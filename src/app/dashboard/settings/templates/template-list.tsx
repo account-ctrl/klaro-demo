@@ -1,0 +1,121 @@
+
+'use client';
+
+import React from 'react';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
+import type { DocumentTemplate } from '@/lib/types';
+import { AddTemplate, EditTemplate, DeleteTemplate, TemplateFormValues } from './template-actions';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { FileCode } from 'lucide-react';
+import { format } from 'date-fns';
+
+// In a real multi-tenant app, this would come from the user's session/claims or route.
+const BARANGAY_ID = 'barangay_san_isidro';
+
+export default function TemplateList() {
+    const firestore = useFirestore();
+    const { user } = useUser();
+    const { toast } = useToast();
+
+    const templatesCollectionRef = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, `/barangays/${BARANGAY_ID}/document_templates`);
+    }, [firestore]);
+    
+    const { data: templates, isLoading } = useCollection<DocumentTemplate>(templatesCollectionRef);
+
+    const handleAdd = (newTemplate: TemplateFormValues) => {
+        if (!templatesCollectionRef || !user) return;
+        
+        const docToAdd = {
+            ...newTemplate,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }
+
+        addDocumentNonBlocking(templatesCollectionRef, docToAdd)
+            .then(docRef => {
+                if (docRef) {
+                    updateDocumentNonBlocking(docRef, { templateId: docRef.id });
+                }
+            });
+
+        toast({ title: "Template Added", description: `${newTemplate.name} has been created.`});
+    };
+
+    const handleEdit = (updatedTemplate: DocumentTemplate) => {
+        if (!firestore || !updatedTemplate.templateId) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${updatedTemplate.templateId}`);
+        const { templateId, createdAt, ...dataToUpdate } = updatedTemplate;
+        
+        const finalData = {
+            ...dataToUpdate,
+            updatedAt: serverTimestamp(),
+        }
+
+        updateDocumentNonBlocking(docRef, finalData);
+        toast({ title: "Template Updated", description: `The template ${updatedTemplate.name} has been updated.`});
+    };
+
+    const handleDelete = (id: string) => {
+        if (!firestore) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${id}`);
+        deleteDocumentNonBlocking(docRef);
+        toast({ variant: "destructive", title: "Template Deleted", description: "The document template has been permanently deleted." });
+    };
+    
+    if (isLoading) {
+        return (
+             <div className="space-y-4">
+                <div className="flex justify-end">
+                    <Skeleton className="h-10 w-40" />
+                </div>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-[220px] w-full rounded-xl" />
+                    ))}
+                </div>
+             </div>
+        )
+    }
+
+  return (
+    <div className="space-y-6">
+        <div className="flex justify-end">
+            <AddTemplate onAdd={handleAdd} />
+        </div>
+        
+        {!templates || templates.length === 0 ? (
+             <div className="text-muted-foreground col-span-full text-center py-10">
+                No document templates found. Click "New Template" to get started.
+            </div>
+        ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {templates.map((template) => (
+                    <Card key={template.templateId}>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <FileCode className="h-5 w-5 text-primary"/>
+                                {template.name}
+                            </CardTitle>
+                            <CardDescription>{template.description || 'No description provided.'}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">ID: <span className="font-mono text-xs">{template.templateId}</span></p>
+                            <p className="text-sm text-muted-foreground">Last updated: {template.updatedAt ? format(template.updatedAt.toDate(), 'PPp') : 'N/A'}</p>
+                        </CardContent>
+                        <CardFooter className="flex flex-col gap-2 items-stretch">
+                            <EditTemplate record={template} onEdit={handleEdit} />
+                            <DeleteTemplate recordId={template.templateId} onDelete={handleDelete} />
+                        </CardFooter>
+                    </Card>
+                ))}
+            </div>
+        )}
+    </div>
+  );
+}

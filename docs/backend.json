@@ -1,0 +1,530 @@
+{
+  "entities": {
+    "Purok": {
+      "title": "Purok",
+      "type": "object",
+      "description": "Stores the different puroks or zones within the barangay.",
+      "properties": {
+        "purokId": { "type": "string", "description": "Unique identifier for the purok." },
+        "name": { "type": "string", "description": "Name of the purok." },
+        "district": { "type": "string", "description": "Optional district name." },
+        "description": { "type": "string", "description": "Description of the purok." },
+        "purokLeaderId": { "type": "string", "description": "Foreign Key to the User ID of the assigned official." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["purokId", "name"]
+    },
+    "Household": {
+      "title": "Household",
+      "type": "object",
+      "description": "Groups residents into household units.",
+      "properties": {
+        "householdId": { "type": "string" },
+        "name": { "type": "string", "description": "A descriptive name for the household, e.g., 'Dela Cruz Family', derived from the head of household." },
+        "householdNumber": { "type": "string", "description": "A unique identifier assigned by the barangay." },
+        "purokId": { "type": "string" },
+        "household_head_id": { "type": "string", "description": "FK to residents.resident_id" },
+        "address": { "type": "string" },
+        "housing_material": { "type": "string", "enum": ["Concrete", "Semi-Concrete", "Light Material", "Salvaged Material"] },
+        "tenure_status": { "type": "string", "enum": ["Owned", "Rented", "Living with Relatives", "Informal Settler"] },
+        "water_source": { "type": "string", "enum": ["Piped", "Deep Well", "Shared Faucet", "Buying Water"] },
+        "toilet_facility": { "type": "string", "enum": ["Water-sealed", "Antipolo type", "None"] },
+        "electricity": { "type": "string", "enum": ["Direct Connection", "Sub-meter", "Jumper", "Solar/None"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["householdId", "household_head_id", "purokId", "address", "householdNumber"]
+    },
+     "HouseholdMember": {
+      "title": "HouseholdMember",
+      "type": "object",
+      "description": "Links a resident to a household with a specific role.",
+      "properties": {
+        "memberId": { "type": "string" },
+        "householdId": { "type": "string" },
+        "residentId": { "type": "string" },
+        "role": { "type": "string", "enum": ["Head", "Spouse", "Child", "Parent", "Sibling", "Other"] }
+      },
+      "required": ["memberId", "householdId", "residentId", "role"]
+    },
+    "Resident": {
+      "title": "Resident",
+      "type": "object",
+      "description": "The master record for every individual residing in the barangay.",
+      "properties": {
+        "residentId": { "type": "string" },
+        "householdId": { "type": "string", "description": "Reference to the household." },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "dateOfBirth": { "type": "string", "format": "date", "description": "dob" },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "address": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Moved Out", "Deceased"] },
+        "middleName": { "type": "string" },
+        "suffix": { "type": "string" },
+        "civilStatus": { "type": "string", "enum": ["Single", "Married", "Widowed", "Separated"] },
+        "nationality": { "type": "string" },
+        "isVoter": { "type": "boolean" },
+        "is4ps": { "type": "boolean" },
+        "isPwd": { "type": "boolean" },
+        "occupation": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "email": { "type": "string", "format": "email" }
+      },
+      "required": ["residentId", "firstName", "lastName", "dateOfBirth", "gender"]
+    },
+    "User": {
+        "title": "User",
+        "type": "object",
+        "description": "Stores login credentials and links system users to resident profiles and roles.",
+        "properties": {
+            "userId": { "type": "string" },
+            "fullName": { "type": "string", "description": "The full name of the user." },
+            "residentId": { "type": "string", "description": "Optional: Link to a resident profile." },
+            "position": { "type": "string", "description": "Official title, e.g., Punong Barangay, Kagawad." },
+            "committee": { "type": "string", "description": "Committee chairmanship, if applicable." },
+            "termStart": { "type": "string", "format": "date", "description": "Start of the official's term." },
+            "termEnd": { "type": "string", "format": "date", "description": "End of the official's term." },
+            "digitalSignatureUrl": { "type": "string", "format": "uri", "description": "URL to the official's digital signature image." },
+            "systemRole": { "type": "string", "enum": ["Super Admin", "Encoder", "Viewer", "Responder", "Admin"], "description": "Defines the user's permission level in the system." },
+            "email": { "type": "string", "format": "email" },
+            "password_hash": { "type": "string" },
+            "status": { "type": "string", "enum": ["Active", "Inactive", "Pending"] }
+        },
+        "required": ["userId", "fullName", "position", "systemRole", "email", "status"]
+    },
+    "BlotterCase": {
+      "title": "BlotterCase",
+      "type": "object",
+      "description": "Records all community disputes and incidents.",
+      "properties": {
+        "caseId": { "type": "string" },
+        "caseType": { "type": "string", "description": "e.g., 'Slight Physical Injuries', 'Theft (Petty)', 'Unlawful Detainer', etc." },
+        "severity": { "type": "string", "enum": ["Low", "Medium", "High", "Admin", "Referral Only"], "description": "Severity level to guide system actions." },
+        "narrative": { "type": "string" },
+        "dateReported": { "type": "string", "format": "date-time" },
+        "filedByUserId": { "type": "string", "description": "The user ID of the barangay official who filed the report." },
+        "status": { "type": "string", "enum": ["Open", "Under Mediation", "Conciliation", "Arbitration", "Settled", "Dismissed", "Referred", "Issued CFA"] },
+        "referredTo": { "type": "string", "description": "Agency/office where case was referred." },
+        "referralDate": { "type": "string", "format": "date", "description": "Date of referral." },
+        "complainantIds": { "type": "array", "items": { "type": "string" } },
+        "respondentIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["caseId", "caseType", "narrative", "dateReported", "status", "complainantIds", "respondentIds"]
+    },
+     "BlotterParticipant": {
+      "title": "BlotterParticipant",
+      "type": "object",
+      "description": "Links residents to a blotter case.",
+      "properties": {
+        "participantId": { "type": "string" },
+        "caseId": { "type": "string" },
+        "residentId": { "type": "string" },
+        "role": { "type": "string", "enum": ["Complainant", "Respondent", "Witness"] }
+      },
+      "required": ["participantId", "caseId", "residentId", "role"]
+    },
+    "CertificateType": {
+        "title": "CertificateType",
+        "type": "object",
+        "description": "A lookup table for all types of certificates the barangay issues.",
+        "properties": {
+            "certTypeId": { "type": "string" },
+            "name": { "type": "string" },
+            "code": { "type": "string" },
+            "fee": { "type": "number" },
+            "validityInMonths": { "type": "number" },
+            "requirements": { "type": "array", "items": { "type": "string"} },
+            "exemptions": { "type": "array", "items": { "type": "string"} },
+            "signatory": { "type": "string" },
+            "templateId": { "type": "string" }
+        },
+        "required": ["certTypeId", "name"]
+    },
+    "CertificateRequest": {
+        "title": "CertificateRequest",
+        "type": "object",
+        "description": "Tracks all resident applications for certificates.",
+        "properties": {
+            "requestId": { "type": "string" },
+            "requestNumber": { "type": "string" },
+            "residentId": { "type": "string" },
+            "residentName": { "type": "string" },
+            "certTypeId": { "type": "string" },
+            "certificateName": { "type": "string" },
+            "purpose": { "type": "string" },
+            "status": { "type": "string", "enum": ["Pending", "Processing", "Approved", "Ready for Pickup", "Claimed", "Denied"] },
+            "dateRequested": { "type": "string", "format": "date-time" },
+            "dateProcessed": { "type": "string", "format": "date-time" },
+            "processedByUserId": { "type": "string" },
+            "denialReason": { "type": "string" }
+        },
+        "required": ["requestId", "residentId", "certTypeId", "purpose", "status", "dateRequested", "requestNumber", "residentName", "certificateName"]
+    },
+    "FinancialTransaction": {
+      "title": "FinancialTransaction",
+      "type": "object",
+      "description": "Manages all financial records, compliant with basic government accounting standards.",
+      "properties": {
+        "transactionId": { "type": "string" },
+        "transactionType": { "type": "string", "enum": ["Income", "Expense"] },
+        "amount": { "type": "number" },
+        "transaction_date": { "type": "string", "format": "date" },
+        "payment_method": { "type": "string", "enum": ["Cash", "Check", "Bank Transfer", "GCash", "Maya"] },
+        "reference_number": { "type": "string", "description": "OR Number for Income, DV/Check Number for Expense." },
+        "payor_payee": { "type": "string", "description": "Name of the person or entity for the transaction." },
+        "fund_source": { "type": "string", "enum": ["General Fund", "Sangguniang Kabataan (SK) Fund", "Gender and Development (GAD) Fund", "Calamity / DRRM Fund"] },
+        "category": { "type": "string" },
+        "description": { "type": "string", "description": "Particulars of the transaction." },
+        "attachment_url": { "type": "string", "format": "uri", "description": "URL to the uploaded supporting document." },
+        "status": { "type": "string", "enum": ["Draft", "Pending Approval", "Posted", "Void"] },
+        "recorded_by_user": { "type": "string", "description": "FK to the user ID who recorded the transaction." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["transactionId", "transactionType", "amount", "transaction_date", "category", "description", "payor_payee", "status"]
+    },
+    "Obligation": {
+        "title": "Obligation",
+        "type": "object",
+        "description": "Reserves funds from the budget before disbursement.",
+        "properties": {
+            "obrId": { "type": "string" },
+            "obrNumber": { "type": "string", "description": "e.g., 'OBR-2025-01-001'" },
+            "payee": { "type": "string", "description": "Vendor or Resident Name" },
+            "fundSource": { "type": "string", "enum": ["General Fund", "SK Fund", "Calamity Fund"] },
+            "description": { "type": "string" },
+            "amount": { "type": "number" },
+            "status": { "type": "string", "enum": ["Active", "Cancelled", "Fully Paid"] },
+            "certifiedBy": { "type": "string", "description": "User ID of Treasurer" },
+            "certifiedAt": { "type": "string", "format": "date-time" },
+            "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["obrId", "obrNumber", "payee", "amount"]
+    },
+    "DisbursementVoucher": {
+        "title": "DisbursementVoucher",
+        "type": "object",
+        "description": "Represents the formal payment document (COA Form).",
+        "properties": {
+            "dvId": { "type": "string" },
+            "dvNumber": { "type": "string", "description": "e.g., 'DV-2025-10-001'" },
+            "obrId": { "type": "string", "description": "Link to the Obligation Request" },
+            "payee": { "type": "string" },
+            "grossAmount": { "type": "number" },
+            "taxAmount": { "type": "number" },
+            "netAmount": { "type": "number" },
+            "status": { "type": "string", "enum": ["Draft", "For Budget Certification", "For Approval", "Ready for Payment", "Released", "Cancelled"] },
+            "checkNumber": { "type": "string" },
+            "bankAccountId": { "type": "string" },
+            "releasedAt": { "type": "string", "format": "date-time" },
+            "receivedBy": { "type": "string" }
+        },
+        "required": ["dvId", "dvNumber", "obrId", "payee", "grossAmount", "netAmount", "status"]
+    },
+    "Project": {
+      "title": "Project",
+      "type": "object",
+      "description": "Monitors the progress and budget of barangay development projects.",
+      "properties": {
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["Social Services", "Economic Services", "Infrastructure", "Environmental Management", "Disaster Risk Reduction"] },
+        "purokId": { "type": "string" },
+        "specific_location": { "type": "string" },
+        "budget_amount": { "type": "number" },
+        "contract_amount": { "type": "number" },
+        "source_of_fund": { "type": "string", "enum": ["20% Barangay Development Fund (BDF)", "10% SK Fund", "5% BDRRM Fund", "General Fund / MOOE", "External Source"] },
+        "appropriation_year": { "type": "number" },
+        "sb_resolution_no": { "type": "string" },
+        "implementation_mode": { "type": "string", "enum": ["By Administration", "By Contract"] },
+        "contractor_name": { "type": "string" },
+        "procurement_status": { "type": "string", "enum": ["Pre-Procurement", "Posting/Advertising", "Bid Evaluation", "Awarded", "Notice to Proceed Issued"] },
+        "target_start_date": { "type": "string", "format": "date" },
+        "target_end_date": { "type": "string", "format": "date" },
+        "actual_start_date": { "type": "string", "format": "date" },
+        "actual_end_date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Planned", "Procurement", "Ongoing", "Suspended", "Completed", "Cancelled"] },
+        "percentComplete": { "type": "number" },
+        "manager_user_id": { "type": "string" }
+      },
+      "required": ["projectId", "projectName", "category", "budget_amount", "status"]
+    },
+    "Program": {
+      "title": "Program",
+      "type": "object",
+      "description": "A list of official Programs, Projects, and Activities (PPAs) for budgeting.",
+      "properties": {
+        "programId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["General Administration", "Social Services", "Economic Services", "Other Services"] }
+      },
+      "required": ["programId", "name", "category"]
+    },
+    "EmergencyAlert": {
+      "title": "EmergencyAlert",
+      "type": "object",
+      "description": "Logs all emergency 'SOS' help requests from residents.",
+      "properties": {
+        "alertId": { "type": "string" },
+        "residentId": { "type": "string" },
+        "residentName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "status": { "type": "string", "enum": ["New", "Acknowledged", "Dispatched", "On Scene", "Resolved", "False Alarm"] },
+        "category": { "type": "string", "enum": ["Medical", "Fire", "Crime", "Accident", "Unspecified"] },
+        "description": { "type": "string", "description": "Admin's notes on the situation." },
+        "responder_team_id": { "type": "string", "description": "ID of the responding user or vehicle." },
+        "acknowledgedByUserId": { "type": "string" },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      },
+      "required": ["alertId", "residentId", "timestamp", "latitude", "longitude", "status"]
+    },
+     "IncidentLog": {
+        "title": "IncidentLog",
+        "type": "object",
+        "description": "A log for the timeline of actions for an emergency alert.",
+        "properties": {
+            "logId": { "type": "string" },
+            "alertId": { "type": "string" },
+            "userId": { "type": "string", "description": "Who took the action (Admin or Tanod)." },
+            "action_taken": { "type": "string", "enum": ["ACKNOWLEDGED", "DISPATCHED", "ARRIVED", "RESOLVED"]},
+            "notes": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["logId", "alertId", "userId", "action_taken"]
+    },
+    "ResponderLocation": {
+        "title": "ResponderLocation",
+        "type": "object",
+        "description": "Tracks the real-time location of responders.",
+        "properties": {
+            "userId": { "type": "string", "description": "The Tanod's user ID." },
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" },
+            "last_active": { "type": "string", "format": "date-time" },
+            "status": { "type": "string", "enum": ["On Duty", "Busy", "Offline"]}
+        },
+        "required": ["userId", "latitude", "longitude", "last_active", "status"]
+    },
+    "DocumentTemplate": {
+        "title": "DocumentTemplate",
+        "type": "object",
+        "description": "Stores the HTML templates for generating certificates and documents.",
+        "properties": {
+            "templateId": { "type": "string" },
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "content": { "type": "string", "description": "HTML content of the template." },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["templateId", "name", "content"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "type": "object",
+      "description": "Stores official barangay announcements.",
+      "properties": {
+        "announcementId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "category": { "type": "string", "enum": ["General Info", "Event", "Health", "Ordinance", "Emergency"] },
+        "datePosted": { "type": "string", "format": "date-time" },
+        "postedByUserId": { "type": "string" }
+      },
+      "required": ["announcementId", "title", "datePosted", "postedByUserId"]
+    },
+    "Pet": {
+      "title": "Pet",
+      "type": "object",
+      "description": "Stores profiles for resident pets for animal welfare and rabies control.",
+      "properties": {
+        "petId": { "type": "string" },
+        "ownerResidentId": { "type": "string" },
+        "householdId": { "type": "string" },
+        "name": { "type": "string" },
+        "species": { "type": "string", "enum": ["Dog", "Cat", "Other"] },
+        "breed": { "type": "string" },
+        "colorMarkings": { "type": "string" },
+        "gender": { "type": "string", "enum": ["Male", "Female"] },
+        "dateOfBirth": { "type": "string", "format": "date" },
+        "photoUrl": { "type": "string", "format": "uri" },
+        "tagNumber": { "type": "string" },
+        "microchipNumber": { "type": "string" },
+        "isNeutered": { "type": "boolean" },
+        "behaviorStatus": { "type": "string", "enum": ["Friendly / Docile", "Territorial / Guard Dog", "History of Biting (Aggressive)"] },
+        "status": { "type": "string", "enum": ["Active", "Deceased", "Lost", "Transferred"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["petId", "ownerResidentId", "name", "species"]
+    },
+    "PetVaccination": {
+      "title": "PetVaccination",
+      "type": "object",
+      "description": "Tracks vaccination history for a specific pet.",
+      "properties": {
+        "vaccinationId": { "type": "string" },
+        "petId": { "type": "string" },
+        "vaccineType": { "type": "string" },
+        "dateAdministered": { "type": "string", "format": "date" },
+        "dateExpiration": { "type": "string", "format": "date" },
+        "veterinarian": { "type": "string" },
+        "batchNumber": { "type": "string" },
+        "remarks": { "type": "string" }
+      },
+      "required": ["vaccinationId", "petId", "dateAdministered", "dateExpiration"]
+    },
+    "FacilityResource": {
+      "title": "FacilityResource",
+      "type": "object",
+      "description": "Defines bookable assets like rooms, vehicles, or equipment.",
+      "properties": {
+        "resourceId": { "type": "string" },
+        "name": { "type": "string", "description": "e.g., 'Session Hall', 'Ambulance'" },
+        "type": { "type": "string", "enum": ["Room", "Vehicle", "Equipment"] },
+        "status": { "type": "string", "enum": ["Available", "Under Maintenance"] }
+      },
+      "required": ["resourceId", "name", "type"]
+    },
+    "ScheduleEvent": {
+      "title": "ScheduleEvent",
+      "type": "object",
+      "description": "The master record for all calendar events.",
+      "properties": {
+        "eventId": { "type": "string" },
+        "category": { "type": "string", "enum": ["Blotter", "Health", "Session", "Rental", "Public"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "referenceId": { "type": "string", "description": "Link to the source (e.g., Blotter Case ID)." },
+        "start": { "type": "string", "format": "date-time", "description": "Start datetime in ISO 8601 format." },
+        "end": { "type": "string", "format": "date-time", "description": "End datetime in ISO 8601 format." },
+        "allDay": { "type": "boolean" },
+        "resourceId": { "type": "string", "description": "FK to the Facility/Resource being booked." },
+        "status": { "type": "string", "enum": ["Scheduled", "Completed", "Cancelled", "Rescheduled"] },
+        "createdByUserId": { "type": "string" }
+      },
+      "required": ["eventId", "category", "title", "start", "end"]
+    },
+    "EventAttendee": {
+      "title": "EventAttendee",
+      "type": "object",
+      "description": "Links individuals to an event and tracks their attendance.",
+      "properties": {
+        "attendanceId": { "type": "string" },
+        "eventId": { "type": "string" },
+        "residentId": { "type": "string" },
+        "staffId": { "type": "string" },
+        "customName": { "type": "string", "description": "For non-resident guests." },
+        "role": { "type": "string", "description": "e.g., Complainant, Patient, Guest." },
+        "notificationSent": { "type": "boolean" },
+        "attendanceStatus": { "type": "string", "enum": ["Pending", "Present", "Absent", "Excused"] }
+      },
+      "required": ["attendanceId", "eventId"]
+    }
+  },
+  "auth": {
+    "providers": ["password", "anonymous"]
+  },
+  "firestore": {
+    "/barangays/{barangayId}/puroks/{purokId}": {
+      "schema": { "$ref": "#/entities/Purok" },
+      "description": "Stores purok information for a barangay."
+    },
+    "/barangays/{barangayId}/households/{householdId}": {
+      "schema": { "$ref": "#/entities/Household" },
+      "description": "Stores household information for a barangay."
+    },
+     "/barangays/{barangayId}/households/{householdId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/HouseholdMember" },
+      "description": "Stores members of a specific household."
+    },
+    "/barangays/{barangayId}/residents/{residentId}": {
+      "schema": { "$ref": "#/entities/Resident" },
+      "description": "Stores private resident information for a barangay."
+    },
+    "/users/{userId}": {
+        "schema": { "$ref": "#/entities/User" },
+        "description": "System users with their roles and permissions. The document ID is the userId."
+    },
+     "/users/{userId}/responder_locations/{locationId}": {
+      "schema": { "$ref": "#/entities/ResponderLocation" },
+      "description": "Tracks responder locations."
+    },
+    "/barangays/{barangayId}/blotter_cases/{caseId}": {
+      "schema": { "$ref": "#/entities/BlotterCase" },
+      "description": "Stores blotter case information for a barangay."
+    },
+     "/barangays/{barangayId}/blotter_cases/{caseId}/participants/{participantId}": {
+      "schema": { "$ref": "#/entities/BlotterParticipant" },
+      "description": "Links residents to a specific blotter case."
+    },
+    "/barangays/{barangayId}/certificate_types/{certTypeId}": {
+        "schema": { "$ref": "#/entities/CertificateType" },
+        "description": "Lookup table for available certificate types."
+    },
+    "/barangays/{barangayId}/certificate_requests/{requestId}": {
+        "schema": { "$ref": "#/entities/CertificateRequest" },
+        "description": "Stores document requests from residents."
+    },
+    "/barangays/{barangayId}/financial_transactions/{transactionId}": {
+        "schema": { "$ref": "#/entities/FinancialTransaction" },
+        "description": "Stores all financial transactions for a barangay."
+    },
+     "/barangays/{barangayId}/obligations/{obrId}": {
+      "schema": { "$ref": "#/entities/Obligation" },
+      "description": "Stores Obligation Requests (fund reservations)."
+    },
+    "/barangays/{barangayId}/disbursement_vouchers/{dvId}": {
+      "schema": { "$ref": "#/entities/DisbursementVoucher" },
+      "description": "Stores Disbursement Vouchers for payments."
+    },
+    "/barangay/{barangayId}/projects/{projectId}": {
+        "schema": { "$ref": "#/entities/Project" },
+        "description": "Stores publicly accessible project information for a barangay."
+    },
+     "/barangay/{barangayId}/programs/{programId}": {
+        "schema": { "$ref": "#/entities/Program" },
+        "description": "Stores the list of official Programs, Projects, and Activities (PPAs)."
+    },
+    "/barangays/{barangayId}/emergency_alerts/{alertId}": {
+        "schema": { "$ref": "#/entities/EmergencyAlert" },
+        "description": "Stores all emergency alerts for a barangay."
+    },
+    "/barangays/{barangayId}/emergency_alerts/{alertId}/logs/{logId}": {
+        "schema": { "$ref": "#/entities/IncidentLog" },
+        "description": "Stores the audit trail for a specific emergency alert."
+    },
+    "/barangays/{barangayId}/document_templates/{templateId}": {
+        "schema": { "$ref": "#/entities/DocumentTemplate" },
+        "description": "Stores HTML document templates for a barangay."
+    },
+    "/barangays/{barangayId}/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Stores official barangay announcements."
+    },
+    "/barangays/{barangayId}/pets/{petId}": {
+      "schema": { "$ref": "#/entities/Pet" },
+      "description": "Stores pet profiles for a barangay."
+    },
+    "/barangays/{barangayId}/pets/{petId}/vaccinations/{vaccinationId}": {
+      "schema": { "$ref": "#/entities/PetVaccination" },
+      "description": "Tracks vaccination history for a specific pet."
+    },
+    "/barangays/{barangayId}/schedule_events/{eventId}": {
+        "schema": { "$ref": "#/entities/ScheduleEvent" },
+        "description": "Stores all calendar events for a barangay."
+    },
+    "/barangays/{barangayId}/schedule_events/{eventId}/attendees/{attendeeId}": {
+        "schema": { "$ref": "#/entities/EventAttendee" },
+        "description": "Manages attendees for a specific event."
+    },
+    "/barangays/{barangayId}/facilities_resources/{resourceId}": {
+        "schema": { "$ref": "#/entities/FacilityResource" },
+        "description": "Defines bookable facilities and resources."
+    }
+  }
+}

@@ -1,0 +1,139 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBarangayOfficial() {
+      // In a real app, you would check custom claims.
+      // For this demo, we'll assume any signed-in user is an official for simplicity.
+      return isSignedIn();
+    }
+    
+    // ------------------------------------------------------------------------
+    // Application Data Rules
+    // ------------------------------------------------------------------------
+
+    // RESIDENTS can be read by officials. Residents can only read/write their own data.
+    match /barangays/{barangayId}/residents/{residentId} {
+      allow get: if isBarangayOfficial() || request.auth.uid == residentId;
+      allow list, create, delete: if isBarangayOfficial();
+      // Allow update if the user is an official OR if they are the resident and not changing their ID
+      allow update: if isBarangayOfficial() || (request.auth.uid == residentId && request.resource.data.residentId == resource.data.residentId);
+    }
+
+    // HOUSEHOLDS & PUROKS can be managed by officials.
+    match /barangays/{barangayId}/households/{householdId} {
+       allow read, write: if isBarangayOfficial();
+       
+       // Household members can be managed by officials.
+       match /members/{memberId} {
+         allow read, write: if isBarangayOfficial();
+       }
+    }
+     match /barangays/{barangayId}/puroks/{purokId} {
+       allow read, write: if isBarangayOfficial();
+    }
+
+    // BLOTTER cases can be managed by officials.
+    match /barangays/{barangayId}/blotter_cases/{caseId} {
+      allow read, write: if isBarangayOfficial();
+
+       // Participants can be managed by officials.
+      match /participants/{participantId} {
+        allow read, write: if isBarangayOfficial();
+      }
+    }
+
+    // CERTIFICATE TYPES & TEMPLATES can be read by ANY signed in user (for dropdowns).
+    // Officials can manage them.
+    match /barangays/{barangayId}/certificate_types/{certTypeId} {
+      allow get, list: if isSignedIn();
+      allow write: if isBarangayOfficial();
+    }
+    match /barangays/{barangayId}/document_templates/{templateId} {
+      allow read, write: if isBarangayOfficial();
+    }
+
+    // CERTIFICATE REQUESTS can be created by any signed-in user.
+    // Officials can manage (read/update/delete) requests.
+    // Residents can read/list ONLY their own requests.
+    match /barangays/{barangayId}/certificate_requests/{requestId} {
+        allow create: if isSignedIn();
+        allow update, delete: if isBarangayOfficial();
+        // Allow a user to get their own request or an official to get any.
+        allow get: if isBarangayOfficial() || (isSignedIn() && resource.data.residentId == request.auth.uid);
+        // Allow a user to query for their own requests or an official to query all.
+        allow list: if isBarangayOfficial() || (isSignedIn() && request.query.where.residentId == request.auth.uid);
+    }
+
+    // FINANCIALS, OBLIGATIONS & VOUCHERS are managed by officials.
+    match /barangays/{barangayId}/financial_transactions/{transactionId} {
+        allow read, write: if isBarangayOfficial();
+    }
+    match /barangays/{barangayId}/obligations/{obrId} {
+        allow read, write: if isBarangayOfficial();
+    }
+    match /barangays/{barangayId}/disbursement_vouchers/{dvId} {
+        allow read, write: if isBarangayOfficial();
+    }
+     match /barangays/{barangayId}/projects/{projectId} {
+        allow read, write: if isBarangayOfficial();
+    }
+    match /barangays/{barangayId}/programs/{programId} {
+        allow read, write: if isBarangayOfficial();
+    }
+    
+    // ANNOUNCEMENTS can be read by any signed-in user.
+    match /barangays/{barangayId}/announcements/{announcementId} {
+        allow read: if isSignedIn();
+        allow write: if isBarangayOfficial();
+    }
+
+    // PETS and their vaccinations can be managed by officials.
+    match /barangays/{barangayId}/pets/{petId} {
+      allow read, write: if isBarangayOfficial();
+
+      match /vaccinations/{vaccinationId} {
+         allow read, write: if isBarangayOfficial();
+      }
+    }
+
+    // USERS are managed by officials.
+    match /users/{userId} {
+        allow read, write: if isBarangayOfficial(); 
+    }
+     match /roles/{roleId} {
+        allow read, write: if isBarangayOfficial(); 
+    }
+
+    // EMERGENCY ALERTS can be created by any user and managed by officials.
+    match /barangays/{barangayId}/emergency_alerts/{alertId} {
+      allow read, write: if isSignedIn();
+    }
+     match /users/{userId}/responder_locations/{locationId} {
+        allow read, write: if isBarangayOfficial();
+     }
+
+    // SCHEDULER can be read by any signed-in user and managed by officials.
+    match /barangays/{barangayId}/schedule_events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isBarangayOfficial();
+      
+      match /attendees/{attendeeId} {
+        allow read, write: if isBarangayOfficial();
+      }
+    }
+
+    // FACILITIES & RESOURCES can be managed by officials.
+    match /barangays/{barangayId}/facilities_resources/{resourceId} {
+      allow read, write: if isBarangayOfficial();
+    }
+  }
+}

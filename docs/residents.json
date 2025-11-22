@@ -1,0 +1,23 @@
+
+[
+    {
+        "_id": "Z5i3gqu4Ahf29s5z5a5g2wYx4E12",
+        "residentId": "Z5i3gqu4Ahf29s5z5a5g2wYx4E12",
+        "firstName": "Juana",
+        "lastName": "Dela Cruz",
+        "dateOfBirth": "1990-05-15",
+        "gender": "Female",
+        "address": "123 Rizal St, Purok 2, Quezon City",
+        "status": "Active",
+        "middleName": "Santos",
+        "civilStatus": "Married",
+        "nationality": "Filipino",
+        "isVoter": true,
+        "is4ps": false,
+        "isPwd": false,
+        "occupation": "Home Maker",
+        "contactNumber": "09171234567",
+        "email": "resident@demo.com",
+        "householdId": "HH-1719602400000"
+    }
+]
