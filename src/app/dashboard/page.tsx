@@ -79,9 +79,9 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
                         <div>
                             <p className="font-medium text-sm">{overdueProjects.length} Overdue Project{overdueProjects.length > 1 ? 's' : ''}</p>
                             <p className="text-xs text-muted-foreground">"{overdueProjects[0].projectName}" and {overdueProjects.length > 1 ? `${overdueProjects.length - 1} others are` : 'is'} behind schedule.</p>
-                            <Link href="/dashboard/projects" asChild>
-                                <Button variant="link" size="sm" className="p-0 h-auto">View Projects</Button>
-                            </Link>
+                            <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                                <Link href="/dashboard/projects">View Projects</Link>
+                            </Button>
                         </div>
                     </div>
                  )}
@@ -95,9 +95,9 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
                             <p className="text-xs text-muted-foreground">
                                 Case{pendingHearings.length > 1 ? 's' : ''} {pendingHearings.slice(0, 2).map(c => `#${c.caseId}`).join(', ')} {pendingHearings.length > 2 ? ` and ${pendingHearings.length - 2} others` : ''} need scheduling.
                             </p>
-                             <Link href="/dashboard/blotter" asChild>
-                                <Button variant="link" size="sm" className="p-0 h-auto">View Blotter</Button>
-                             </Link>
+                             <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                                <Link href="/dashboard/blotter">View Blotter</Link>
+                             </Button>
                         </div>
                     </div>
                  )}
@@ -244,15 +244,15 @@ export default function DashboardPage() {
                     <p className="text-muted-foreground">{currentDate} | Barangay San Isidro</p>
                 </div>
                  <div className="flex items-center gap-2">
-                    <Link href="/dashboard/documents" asChild>
-                        <Button><Plus className="mr-2 h-4 w-4" /> New Request</Button>
-                    </Link>
-                    <Link href="/dashboard/blotter" asChild>
-                        <Button variant="destructive"><Gavel className="mr-2 h-4 w-4" /> File Blotter</Button>
-                    </Link>
-                    <Link href="/dashboard/residents" asChild>
-                        <Button variant="secondary"><UserPlus className="mr-2 h-4 w-4" /> Add Resident</Button>
-                    </Link>
+                    <Button asChild>
+                        <Link href="/dashboard/documents"><Plus className="mr-2 h-4 w-4" /> New Request</Link>
+                    </Button>
+                    <Button variant="destructive" asChild>
+                        <Link href="/dashboard/blotter"><Gavel className="mr-2 h-4 w-4" /> File Blotter</Link>
+                    </Button>
+                    <Button variant="secondary" asChild>
+                        <Link href="/dashboard/residents"><UserPlus className="mr-2 h-4 w-4" /> Add Resident</Link>
+                    </Button>
                 </div>
             </div>
         </div>
