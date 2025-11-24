@@ -39,7 +39,7 @@ function DocumentsTableActions({ doc, onEdit, onDelete, onPrint, residents, cert
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={doc.status !== 'Approved'}>
-            <PrintDocument record={doc} onPrint={onPrint} residents={residents} />
+            <PrintDocument record={doc} onPrint={onPrint} residents={residents} certificateTypes={certificateTypes} />
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
           <EditDocument record={doc} onEdit={onEdit} residents={residents} certificateTypes={certificateTypes} />

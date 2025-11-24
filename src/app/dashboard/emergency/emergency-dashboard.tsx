@@ -4,12 +4,12 @@
 import { useMemo, useState } from "react";
 import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
 import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
-import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { EmergencyAlert, Resident } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText } from "lucide-react";
+import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText, Trash2, MoreHorizontal } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,6 +19,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
@@ -81,7 +87,7 @@ const getAge = (dateString: string) => {
     return age;
 }
 
-const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve }: { alert: EmergencyAlert; resident: Resident | undefined, onAcknowledge: (id: string) => void; onResolve: (id: string, notes: string) => void; }) => {
+const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDelete }: { alert: EmergencyAlert; resident: Resident | undefined, onAcknowledge: (id: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
     const timeAgo = useMemo(() => {
         if (!alert.timestamp) return '...';
         return formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true });
@@ -116,7 +122,22 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve }: { al
                         <Siren />
                         <span>Incident Details</span>
                     </CardTitle>
-                    <Badge variant={statusBadgeVariant}>{alert.status}</Badge>
+                    <div className="flex items-center gap-2">
+                        <Badge variant={statusBadgeVariant}>{alert.status}</Badge>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => onDelete(alert.alertId)}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete Alert
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
                 <CardDescription>
                     Received {timeAgo}
@@ -323,6 +344,14 @@ export function EmergencyDashboard() {
      toast({ title: "Alert Resolved", description: `Alert #${alertId} has been marked as resolved.`});
   };
 
+  const handleDelete = (alertId: string) => {
+    if (!firestore) return;
+    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${alertId}`);
+    deleteDocumentNonBlocking(docRef);
+    toast({ title: "Alert Deleted", description: "The alert has been permanently removed." });
+    if (selectedAlertId === alertId) setSelectedAlertId(null);
+  };
+
   const isLoading = isLoadingAlerts || isLoadingResidents;
 
   return (
@@ -386,6 +415,7 @@ export function EmergencyDashboard() {
                         resident={selectedResident}
                         onAcknowledge={handleAcknowledge}
                         onResolve={handleResolve}
+                        onDelete={handleDelete}
                     />
                 )}
                  {!isLoading && sortedAlerts.length === 0 && (
@@ -402,5 +432,3 @@ export function EmergencyDashboard() {
     </div>
   );
 }
-
-    

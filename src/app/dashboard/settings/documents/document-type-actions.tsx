@@ -26,11 +26,19 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { PlusCircle, FilePen, Trash2, X } from 'lucide-react';
 import type { CertificateType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useDocumentTemplates } from '@/hooks/use-barangay-data';
 
 export type DocumentTypeFormValues = Omit<CertificateType, 'certTypeId'>;
 
@@ -43,6 +51,7 @@ type DocumentTypeFormProps = {
 };
 
 function DocumentTypeForm({ record, onSave, onClose }: DocumentTypeFormProps) {
+  const { data: templates } = useDocumentTemplates();
   const [formData, setFormData] = useState<DocumentTypeFormValues>({
     name: record?.name ?? '',
     code: record?.code ?? '',
@@ -58,6 +67,10 @@ function DocumentTypeForm({ record, onSave, onClose }: DocumentTypeFormProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value, type } = e.target;
     setFormData((prev) => ({ ...prev, [id]: type === 'number' ? parseFloat(value) : value }));
+  };
+
+  const handleSelectChange = (id: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleAddRequirement = () => {
@@ -116,8 +129,24 @@ function DocumentTypeForm({ record, onSave, onClose }: DocumentTypeFormProps) {
                     <Input id="signatory" value={formData.signatory} onChange={handleChange} placeholder="e.g., Punong Barangay" />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="templateId">Template ID</Label>
-                    <Input id="templateId" value={formData.templateId} onChange={handleChange} placeholder="e.g., default_clearance_v2" />
+                    <Label htmlFor="templateId">Template</Label>
+                    <Select onValueChange={(val) => handleSelectChange('templateId', val)} value={formData.templateId}>
+                        <SelectTrigger id="templateId">
+                            <SelectValue placeholder="Select a template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="default_clearance">Default Clearance</SelectItem>
+                            {templates?.map(t => {
+                                // Use templateId field if available, otherwise use doc ID
+                                const val = t.templateId || t.id;
+                                return (
+                                    <SelectItem key={val} value={val}>
+                                        {t.name}
+                                    </SelectItem>
+                                );
+                            })}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
             
