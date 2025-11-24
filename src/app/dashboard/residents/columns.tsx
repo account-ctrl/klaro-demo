@@ -17,9 +17,11 @@ import {
 import { EditResident, DeleteResident } from "./resident-actions";
 import { Badge } from "@/components/ui/badge";
 
+type ResidentWithId = Resident & { id?: string };
+
 type ResidentsTableActionsProps = {
-  resident: Resident;
-  onEdit: (resident: Resident) => void;
+  resident: ResidentWithId;
+  onEdit: (resident: ResidentWithId) => void;
   onDelete: (id: string) => void;
   households: Household[];
 }
@@ -47,7 +49,7 @@ function ResidentsTableActions({ resident, onEdit, onDelete, households }: Resid
             <span>Edit</span>
           </DropdownMenuItem>
         </EditResident>
-        <DeleteResident recordId={resident.residentId} onDelete={onDelete}>
+        <DeleteResident recordId={resident.id || resident.residentId} onDelete={onDelete}>
            <DropdownMenuItem
             onSelect={(e) => e.preventDefault()}
             className="text-destructive focus:bg-destructive/10 focus:text-destructive"
@@ -73,7 +75,7 @@ const getAge = (dateString: string) => {
     return age;
 }
 
-export const getColumns = (onEdit: (resident: Resident) => void, onDelete: (id: string) => void, households: Household[]): ColumnDef<Resident>[] => [
+export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete: (id: string) => void, households: Household[]): ColumnDef<Resident>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -149,7 +151,7 @@ export const getColumns = (onEdit: (resident: Resident) => void, onDelete: (id: 
   {
     id: "actions",
     cell: ({ row }) => {
-      const resident = row.original;
+      const resident = row.original as ResidentWithId;
       return <ResidentsTableActions resident={resident} onEdit={onEdit} onDelete={onDelete} households={households} />
     },
   },

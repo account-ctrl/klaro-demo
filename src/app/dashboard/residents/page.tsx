@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
 
+type ResidentWithId = Resident & { id?: string };
 
 export default function ResidentsPage() {
   const firestore = useFirestore();
@@ -50,12 +51,16 @@ export default function ResidentsPage() {
     });
   };
 
-  const handleEdit = (updatedRecord: Resident) => {
-    if (!firestore || !updatedRecord.residentId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${updatedRecord.residentId}`);
+  const handleEdit = (updatedRecord: ResidentWithId) => {
+    const recordId = updatedRecord.id || updatedRecord.residentId;
+    if (!firestore || !recordId) return;
+    
+    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${recordId}`);
     
     // Create a clean object with only the fields defined in the Resident type.
-    const { residentId, ...dataToUpdate } = updatedRecord;
+    // Exclude 'id' (from useCollection) and 'residentId' (if we don't want to update it, though it's part of the type)
+    // We usually don't update the ID field.
+    const { residentId, id, ...dataToUpdate } = updatedRecord;
     
     // Remove undefined fields to prevent Firestore errors
     Object.keys(dataToUpdate).forEach(key => {
@@ -64,6 +69,9 @@ export default function ResidentsPage() {
             delete dataToUpdate[dataKey];
         }
     });
+    
+    // We might want to keep residentId in the document body if it was there
+    // But usually we don't change it.
     
     updateDocumentNonBlocking(docRef, dataToUpdate);
      toast({

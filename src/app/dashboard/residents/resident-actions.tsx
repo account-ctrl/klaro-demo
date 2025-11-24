@@ -44,9 +44,12 @@ import { ResidentActivity } from './resident-activity';
 
 export type ResidentFormValues = Omit<Resident, 'residentId'>;
 
+// Extended type to include Firestore document ID
+type ResidentWithId = Resident & { id?: string };
+
 type ResidentFormProps = {
-  record?: Resident;
-  onSave: (data: ResidentFormValues | Resident) => void;
+  record?: ResidentWithId;
+  onSave: (data: ResidentFormValues | ResidentWithId) => void;
   onClose: () => void;
   households: Household[];
 };
@@ -293,14 +296,14 @@ export function EditResident({
   households,
   children,
 }: {
-  record: Resident;
-  onEdit: (data: Resident) => void;
+  record: ResidentWithId;
+  onEdit: (data: ResidentWithId) => void;
   households: Household[];
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: Resident) => {
+  const handleSave = (data: ResidentWithId) => {
     onEdit(data);
     setOpen(false);
   };
@@ -380,5 +383,3 @@ export function DeleteResident({
     </AlertDialog>
   );
 }
-
-    
