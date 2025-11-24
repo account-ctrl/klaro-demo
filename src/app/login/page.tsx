@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect } from 'react';
@@ -15,9 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Logo } from "@/components/logo";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield, User, UserCog, Loader2 } from "lucide-react";
+import { Shield, User, Loader2 } from "lucide-react";
 import { useAuth, initiateAnonymousSignIn, initiateEmailSignIn, FirebaseClientProvider } from '@/firebase';
-import { Separator } from '@/components/ui/separator';
 
 function LoginCard() {
     const router = useRouter();
@@ -105,11 +103,7 @@ function LoginCard() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <Button onClick={() => handleRoleSimulation('superadmin', false)} variant="secondary" className="w-full" disabled={isPending}>
-                        {isPending ? <Loader2 className="mr-2 animate-spin" /> : <UserCog className="mr-2" />}
-                        Super Admin
-                    </Button>
+                <div className="grid grid-cols-1 gap-4">
                     <Button onClick={() => handleRoleSimulation('user', false)} variant="outline" className="w-full" disabled={isPending}>
                         {isPending ? <Loader2 className="mr-2 animate-spin" /> : <User className="mr-2" />}
                         Resident Login
@@ -119,7 +113,7 @@ function LoginCard() {
             </CardContent>
             <CardFooter>
                 <p className="text-xs text-center text-muted-foreground w-full">
-                    Admin & Super Admin logins use anonymous sign-in. Resident login uses a predefined account for profile simulation.
+                    Admin login uses anonymous sign-in. Resident login uses a predefined account for profile simulation.
                 </p>
             </CardFooter>
         </Card>
