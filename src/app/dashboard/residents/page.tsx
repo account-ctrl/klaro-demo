@@ -1,17 +1,15 @@
 'use client';
 
 import React from "react";
-import { collection, doc } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { setDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { Resident, Household } from "@/lib/types";
+import { Resident } from "@/lib/types";
 import { getColumns } from "./columns";
 import { DataTable } from "./data-table";
 import { ResidentFormValues } from "./resident-actions";
 import { useToast } from "@/hooks/use-toast";
-
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useResidents, useHouseholds, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
 
 type ResidentWithId = Resident & { id?: string };
 
@@ -19,18 +17,10 @@ export default function ResidentsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const residentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
-
-  const householdsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/households`);
-  }, [firestore]);
-
-  const { data: records, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
-  const { data: households, isLoading: isLoadingHouseholds } = useCollection<Household>(householdsCollectionRef);
+  const { data: records, isLoading: isLoadingResidents } = useResidents();
+  const { data: households, isLoading: isLoadingHouseholds } = useHouseholds();
+  
+  const residentsCollectionRef = useBarangayRef('residents');
 
   const handleAdd = (newRecord: ResidentFormValues) => {
     if (!residentsCollectionRef) return;
@@ -58,8 +48,6 @@ export default function ResidentsPage() {
     const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${recordId}`);
     
     // Create a clean object with only the fields defined in the Resident type.
-    // Exclude 'id' (from useCollection) and 'residentId' (if we don't want to update it, though it's part of the type)
-    // We usually don't update the ID field.
     const { residentId, id, ...dataToUpdate } = updatedRecord;
     
     // Remove undefined fields to prevent Firestore errors
@@ -69,9 +57,6 @@ export default function ResidentsPage() {
             delete dataToUpdate[dataKey];
         }
     });
-    
-    // We might want to keep residentId in the document body if it was there
-    // But usually we don't change it.
     
     updateDocumentNonBlocking(docRef, dataToUpdate);
      toast({

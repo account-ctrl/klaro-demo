@@ -34,9 +34,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 export type DocumentTypeFormValues = Omit<CertificateType, 'certTypeId'>;
 
+type CertificateTypeWithId = CertificateType & { id?: string };
+
 type DocumentTypeFormProps = {
-  record?: CertificateType;
-  onSave: (data: DocumentTypeFormValues | CertificateType) => void;
+  record?: CertificateTypeWithId;
+  onSave: (data: DocumentTypeFormValues | CertificateTypeWithId) => void;
   onClose: () => void;
 };
 
@@ -182,10 +184,10 @@ export function AddDocumentType({ onAdd }: { onAdd: (data: DocumentTypeFormValue
   );
 }
 
-export function EditDocumentType({ record, onEdit }: { record: CertificateType; onEdit: (data: CertificateType) => void; }) {
+export function EditDocumentType({ record, onEdit }: { record: CertificateTypeWithId; onEdit: (data: CertificateTypeWithId) => void; }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: CertificateType) => {
+  const handleSave = (data: CertificateTypeWithId) => {
     onEdit(data);
     setOpen(false);
   };

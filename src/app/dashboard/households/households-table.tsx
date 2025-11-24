@@ -1,22 +1,18 @@
-
 'use client';
 
 import React from 'react';
 import {
-  collection,
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { Household, Resident, HouseholdMember } from '@/lib/types';
+import { Household } from '@/lib/types';
 import { getColumns } from './columns';
 import { DataTable } from './data-table';
 import { HouseholdFormValues } from './household-actions';
 import { useToast } from '@/hooks/use-toast';
-
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useHouseholds, useResidents, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
 
 type HouseholdWithId = Household & { id?: string };
 
@@ -25,18 +21,10 @@ export function HouseholdsTable() {
   const { user } = useUser();
   const { toast } = useToast();
 
-  const householdsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/households`);
-  }, [firestore]);
-
-  const residentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
-
-  const { data: households, isLoading: isLoadingHouseholds } = useCollection<Household>(householdsCollectionRef);
-  const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
+  const { data: households, isLoading: isLoadingHouseholds } = useHouseholds();
+  const { data: residents, isLoading: isLoadingResidents } = useResidents();
+  
+  const householdsCollectionRef = useBarangayRef('households');
 
   const handleAdd = (newRecord: HouseholdFormValues) => {
     if (!householdsCollectionRef || !user || !residents) return;
@@ -68,10 +56,6 @@ export function HouseholdsTable() {
       return;
     }
 
-    // Exclude id and householdId (if it's not the doc ID, we generally keep it but don't change it. 
-    // Here we construct a new object. If householdId is the unique key in data, we can keep it.
-    // The previous code destructured householdId, so I will do the same to be safe, but we're updating by doc ID now.)
-    
     const { householdId, id, createdAt, ...dataToUpdate } = updatedRecord;
 
     const finalRecord = {
@@ -85,7 +69,6 @@ export function HouseholdsTable() {
 
   const handleDelete = (id: string) => {
     if (!firestore) return;
-    // You might want to add logic here to handle what happens to residents in the deleted household.
     const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${id}`);
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Household Deleted' });
@@ -93,18 +76,8 @@ export function HouseholdsTable() {
   
    const handleMemberChange = (residentId: string, householdId: string | null) => {
     if (!firestore || !residentId) return;
-    // This assumes residentId is the DOC ID. If it's not, we have another problem.
-    // Residents list comes from useCollection, so it has .id
-    // But residents passed here is Resident[]. 
-    // Let's assume residentId passed from the component is correct.
-    // In HouseholdMembers component, residentId is taken from `member.residentId` or `r.residentId`.
-    // If residents have mismatching IDs, this might fail too.
-    // But let's stick to fixing household delete first.
     
-    // To be safe, we should probably find the resident by residentId (field) and use its doc ID.
-    // But residents prop here has objects.
     const resident = residents?.find(r => r.residentId === residentId);
-    // Cast to include ID
     const residentDocId = (resident as any)?.id || residentId;
     
     const residentDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${residentDocId}`);

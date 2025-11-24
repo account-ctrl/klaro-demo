@@ -39,63 +39,73 @@ import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { doc, getDoc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { DEFAULT_BARANGAY_CLEARANCE, DEFAULT_INDIGENCY, DEFAULT_RESIDENCY } from '@/app/dashboard/settings/templates/default-templates';
 
-export const generateCertificateHtml = (request: CertificateRequest, resident?: Resident) => {
-    const css = `
-        body { font-family: 'Times New Roman', serif; margin: 2in; }
-        .header { text-align: center; line-height: 1.2; }
-        .header img { width: 80px; height: 80px; }
-        .header h1 { font-size: 16px; margin: 0; }
-        .header h2 { font-size: 20px; font-weight: bold; margin: 5px 0; }
-        .title { text-align: center; margin-top: 2rem; }
-        .title h1 { font-size: 28px; font-weight: bold; letter-spacing: 5px; }
-        .content { text-indent: 4em; margin-top: 2rem; text-align: justify; line-height: 1.8; font-size: 14px; }
-        .signature-area { margin-top: 4rem; text-align: right; }
-        .signature-area .official-name { font-weight: bold; font-size: 14px; text-transform: uppercase; }
-        .signature-area .official-title { font-size: 12px; }
-        .not-valid { margin-top: 5rem; text-align: center; font-size: 10px; font-style: italic; }
-    `;
-    const getAge = (dateString: string) => {
-        if (!dateString) return 'N/A';
-        const birthDate = new Date(dateString);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-        return age;
-    };
-    const residentAge = resident ? getAge(resident.dateOfBirth) : 'N/A';
+const BARANGAY_ID = 'barangay_san_isidro';
 
-    return `
-        <html>
-        <head><title>${request.certificateName}</title><style>${css}</style></head>
-        <body>
-            <div class="header">
-                <p>Republic of the Philippines<br>Province of Metro Manila<br>City of Quezon</p>
-                <h2>Barangay San Isidro</h2>
-                <p>Tel No. 123-4567</p>
-            </div>
-            <div class="title"><h1>BARANGAY CLEARANCE</h1></div>
-            <div class="content">
-                <p>This is to certify that <strong>${request.residentName.toUpperCase()}</strong>, ${residentAge} years old, Filipino, and a bona fide resident of this Barangay, is a person of good moral character and has no pending case filed against him/her in this office.</p>
-                <p>This clearance is being issued upon the request of the above-named person for the purpose of <strong>${request.purpose}</strong>.</p>
-                <p>Issued this ${new Date().getDate()}th day of ${new Date().toLocaleString('default', { month: 'long' })}, ${new Date().getFullYear()} at Barangay San Isidro, Quezon City.</p>
-            </div>
-            <div class="signature-area">
-                <p class="official-name">JUAN L. TAMAD</p>
-                <p class="official-title">Punong Barangay</p>
-            </div>
-            <div class="not-valid">Not valid without official barangay seal.</div>
-        </body>
-        </html>
-    `;
+const getAge = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const birthDate = new Date(dateString);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age.toString();
 };
+
+const formatDate = (date: Date, formatStr: string) => {
+    if (formatStr === 'long') {
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    if (formatStr === 'day') return date.getDate().toString();
+    if (formatStr === 'month') return date.toLocaleString('default', { month: 'long' });
+    if (formatStr === 'year') return date.getFullYear().toString();
+    return date.toLocaleDateString();
+}
+
+const fillTemplate = (template: string, request: CertificateRequest, resident?: Resident) => {
+    let content = template;
+    const now = new Date();
+
+    // Resident Details
+    content = content.replace(/{{ resident.firstName }}/g, resident?.firstName || 'N/A');
+    content = content.replace(/{{ resident.lastName }}/g, resident?.lastName || 'N/A');
+    content = content.replace(/{{ resident.middleName }}/g, resident?.middleName || '');
+    content = content.replace(/{{ resident.suffix }}/g, resident?.suffix || '');
+    content = content.replace(/{{ resident.address }}/g, resident?.address || 'Barangay San Isidro, Quezon City');
+    content = content.replace(/{{ resident.age }}/g, resident?.dateOfBirth ? getAge(resident.dateOfBirth) : 'N/A');
+    content = content.replace(/{{ resident.civilStatus }}/g, resident?.civilStatus || 'Single');
+    
+    // Request Details
+    content = content.replace(/{{ request.purpose }}/g, request.purpose);
+    content = content.replace(/{{ document.name }}/g, request.certificateName);
+
+    // Date Logic (Basic Liquid-like syntax support)
+    content = content.replace(/{{ 'now' \| date: 'long' }}/g, formatDate(now, 'long'));
+    content = content.replace(/{{ 'now' \| date: 'day' }}/g, formatDate(now, 'day'));
+    content = content.replace(/{{ 'now' \| date: 'month' }}/g, formatDate(now, 'month'));
+    content = content.replace(/{{ 'now' \| date: 'year' }}/g, formatDate(now, 'year'));
+    
+    // Fallback for simple now
+    content = content.replace(/{{ now }}/g, formatDate(now, 'long'));
+
+    return content;
+}
+
+// Deprecated: generateCertificateHtml.
+export const generateCertificateHtml = (request: CertificateRequest, resident?: Resident) => {
+    return fillTemplate(DEFAULT_BARANGAY_CLEARANCE, request, resident);
+};
+
+type CertificateRequestWithId = CertificateRequest & { id?: string };
 
 export type DocumentFormValues = Omit<CertificateRequest, 'requestId' | 'requestNumber' | 'dateRequested' | 'residentName' | 'certificateName'>;
 
 type DocumentFormProps = {
-  record?: CertificateRequest;
-  onSave: (data: DocumentFormValues | CertificateRequest) => void;
+  record?: CertificateRequestWithId;
+  onSave: (data: DocumentFormValues | CertificateRequestWithId) => void;
   onClose: () => void;
   residents: Resident[];
   certificateTypes: CertificateType[];
@@ -276,10 +286,10 @@ export function AddDocument({ onAdd, residents, certificateTypes }: { onAdd: (da
   );
 }
 
-export function EditDocument({ record, onEdit, residents, certificateTypes }: { record: CertificateRequest; onEdit: (data: CertificateRequest) => void; residents: Resident[]; certificateTypes: CertificateType[] }) {
+export function EditDocument({ record, onEdit, residents, certificateTypes }: { record: CertificateRequestWithId; onEdit: (data: CertificateRequestWithId) => void; residents: Resident[]; certificateTypes: CertificateType[] }) {
   const [open, setOpen] = useState(false);
   
-  const handleSave = (data: CertificateRequest) => {
+  const handleSave = (data: CertificateRequestWithId) => {
     onEdit(data);
     setOpen(false);
   };
@@ -342,14 +352,52 @@ export function DeleteDocument({ recordId, onDelete }: { recordId: string; onDel
   );
 }
 
-export function PrintDocument({ record, onPrint, residents }: { record: CertificateRequest; onPrint: (record: CertificateRequest) => void; residents: Resident[] }) {
-    const handlePrintClick = () => {
+export function PrintDocument({ record, onPrint, residents, certificateTypes }: { record: CertificateRequest; onPrint: (record: CertificateRequest) => void; residents: Resident[]; certificateTypes: CertificateType[] }) {
+    const firestore = useFirestore();
+    const { toast } = useToast();
+
+    const handlePrintClick = async () => {
         const resident = residents.find(r => r.residentId === record.residentId);
-        const htmlContent = generateCertificateHtml(record, resident);
+        const certType = certificateTypes.find(c => c.certTypeId === record.certTypeId);
+        
+        let templateContent = DEFAULT_BARANGAY_CLEARANCE;
+
+        // Try to load template from Firestore if ID exists
+        if (certType?.templateId && firestore) {
+             try {
+                const templateRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${certType.templateId}`);
+                const templateSnap = await getDoc(templateRef);
+                if (templateSnap.exists()) {
+                    templateContent = templateSnap.data().content;
+                } else {
+                     console.warn("Template not found in Firestore, checking defaults...");
+                     // Fallback to defaults based on name if templateId is invalid
+                }
+             } catch (e) {
+                 console.error("Error fetching template:", e);
+                 toast({ variant: 'destructive', title: 'Error', description: 'Failed to load document template. Using default.' });
+             }
+        }
+        
+        // Smart defaults if no template loaded or templateId missing
+        if (!certType?.templateId || templateContent === DEFAULT_BARANGAY_CLEARANCE) {
+             const lowerName = record.certificateName.toLowerCase();
+             if (lowerName.includes('indigency')) {
+                 templateContent = DEFAULT_INDIGENCY;
+             } else if (lowerName.includes('residency') || lowerName.includes('resident')) {
+                 templateContent = DEFAULT_RESIDENCY;
+             }
+        }
+
+        const htmlContent = fillTemplate(templateContent, record, resident);
         const printWindow = window.open('', '_blank');
         printWindow?.document.write(htmlContent);
         printWindow?.document.close();
-        printWindow?.print();
+        
+        setTimeout(() => {
+            printWindow?.print();
+        }, 500);
+        
         onPrint(record);
     }
     return (

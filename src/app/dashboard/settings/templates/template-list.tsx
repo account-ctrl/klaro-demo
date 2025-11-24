@@ -16,6 +16,8 @@ import { format } from 'date-fns';
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
 
+type DocumentTemplateWithId = DocumentTemplate & { id?: string };
+
 export default function TemplateList() {
     const firestore = useFirestore();
     const { user } = useUser();
@@ -47,10 +49,11 @@ export default function TemplateList() {
         toast({ title: "Template Added", description: `${newTemplate.name} has been created.`});
     };
 
-    const handleEdit = (updatedTemplate: DocumentTemplate) => {
-        if (!firestore || !updatedTemplate.templateId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${updatedTemplate.templateId}`);
-        const { templateId, createdAt, ...dataToUpdate } = updatedTemplate;
+    const handleEdit = (updatedTemplate: DocumentTemplateWithId) => {
+        const docId = updatedTemplate.id || updatedTemplate.templateId;
+        if (!firestore || !docId) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${docId}`);
+        const { templateId, id, createdAt, ...dataToUpdate } = updatedTemplate;
         
         const finalData = {
             ...dataToUpdate,
@@ -95,7 +98,9 @@ export default function TemplateList() {
             </div>
         ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {templates.map((template) => (
+                {templates.map((template) => {
+                    const templateWithId = template as DocumentTemplateWithId;
+                    return (
                     <Card key={template.templateId}>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -109,11 +114,12 @@ export default function TemplateList() {
                             <p className="text-sm text-muted-foreground">Last updated: {template.updatedAt ? format(template.updatedAt.toDate(), 'PPp') : 'N/A'}</p>
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2 items-stretch">
-                            <EditTemplate record={template} onEdit={handleEdit} />
-                            <DeleteTemplate recordId={template.templateId} onDelete={handleDelete} />
+                            <EditTemplate record={templateWithId} onEdit={handleEdit} />
+                            <DeleteTemplate recordId={templateWithId.id || templateWithId.templateId} onDelete={handleDelete} />
                         </CardFooter>
                     </Card>
-                ))}
+                    );
+                })}
             </div>
         )}
     </div>

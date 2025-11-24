@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
 
+type CertificateTypeWithId = CertificateType & { id?: string };
 
 export default function DocumentTypeList() {
     const firestore = useFirestore();
@@ -42,10 +43,11 @@ export default function DocumentTypeList() {
         toast({ title: "Document Type Added", description: `${newDocType.name} has been created.`});
     };
 
-    const handleEdit = (updatedDocType: CertificateType) => {
-        if (!firestore || !updatedDocType.certTypeId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_types/${updatedDocType.certTypeId}`);
-        const { certTypeId, ...dataToUpdate } = updatedDocType;
+    const handleEdit = (updatedDocType: CertificateTypeWithId) => {
+        const docId = updatedDocType.id || updatedDocType.certTypeId;
+        if (!firestore || !docId) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_types/${docId}`);
+        const { certTypeId, id, ...dataToUpdate } = updatedDocType;
         updateDocumentNonBlocking(docRef, { ...dataToUpdate });
         toast({ title: "Document Type Updated", description: `The record for ${updatedDocType.name} has been updated.`});
     };
@@ -84,31 +86,34 @@ export default function DocumentTypeList() {
             </div>
         ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {documentTypes.map((docType) => (
-                    <Card key={docType.certTypeId}>
-                        <CardHeader>
-                            <div className="flex justify-between items-start">
-                                <CardTitle>{docType.name}</CardTitle>
-                                {docType.code && <Badge variant="outline">{docType.code}</Badge>}
-                            </div>
-                            <CardDescription>Fee: ₱{docType.fee?.toFixed(2) ?? '0.00'} | Valid for {docType.validityInMonths ?? 12} months</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             <div className="space-y-2">
-                                <h4 className="font-semibold text-sm flex items-center gap-2"><CheckSquare className="h-4 w-4 text-primary" /> Requirements</h4>
-                                <div className="flex flex-wrap gap-1">
-                                    {docType.requirements?.map(req => (
-                                        <Badge key={req} variant="secondary" className="font-normal">{req}</Badge>
-                                    ))}
+                {documentTypes.map((docType) => {
+                    const docWithId = docType as CertificateTypeWithId;
+                    return (
+                        <Card key={docType.certTypeId}>
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <CardTitle>{docType.name}</CardTitle>
+                                    {docType.code && <Badge variant="outline">{docType.code}</Badge>}
                                 </div>
-                             </div>
-                        </CardContent>
-                        <CardFooter className="flex flex-col gap-2 items-stretch">
-                            <EditDocumentType record={docType} onEdit={handleEdit} />
-                            <DeleteDocumentType recordId={docType.certTypeId} onDelete={handleDelete} />
-                        </CardFooter>
-                    </Card>
-                ))}
+                                <CardDescription>Fee: ₱{docType.fee?.toFixed(2) ?? '0.00'} | Valid for {docType.validityInMonths ?? 12} months</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-sm flex items-center gap-2"><CheckSquare className="h-4 w-4 text-primary" /> Requirements</h4>
+                                    <div className="flex flex-wrap gap-1">
+                                        {docType.requirements?.map(req => (
+                                            <Badge key={req} variant="secondary" className="font-normal">{req}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            </CardContent>
+                            <CardFooter className="flex flex-col gap-2 items-stretch">
+                                <EditDocumentType record={docWithId} onEdit={handleEdit} />
+                                <DeleteDocumentType recordId={docWithId.id || docWithId.certTypeId} onDelete={handleDelete} />
+                            </CardFooter>
+                        </Card>
+                    );
+                })}
             </div>
         )}
     </div>

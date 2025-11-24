@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -62,9 +63,11 @@ const defaultTemplateContent = `<!DOCTYPE html>
 
 export type TemplateFormValues = Omit<DocumentTemplate, 'templateId' | 'createdAt' | 'updatedAt'>;
 
+type DocumentTemplateWithId = DocumentTemplate & { id?: string };
+
 type TemplateFormProps = {
-  record?: DocumentTemplate;
-  onSave: (data: TemplateFormValues | DocumentTemplate) => void;
+  record?: DocumentTemplateWithId;
+  onSave: (data: TemplateFormValues | DocumentTemplateWithId) => void;
   onClose: () => void;
 };
 
@@ -182,10 +185,10 @@ export function AddTemplate({ onAdd }: { onAdd: (data: TemplateFormValues) => vo
   );
 }
 
-export function EditTemplate({ record, onEdit }: { record: DocumentTemplate; onEdit: (data: DocumentTemplate) => void; }) {
+export function EditTemplate({ record, onEdit }: { record: DocumentTemplateWithId; onEdit: (data: DocumentTemplateWithId) => void; }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: DocumentTemplate) => {
+  const handleSave = (data: DocumentTemplateWithId) => {
     onEdit(data);
     setOpen(false);
   };

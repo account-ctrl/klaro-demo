@@ -16,11 +16,13 @@ import {
 import { EditDocument, DeleteDocument, PrintDocument } from "./document-actions";
 import { Badge } from "@/components/ui/badge";
 
+type CertificateRequestWithId = CertificateRequest & { id?: string };
+
 type DocumentsTableActionsProps = {
-  doc: CertificateRequest;
-  onEdit: (doc: CertificateRequest) => void;
+  doc: CertificateRequestWithId;
+  onEdit: (doc: CertificateRequestWithId) => void;
   onDelete: (id: string) => void;
-  onPrint: (doc: CertificateRequest) => void;
+  onPrint: (doc: CertificateRequestWithId) => void;
   residents: Resident[];
   certificateTypes: CertificateType[];
 }
@@ -43,7 +45,7 @@ function DocumentsTableActions({ doc, onEdit, onDelete, onPrint, residents, cert
           <EditDocument record={doc} onEdit={onEdit} residents={residents} certificateTypes={certificateTypes} />
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
-          <DeleteDocument recordId={doc.requestId} onDelete={onDelete} />
+          <DeleteDocument recordId={doc.id || doc.requestId} onDelete={onDelete} />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -65,9 +67,9 @@ const getStatusBadgeVariant = (status: CertificateRequest['status']) => {
 }
 
 export const getColumns = (
-  onEdit: (doc: CertificateRequest) => void,
+  onEdit: (doc: CertificateRequestWithId) => void,
   onDelete: (id: string) => void,
-  onPrint: (doc: CertificateRequest) => void,
+  onPrint: (doc: CertificateRequestWithId) => void,
   residents: Resident[],
   certificateTypes: CertificateType[]
 ): ColumnDef<CertificateRequest>[] => [
@@ -112,7 +114,7 @@ export const getColumns = (
   {
     id: "actions",
     cell: ({ row }) => {
-      const doc = row.original;
+      const doc = row.original as CertificateRequestWithId;
       return <DocumentsTableActions doc={doc} onEdit={onEdit} onDelete={onDelete} onPrint={onPrint} residents={residents} certificateTypes={certificateTypes} />
     },
   },

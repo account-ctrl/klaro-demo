@@ -3,51 +3,40 @@
 
 import React from 'react';
 import {
-  collection,
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { CertificateRequest, Resident, CertificateType, FinancialTransaction } from "@/lib/types";
 import { getColumns } from './columns';
 import { DataTable } from './data-table';
 import { DocumentFormValues } from './document-actions';
 import { useToast } from '@/hooks/use-toast';
+import { 
+  useDocuments, 
+  useResidents, 
+  useDocumentTypes, 
+  useFinancials, 
+  useBarangayRef, 
+  BARANGAY_ID 
+} from '@/hooks/use-barangay-data';
 
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
-
+type CertificateRequestWithId = CertificateRequest & { id?: string };
 
 export function DocumentsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
 
-  const documentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`);
-  }, [firestore]);
-
-  const residentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
-
-  const certTypesCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/certificate_types`);
-  }, [firestore]);
+  // Data Fetching using new hooks
+  const { data: documents, isLoading: isLoadingDocuments } = useDocuments();
+  const { data: residents, isLoading: isLoadingResidents } = useResidents();
+  const { data: certificateTypes, isLoading: isLoadingCertTypes } = useDocumentTypes();
   
-  const financialsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/financial_transactions`);
-  }, [firestore]);
-
-  const { data: documents, isLoading: isLoadingDocuments } = useCollection<CertificateRequest>(documentsCollectionRef);
-  const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
-  const { data: certificateTypes, isLoading: isLoadingCertTypes } = useCollection<CertificateType>(certTypesCollectionRef);
-
+  // Refs for writing
+  const documentsCollectionRef = useBarangayRef('certificate_requests');
+  const financialsCollectionRef = useBarangayRef('financial_transactions');
 
   const handleAdd = (newRecord: DocumentFormValues) => {
     if (!documentsCollectionRef || !user) return;
@@ -89,14 +78,15 @@ export function DocumentsTable() {
     });
   };
 
-  const handleEdit = (updatedRecord: CertificateRequest) => {
-    if (!firestore || !updatedRecord.requestId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${updatedRecord.requestId}`);
+  const handleEdit = (updatedRecord: CertificateRequestWithId) => {
+    const recordId = updatedRecord.id || updatedRecord.requestId;
+    if (!firestore || !recordId) return;
+    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${recordId}`);
     
     const selectedResident = residents?.find(r => r.residentId === updatedRecord.residentId);
     const selectedCertType = certificateTypes?.find(c => c.certTypeId === updatedRecord.certTypeId);
 
-    const { requestId, ...dataToUpdate } = updatedRecord;
+    const { requestId, id, ...dataToUpdate } = updatedRecord;
 
     const finalData: Partial<Omit<CertificateRequest, 'requestId'>> = {
         ...dataToUpdate,
@@ -149,9 +139,10 @@ export function DocumentsTable() {
 
   };
 
-  const handlePrint = (recordToPrint: CertificateRequest) => {
-    if (!firestore || !recordToPrint.requestId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${recordToPrint.requestId}`);
+  const handlePrint = (recordToPrint: CertificateRequestWithId) => {
+    const recordId = recordToPrint.id || recordToPrint.requestId;
+    if (!firestore || !recordId) return;
+    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${recordId}`);
     
     updateDocumentNonBlocking(docRef, { status: 'Ready for Pickup' });
     toast({ title: 'Document Printed', description: 'Status updated to "Ready for Pickup".' });
