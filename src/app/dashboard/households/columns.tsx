@@ -22,10 +22,11 @@ const puroks: Purok[] = [
     { purokId: 'purok-4', name: 'Purok 4' },
 ];
 
+type HouseholdWithId = Household & { id?: string };
 
 type HouseholdsTableActionsProps = {
-  household: Household;
-  onEdit: (household: Household) => void;
+  household: HouseholdWithId;
+  onEdit: (household: HouseholdWithId) => void;
   onDelete: (id: string) => void;
   residents: Resident[];
   onMemberChange: (residentId: string, householdId: string | null) => void;
@@ -46,14 +47,14 @@ function HouseholdsTableActions({ household, onEdit, onDelete, residents, onMemb
           <EditHousehold record={household} onEdit={onEdit} residents={residents} onMemberChange={onMemberChange} />
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
-          <DeleteHousehold recordId={household.householdId} onDelete={onDelete} />
+          <DeleteHousehold recordId={household.id || household.householdId} onDelete={onDelete} />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-export const getColumns = (onEdit: (household: Household) => void, onDelete: (id: string) => void, residents: Resident[], onMemberChange: (residentId: string, householdId: string | null) => void): ColumnDef<Household>[] => [
+export const getColumns = (onEdit: (household: HouseholdWithId) => void, onDelete: (id: string) => void, residents: Resident[], onMemberChange: (residentId: string, householdId: string | null) => void): ColumnDef<Household>[] => [
   {
     accessorKey: "householdNumber",
     header: ({ column }) => (
@@ -108,7 +109,7 @@ export const getColumns = (onEdit: (household: Household) => void, onDelete: (id
   {
     id: "actions",
     cell: ({ row }) => {
-      const household = row.original;
+      const household = row.original as HouseholdWithId;
       return <HouseholdsTableActions household={household} onEdit={onEdit} onDelete={onDelete} residents={residents} onMemberChange={onMemberChange} />
     },
   },

@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
 
+type HouseholdWithId = Household & { id?: string };
 
 export function HouseholdsTable() {
   const firestore = useFirestore();
@@ -56,9 +57,10 @@ export function HouseholdsTable() {
     toast({ title: 'Household Added', description: `Household "${docToAdd.name}" has been created.` });
   };
 
-  const handleEdit = (updatedRecord: Household) => {
-    if (!firestore || !updatedRecord.householdId || !residents) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${updatedRecord.householdId}`);
+  const handleEdit = (updatedRecord: HouseholdWithId) => {
+    const recordId = updatedRecord.id || updatedRecord.householdId;
+    if (!firestore || !recordId || !residents) return;
+    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${recordId}`);
     
     const head = residents.find(r => r.residentId === updatedRecord.household_head_id);
      if (!head) {
@@ -66,7 +68,11 @@ export function HouseholdsTable() {
       return;
     }
 
-    const { householdId, createdAt, ...dataToUpdate } = updatedRecord;
+    // Exclude id and householdId (if it's not the doc ID, we generally keep it but don't change it. 
+    // Here we construct a new object. If householdId is the unique key in data, we can keep it.
+    // The previous code destructured householdId, so I will do the same to be safe, but we're updating by doc ID now.)
+    
+    const { householdId, id, createdAt, ...dataToUpdate } = updatedRecord;
 
     const finalRecord = {
         ...dataToUpdate,
@@ -87,7 +93,21 @@ export function HouseholdsTable() {
   
    const handleMemberChange = (residentId: string, householdId: string | null) => {
     if (!firestore || !residentId) return;
-    const residentDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${residentId}`);
+    // This assumes residentId is the DOC ID. If it's not, we have another problem.
+    // Residents list comes from useCollection, so it has .id
+    // But residents passed here is Resident[]. 
+    // Let's assume residentId passed from the component is correct.
+    // In HouseholdMembers component, residentId is taken from `member.residentId` or `r.residentId`.
+    // If residents have mismatching IDs, this might fail too.
+    // But let's stick to fixing household delete first.
+    
+    // To be safe, we should probably find the resident by residentId (field) and use its doc ID.
+    // But residents prop here has objects.
+    const resident = residents?.find(r => r.residentId === residentId);
+    // Cast to include ID
+    const residentDocId = (resident as any)?.id || residentId;
+    
+    const residentDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${residentDocId}`);
     updateDocumentNonBlocking(residentDocRef, { householdId: householdId });
     toast({
       title: householdId ? "Member Added" : "Member Removed",

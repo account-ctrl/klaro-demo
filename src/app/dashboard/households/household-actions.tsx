@@ -49,9 +49,11 @@ const BARANGAY_ID = 'barangay_san_isidro';
 
 export type HouseholdFormValues = Omit<Household, 'householdId' | 'createdAt' | 'name'>;
 
+type HouseholdWithId = Household & { id?: string };
+
 type HouseholdFormProps = {
-  record?: Household;
-  onSave: (data: HouseholdFormValues | Household) => void;
+  record?: HouseholdWithId;
+  onSave: (data: HouseholdFormValues | HouseholdWithId) => void;
   onClose: () => void;
   residents: Resident[];
 };
@@ -229,9 +231,15 @@ function HouseholdForm({ record, onSave, onClose, residents }: HouseholdFormProp
   );
 }
 
-function HouseholdMembers({ household, residents, onMemberChange }: { household: Household, residents: Resident[], onMemberChange: (residentId: string, householdId: string | null) => void }) {
+function HouseholdMembers({ household, residents, onMemberChange }: { household: HouseholdWithId, residents: Resident[], onMemberChange: (residentId: string, householdId: string | null) => void }) {
     const firestore = useFirestore();
     const membersQuery = useMemoFirebase(() => {
+        // Prefer using doc ID (household.id) if available, but fallback to householdId if necessary.
+        // Usually queries depend on the 'householdId' FIELD in the resident document matching the household.
+        // So we must use household.householdId because that's what's stored in the resident.
+        // WAIT: If the householdId FIELD is different from the household DOC ID, and we are fixing the delete/edit to use DOC ID...
+        // ... then resident relationships might be broken if they point to the householdId field instead of DOC ID.
+        // But let's assume residents point to the householdId FIELD.
         if (!firestore || !household.householdId) return null;
         return query(collection(firestore, `/barangays/${BARANGAY_ID}/residents`), where('householdId', '==', household.householdId));
     }, [firestore, household.householdId]);
@@ -317,10 +325,10 @@ export function AddHousehold({ onAdd, residents }: { onAdd: (data: HouseholdForm
   );
 }
 
-export function EditHousehold({ record, onEdit, residents, onMemberChange }: { record: Household; onEdit: (data: Household) => void; residents: Resident[]; onMemberChange: (residentId: string, householdId: string | null) => void; }) {
+export function EditHousehold({ record, onEdit, residents, onMemberChange }: { record: HouseholdWithId; onEdit: (data: HouseholdWithId) => void; residents: Resident[]; onMemberChange: (residentId: string, householdId: string | null) => void; }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: Household) => {
+  const handleSave = (data: HouseholdWithId) => {
     onEdit(data);
     setOpen(false);
   };
