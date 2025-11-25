@@ -360,7 +360,7 @@ export function PrintDocument({ record, onPrint, residents, certificateTypes }: 
         const resident = residents.find(r => r.residentId === record.residentId);
         const certType = certificateTypes.find(c => c.certTypeId === record.certTypeId);
         
-        let templateContent = DEFAULT_BARANGAY_CLEARANCE;
+        let templateContent = '';
 
         // Try to load template from Firestore if ID exists
         if (certType?.templateId && firestore) {
@@ -371,7 +371,6 @@ export function PrintDocument({ record, onPrint, residents, certificateTypes }: 
                     templateContent = templateSnap.data().content;
                 } else {
                      console.warn("Template not found in Firestore, checking defaults...");
-                     // Fallback to defaults based on name if templateId is invalid
                 }
              } catch (e) {
                  console.error("Error fetching template:", e);
@@ -379,13 +378,15 @@ export function PrintDocument({ record, onPrint, residents, certificateTypes }: 
              }
         }
         
-        // Smart defaults if no template loaded or templateId missing
-        if (!certType?.templateId || templateContent === DEFAULT_BARANGAY_CLEARANCE) {
+        // Use smart defaults ONLY if no custom template was found
+        if (!templateContent) {
              const lowerName = record.certificateName.toLowerCase();
              if (lowerName.includes('indigency')) {
                  templateContent = DEFAULT_INDIGENCY;
              } else if (lowerName.includes('residency') || lowerName.includes('resident')) {
                  templateContent = DEFAULT_RESIDENCY;
+             } else {
+                 templateContent = DEFAULT_BARANGAY_CLEARANCE;
              }
         }
 
