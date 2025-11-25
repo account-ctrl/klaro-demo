@@ -2,8 +2,8 @@
 'use client';
 
 import { useMemo, useState } from "react";
-import { collection, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
+import { doc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
 import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { EmergencyAlert, Resident } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -25,10 +25,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import dynamic from 'next/dynamic';
 
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
+// Dynamically import the Map component to avoid SSR issues with Leaflet
+const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
+    ssr: false,
+    loading: () => <div className="h-full w-full flex items-center justify-center bg-muted/50 animate-pulse"><p className="text-muted-foreground font-medium">Loading Map...</p></div>
+});
 
+// Utility type to ensure we can access the doc ID
+type EmergencyAlertWithId = EmergencyAlert & { id?: string };
 
 function ResolveAlertDialog({ alertId, onResolve, children }: { alertId: string, onResolve: (id: string, notes: string) => void, children: React.ReactNode }) {
     const [open, setOpen] = useState(false);
@@ -87,7 +94,7 @@ const getAge = (dateString: string) => {
     return age;
 }
 
-const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDelete }: { alert: EmergencyAlert; resident: Resident | undefined, onAcknowledge: (id: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
+const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDelete }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
     const timeAgo = useMemo(() => {
         if (!alert.timestamp) return '...';
         return formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true });
@@ -131,7 +138,10 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDele
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => onDelete(alert.alertId)}>
+                                <DropdownMenuItem 
+                                    className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
+                                    onClick={() => onDelete(alert.id || alert.alertId)}
+                                >
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Delete Alert
                                 </DropdownMenuItem>
@@ -249,20 +259,16 @@ export function EmergencyDashboard() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
 
-  // Get active and acknowledged alerts
-  const alertsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    const baseRef = collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`);
-    return query(baseRef, where('status', 'in', ['New', 'Acknowledged', 'Dispatched', 'On Scene']));
-  }, [firestore]);
+  // Use hooks
+  const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
+  const { data: residents, isLoading: isLoadingResidents } = useResidents();
   
-  const residentsCollectionRef = useMemoFirebase(() => {
-    if(!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
-
-  const { data: alerts, isLoading: isLoadingAlerts } = useCollection<EmergencyAlert>(alertsCollectionRef);
-  const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
+  // Collection ref for writing
+  const alertsCollectionRef = useBarangayRef('emergency_alerts');
+  
+  const alerts = useMemo(() => {
+      return allAlerts?.filter(a => ['New', 'Acknowledged', 'Dispatched', 'On Scene'].includes(a.status)) ?? [];
+  }, [allAlerts]);
   
   const sortedAlerts = useMemo(() => {
     return alerts?.sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0)) ?? [];
@@ -271,9 +277,9 @@ export function EmergencyDashboard() {
   const selectedAlert = useMemo(() => {
       if (!selectedAlertId && sortedAlerts.length > 0) {
           setSelectedAlertId(sortedAlerts[0].alertId);
-          return sortedAlerts[0];
+          return sortedAlerts[0] as EmergencyAlertWithId;
       }
-      return sortedAlerts.find(a => a.alertId === selectedAlertId);
+      return sortedAlerts.find(a => a.alertId === selectedAlertId) as EmergencyAlertWithId | undefined;
   }, [selectedAlertId, sortedAlerts]);
 
   const selectedResident = useMemo(() => {
@@ -286,7 +292,7 @@ export function EmergencyDashboard() {
         toast({ variant: 'destructive', title: 'Cannot Simulate', description: 'No residents found in the database to simulate an alert.' });
         return;
     }
-    if(!user) return;
+    if(!user || !alertsCollectionRef) return;
 
     setIsSimulating(true);
 
@@ -303,12 +309,9 @@ export function EmergencyDashboard() {
             status: 'New',
         };
 
-        if(firestore) {
-            const collectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`);
-            addDocumentNonBlocking(collectionRef, newAlert).then(docRef => {
-                 if (docRef) updateDocumentNonBlocking(docRef, { alertId: docRef.id, timestamp: serverTimestamp() });
-            });
-        }
+        addDocumentNonBlocking(alertsCollectionRef, newAlert).then(docRef => {
+                if (docRef) updateDocumentNonBlocking(docRef, { alertId: docRef.id, timestamp: serverTimestamp() });
+        });
 
         toast({ title: "SOS Simulated!", description: `An alert from ${randomResident.firstName} has been triggered.` });
         setIsSimulating(false);
@@ -358,15 +361,17 @@ export function EmergencyDashboard() {
     <div className="flex h-[calc(100vh-10rem)] gap-6">
         {/* Main Panel */}
         <div className="w-2/3 h-full">
-            <Card className="h-full">
+            <Card className="h-full overflow-hidden">
                 <CardHeader>
                     <CardTitle>Map Visualization</CardTitle>
                     <CardDescription>Real-time location of alerts and responders.</CardDescription>
                 </CardHeader>
-                <CardContent className="h-[calc(100%-4.5rem)]">
-                    <div className="bg-muted h-full w-full rounded-md flex items-center justify-center">
-                        <p className="text-muted-foreground">Map placeholder</p>
-                    </div>
+                <CardContent className="h-[calc(100%-4.5rem)] p-0 relative">
+                    <EmergencyMap 
+                        alerts={alerts ?? []}
+                        selectedAlertId={selectedAlertId}
+                        onSelectAlert={setSelectedAlertId}
+                    />
                 </CardContent>
             </Card>
         </div>

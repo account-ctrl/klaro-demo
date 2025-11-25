@@ -9,7 +9,8 @@ import {
     CertificateType, 
     FinancialTransaction, 
     Household,
-    DocumentTemplate
+    DocumentTemplate,
+    EmergencyAlert
 } from '@/lib/types';
 
 // Exported for direct usage in doc() refs if needed, but prefer hooks.
@@ -59,4 +60,8 @@ export function useHouseholds() {
 
 export function useDocumentTemplates() {
     return useBarangayCollection<DocumentTemplate>('document_templates');
+}
+
+export function useEmergencyAlerts() {
+    return useBarangayCollection<EmergencyAlert>('emergency_alerts');
 }
