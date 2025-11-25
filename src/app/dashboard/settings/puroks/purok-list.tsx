@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -10,9 +10,10 @@ import type { Purok, User as Official } from '@/lib/types';
 import { AddPurok, EditPurok, DeletePurok, PurokFormValues } from './purok-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { User } from 'lucide-react';
+import { User, RefreshCcw, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
@@ -63,6 +64,54 @@ export default function PurokList() {
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Purok Deleted", description: "The purok record has been permanently deleted." });
     };
+
+    const handleLoadDefaults = async () => {
+        if (!firestore) return;
+
+        const samplePuroks = [
+            { name: 'Purok 1', district: 'Centro', description: 'Main commercial area.' },
+            { name: 'Purok 2', district: 'Riverside', description: 'Residential area near the river.' },
+            { name: 'Purok 3', district: 'Upland', description: 'Agricultural zone.' },
+            { name: 'Purok 4', district: 'Sitio', description: 'Dense residential cluster.' },
+            { name: 'Purok 5', district: 'Highway', description: 'Along the national highway.' },
+            { name: 'Purok 6', description: 'New development area.' },
+            { name: 'Purok 7', description: 'Boundary area.' },
+        ];
+
+        try {
+            const batch = writeBatch(firestore);
+            samplePuroks.forEach((purok) => {
+                const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/puroks`));
+                batch.set(newDocRef, {
+                    ...purok,
+                    purokId: newDocRef.id,
+                    createdAt: serverTimestamp(),
+                });
+            });
+            await batch.commit();
+            toast({ title: "Sample Puroks Loaded", description: "Default purok list has been added." });
+        } catch (error) {
+            console.error("Error loading defaults:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to load sample data." });
+        }
+    };
+
+    const handleClearAll = async () => {
+        if (!firestore || !puroks) return;
+        
+        try {
+            const batch = writeBatch(firestore);
+            puroks.forEach((purok) => {
+                const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/puroks/${purok.purokId}`);
+                batch.delete(docRef);
+            });
+            await batch.commit();
+            toast({ variant: "destructive", title: "Data Cleared", description: "All purok records have been removed." });
+        } catch (error) {
+             console.error("Error clearing data:", error);
+             toast({ variant: "destructive", title: "Error", description: "Failed to clear data." });
+        }
+    }
     
     const isLoading = isLoadingPuroks || isLoadingOfficials;
 
@@ -83,13 +132,21 @@ export default function PurokList() {
 
   return (
     <div className="space-y-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleLoadDefaults}>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Load Samples
+            </Button>
+            <Button variant="destructive" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleClearAll} disabled={!puroks || puroks.length === 0}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Clear All
+            </Button>
             <AddPurok onAdd={handleAdd} officials={officials ?? []} />
         </div>
         
         {!puroks || puroks.length === 0 ? (
              <div className="text-muted-foreground col-span-full text-center py-10">
-                No puroks found. Click "New Purok" to get started.
+                No puroks found. Click "New Purok" or "Load Samples" to get started.
             </div>
         ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

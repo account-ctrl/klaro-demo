@@ -235,10 +235,10 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onDispatch, onRes
                         </DropdownMenu>
                     </div>
                 </div>
-                <CardDescription>
-                    {alert.category && <Badge variant="outline" className="mr-2">{alert.category}</Badge>}
-                    Received {timeAgo}
-                </CardDescription>
+                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                    {alert.category && <Badge variant="outline">{alert.category}</Badge>}
+                    <span>Received {timeAgo}</span>
+                </div>
             </CardHeader>
             <Separator />
             <CardContent className="pt-6 space-y-6 flex-grow overflow-y-auto">

@@ -242,8 +242,8 @@ function EmergencySOSButton() {
                         const member = doc.data() as Resident;
                         householdMembersSnapshot.push({
                             name: `${member.firstName} ${member.lastName}`,
-                            relationship: member.residentId === user.uid ? 'Self' : 'Member', // Simplified
-                            // Calculate age
+                            relationship: member.residentId === user.uid ? 'Self' : 'Member',
+                            // Calculate age safely
                             age: member.dateOfBirth ? String(new Date().getFullYear() - new Date(member.dateOfBirth).getFullYear()) : 'N/A'
                         });
                     });
@@ -261,18 +261,22 @@ function EmergencySOSButton() {
                 try {
                     const alertsCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`);
                     
-                    const newAlert: Omit<EmergencyAlert, 'alertId' | 'timestamp'> = {
+                    // Prepare safe alert object, ensuring no undefined fields
+                    const newAlert: Record<string, any> = {
                         residentId: user.uid,
-                        residentName: user.displayName || residentData?.firstName ? `${residentData?.firstName} ${residentData?.lastName}` : 'Resident', 
+                        residentName: user.displayName || (residentData?.firstName ? `${residentData?.firstName} ${residentData?.lastName}` : 'Resident'), 
                         latitude,
                         longitude,
                         status: 'New',
-                        category: category as any,
+                        category: category,
                         message: message,
                         contactNumber: contactNumber || residentData?.contactNumber || 'No contact #',
-                        householdId: residentData?.householdId,
                         householdMembersSnapshot: householdMembersSnapshot,
                     };
+                    
+                    if (residentData?.householdId) {
+                        newAlert.householdId = residentData.householdId;
+                    }
 
                     const docRef = await addDocumentNonBlocking(alertsCollectionRef, newAlert);
                     if (docRef) {
@@ -286,9 +290,9 @@ function EmergencySOSButton() {
                         className: "bg-red-600 text-white border-none"
                     });
                     setOpenDialog(false);
-                } catch (error) {
+                } catch (error: any) {
                     console.error("Error sending SOS:", error);
-                    toast({ variant: 'destructive', title: 'Failed to send SOS', description: 'Please try again or call emergency services directly.' });
+                    toast({ variant: 'destructive', title: 'Failed to send SOS', description: error.message || 'Please try again or call emergency services directly.' });
                 } finally {
                     setIsSending(false);
                 }
@@ -307,6 +311,19 @@ function EmergencySOSButton() {
          const alertRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
          updateDocumentNonBlocking(alertRef, { message, category: category as any });
          toast({ title: "Update Sent", description: "Incident details updated." });
+    }
+
+    const handleResolveAlert = async () => {
+         if (!activeAlertId || !firestore) return;
+         const alertRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
+         await updateDocumentNonBlocking(alertRef, { 
+             status: 'Resolved',
+             resolvedAt: serverTimestamp(),
+             notes: 'Resolved by resident.' 
+         });
+         
+         toast({ title: "Alert Closed", description: "You have marked the incident as resolved." });
+         setActiveAlertId(null);
     }
 
     return (
@@ -419,7 +436,7 @@ function EmergencySOSButton() {
                                 Update Message
                             </Button>
                          </div>
-                         <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveAlertId(null)}>
+                         <Button variant="outline" size="sm" className="w-full" onClick={handleResolveAlert}>
                             Report Resolved / Close
                          </Button>
                     </div>
