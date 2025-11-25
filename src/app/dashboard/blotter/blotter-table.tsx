@@ -172,6 +172,7 @@ export function BlotterTable() {
 
   const handleDelete = (id: string) => {
     if (!firestore) return;
+    console.log("Deleting blotter case with ID:", id); // Added logging
     const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/blotter_cases/${id}`);
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Blotter Record Deleted', description: 'The record has been permanently deleted.' });
@@ -235,7 +236,7 @@ export function BlotterTable() {
           </TableHeader>
           <TableBody>
             {records && records.length > 0 ? records.map((record) => (
-              <TableRow key={record.caseId}>
+              <TableRow key={record.id}>
                 <TableCell className="font-mono text-xs">{record.caseId}</TableCell>
                 <TableCell>{allCaseTypes.find(c => c.value === record.caseType)?.label ?? record.caseType}</TableCell>
                 <TableCell>{getParticipantNames(record.complainantIds)}</TableCell>
@@ -254,7 +255,7 @@ export function BlotterTable() {
                       facilities={currentFacilities}
                     />
                     <EditBlotterRecord record={record} onEdit={handleEdit} residents={residents ?? []} facilities={currentFacilities}/>
-                    <DeleteBlotterRecord recordId={record.caseId} onDelete={handleDelete} />
+                    <DeleteBlotterRecord recordId={record.id} onDelete={handleDelete} />
                   </div>
                 </TableCell>
               </TableRow>

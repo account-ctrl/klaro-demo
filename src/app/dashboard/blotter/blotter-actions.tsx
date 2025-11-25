@@ -466,6 +466,13 @@ export function DeleteBlotterRecord({
   recordId: string;
   onDelete: (id: string) => void;
 }) {
+  const handleClick = (e: React.MouseEvent) => {
+      // Prevent default to avoid any unexpected form submission behavior if contained within one
+      e.preventDefault(); 
+      console.log("Delete confirmed for:", recordId);
+      onDelete(recordId);
+  }
+
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -489,7 +496,7 @@ export function DeleteBlotterRecord({
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={() => onDelete(recordId)}
+            onClick={handleClick}
             className="bg-destructive hover:bg-destructive/90"
           >
             Delete
