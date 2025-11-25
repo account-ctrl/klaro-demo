@@ -1,11 +1,10 @@
-
 'use client';
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { EmergencyAlert, ResponderLocation } from '@/lib/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 type EmergencyMapProps = {
     alerts: EmergencyAlert[];
@@ -28,16 +27,14 @@ function MapUpdater({ center }: { center: [number, number] | null }) {
 }
 
 const createPulseIcon = (isSelected: boolean) => {
-    // Using standard Tailwind classes. Ensure these are safe-listed or used elsewhere if they don't appear.
-    // The 'custom-div-icon' class removes the default white square background of Leaflet DivIcons.
     return L.divIcon({
-        className: '!bg-transparent border-none', // Override leaflet default styles
+        className: '!bg-transparent border-none',
         html: `<div class="relative flex h-6 w-6 items-center justify-center">
                   ${isSelected ? '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>' : ''}
                   <span class="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white shadow-md"></span>
                 </div>`,
         iconSize: [24, 24],
-        iconAnchor: [12, 12], // Center the icon
+        iconAnchor: [12, 12],
         popupAnchor: [0, -12]
     });
 };
@@ -64,22 +61,21 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
         ? [selectedAlert.latitude, selectedAlert.longitude] as [number, number] 
         : (alerts.length > 0 ? [alerts[0].latitude, alerts[0].longitude] as [number, number] : defaultCenter);
 
-    // Fix for "Map container is already initialized"
-    // We generate a unique key on mount so that if the component remounts, 
-    // it forces a fresh MapContainer instance.
-    const [mapKey, setMapKey] = useState<string | null>(null);
+    const mapRef = useRef<L.Map | null>(null);
 
+    // Cleanup map on unmount to avoid "Map container is already initialized" error
     useEffect(() => {
-        setMapKey(`map-${Date.now()}`);
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+        };
     }, []);
-
-    if (!mapKey) {
-        return <div className="h-full w-full bg-muted/20 animate-pulse flex items-center justify-center text-xs text-muted-foreground">Initializing Map...</div>;
-    }
 
     return (
         <MapContainer 
-            key={mapKey}
+            ref={mapRef}
             center={initialCenter} 
             zoom={13} 
             style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0 }}

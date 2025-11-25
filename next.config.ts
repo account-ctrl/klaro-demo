@@ -1,6 +1,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  reactStrictMode: false,
   /* config options here */
   allowedDevOrigins: [
     "https://6000-firebase-studio-1763805159845.cluster-ubrd2huk7jh6otbgyei4h62ope.cloudworkstations.dev",
