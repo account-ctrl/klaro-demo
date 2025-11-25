@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, FilePen, Trash2 } from 'lucide-react';
+import { PlusCircle, FilePen, Trash2, Wand2 } from 'lucide-react';
 import { Announcement } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -46,6 +46,14 @@ type AnnouncementFormProps = {
 };
 
 const categories: Announcement['category'][] = ['General Info', 'Event', 'Health', 'Ordinance', 'Emergency'];
+
+export const ANNOUNCEMENT_TEMPLATES = [
+    { label: 'Medical Mission', title: 'Free Medical Mission', category: 'Health', content: 'We will be conducting a free medical, dental, and optical mission at the Barangay Hall on [Date] from 8:00 AM to 5:00 PM. Services include free check-ups and medicine distribution.' },
+    { label: 'Clean-up Drive', title: 'Barangay Clean-up Drive', category: 'Event', content: 'Join us for a community clean-up drive this Saturday, [Date], starting at 6:00 AM. Assembly area at the Covered Court. Please bring your own broom and dustpan. Together, let\'s keep our barangay clean!' },
+    { label: 'Typhoon Advisory', title: 'Typhoon Warning Advisory', category: 'Emergency', content: 'PAGASA has raised a warning signal in our area. Please secure your homes, prepare emergency kits, and stay tuned for further updates. Evacuation centers are open at the Elementary School and Covered Court.' },
+    { label: 'General Assembly', title: 'Barangay General Assembly', category: 'General Info', content: 'Notice is hereby given for the Barangay General Assembly to be held on [Date] at [Time]. Agenda includes: State of Barangay Address, Financial Report, and Open Forum. Your attendance is highly encouraged.' },
+    { label: 'Curfew Reminder', title: 'Reminder: Curfew Hours', category: 'Ordinance', content: 'This is a reminder that the curfew for minors (17 years old and below) is strictly enforced from 10:00 PM to 4:00 AM daily. Parents are advised to ensure their children are home by 10:00 PM.' },
+] as const;
 
 function AnnouncementForm({ record, onSave, onClose }: AnnouncementFormProps) {
   const [formData, setFormData] = useState<AnnouncementFormValues>({
@@ -62,6 +70,18 @@ function AnnouncementForm({ record, onSave, onClose }: AnnouncementFormProps) {
   
   const handleSelectChange = (value: Announcement['category']) => {
     setFormData((prev) => ({ ...prev, category: value }));
+  }
+
+  const handleTemplateSelect = (value: string) => {
+      const template = ANNOUNCEMENT_TEMPLATES.find(t => t.label === value);
+      if (template) {
+          setFormData(prev => ({
+              ...prev,
+              title: template.title,
+              category: template.category as Announcement['category'],
+              content: template.content
+          }));
+      }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,6 +104,22 @@ function AnnouncementForm({ record, onSave, onClose }: AnnouncementFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {!record && (
+          <div className="space-y-2 bg-muted/50 p-3 rounded-md border border-dashed">
+            <Label className="flex items-center gap-2 text-primary"><Wand2 className="h-4 w-4"/> Use a Template</Label>
+            <Select onValueChange={handleTemplateSelect}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a template to auto-fill..." />
+              </SelectTrigger>
+              <SelectContent>
+                {ANNOUNCEMENT_TEMPLATES.map(t => (
+                  <SelectItem key={t.label} value={t.label}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="title">Title</Label>
         <Input id="title" value={formData.title} onChange={handleChange} required />
