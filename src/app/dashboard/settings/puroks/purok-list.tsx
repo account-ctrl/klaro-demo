@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
@@ -10,10 +10,29 @@ import type { Purok, User as Official } from '@/lib/types';
 import { AddPurok, EditPurok, DeletePurok, PurokFormValues } from './purok-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, RefreshCcw, Trash2 } from 'lucide-react';
+import { User, RefreshCcw, Trash2, LayoutGrid, List, FilePen } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
@@ -23,6 +42,7 @@ export default function PurokList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
     const puroksCollectionRef = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -132,16 +152,37 @@ export default function PurokList() {
 
   return (
     <div className="space-y-6">
-        <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleLoadDefaults}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                Load Samples
-            </Button>
-            <Button variant="destructive" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleClearAll} disabled={!puroks || puroks.length === 0}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Clear All
-            </Button>
-            <AddPurok onAdd={handleAdd} officials={officials ?? []} />
+        <div className="flex justify-between items-center">
+             <div className="flex items-center bg-muted p-1 rounded-lg border">
+                <Button 
+                    variant={viewMode === 'card' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    onClick={() => setViewMode('card')}
+                    className="px-3"
+                >
+                    <LayoutGrid className="h-4 w-4 mr-2" /> Card
+                </Button>
+                <Button 
+                    variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
+                    size="sm" 
+                    onClick={() => setViewMode('list')}
+                    className="px-3"
+                >
+                    <List className="h-4 w-4 mr-2" /> List
+                </Button>
+            </div>
+
+            <div className="flex gap-2">
+                <Button variant="outline" onClick={handleLoadDefaults}>
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                    Load Samples
+                </Button>
+                <Button variant="destructive" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleClearAll} disabled={!puroks || puroks.length === 0}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear All
+                </Button>
+                <AddPurok onAdd={handleAdd} officials={officials ?? []} />
+            </div>
         </div>
         
         {!puroks || puroks.length === 0 ? (
@@ -149,47 +190,118 @@ export default function PurokList() {
                 No puroks found. Click "New Purok" or "Load Samples" to get started.
             </div>
         ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {puroks.map((purok) => {
-                    const leader = officials?.find(o => o.userId === purok.purokLeaderId);
-                    return (
-                        <Card key={purok.purokId}>
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <CardTitle>{purok.name}</CardTitle>
-                                    {purok.district && <Badge variant="outline">{purok.district}</Badge>}
-                                </div>
-                                <CardDescription>{purok.description || 'No description provided.'}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {leader ? (
-                                     <div className="flex items-center gap-3">
-                                        <Avatar className="h-10 w-10">
-                                            <AvatarFallback>{leader.fullName.charAt(0).toUpperCase()}</AvatarFallback>
-                                        </Avatar>
-                                        <div>
-                                            <p className="font-semibold text-sm">{leader.fullName}</p>
-                                            <p className="text-xs text-muted-foreground">Assigned Leader</p>
-                                        </div>
+            viewMode === 'card' ? (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {puroks.map((purok) => {
+                        const leader = officials?.find(o => o.userId === purok.purokLeaderId);
+                        return (
+                            <Card key={purok.purokId}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <CardTitle>{purok.name}</CardTitle>
+                                        {purok.district && <Badge variant="outline">{purok.district}</Badge>}
                                     </div>
-                                ) : (
-                                    <div className="flex items-center gap-3 text-muted-foreground">
-                                        <User className="h-10 w-10 p-2 rounded-full bg-muted" />
-                                        <div>
-                                            <p className="font-semibold text-sm">Unassigned</p>
-                                            <p className="text-xs">No leader assigned</p>
+                                    <CardDescription>{purok.description || 'No description provided.'}</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {leader ? (
+                                         <div className="flex items-center gap-3">
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarFallback>{leader.fullName.charAt(0).toUpperCase()}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-semibold text-sm">{leader.fullName}</p>
+                                                <p className="text-xs text-muted-foreground">Assigned Leader</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                            <CardFooter className="flex flex-col gap-2 items-stretch">
-                                <EditPurok record={purok} onEdit={handleEdit} officials={officials ?? []} />
-                                <DeletePurok recordId={purok.purokId} onDelete={handleDelete} />
-                            </CardFooter>
-                        </Card>
-                    )
-                })}
-            </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3 text-muted-foreground">
+                                            <User className="h-10 w-10 p-2 rounded-full bg-muted" />
+                                            <div>
+                                                <p className="font-semibold text-sm">Unassigned</p>
+                                                <p className="text-xs">No leader assigned</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                                <CardFooter className="flex flex-col gap-2 items-stretch">
+                                    <EditPurok record={purok} onEdit={handleEdit} officials={officials ?? []} />
+                                    <DeletePurok recordId={purok.purokId} onDelete={handleDelete} />
+                                </CardFooter>
+                            </Card>
+                        )
+                    })}
+                </div>
+            ) : (
+                <div className="border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Purok Name</TableHead>
+                                <TableHead>District</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Leader</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {puroks.map((purok) => {
+                                const leader = officials?.find(o => o.userId === purok.purokLeaderId);
+                                return (
+                                    <TableRow key={purok.purokId}>
+                                        <TableCell className="font-medium">{purok.name}</TableCell>
+                                        <TableCell>{purok.district || '-'}</TableCell>
+                                        <TableCell>{purok.description}</TableCell>
+                                        <TableCell>
+                                            {leader ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-6 w-6">
+                                                        <AvatarFallback className="text-[10px]">{leader.fullName.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="text-sm">{leader.fullName}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm">Unassigned</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <EditPurok 
+                                                    record={purok} 
+                                                    onEdit={handleEdit} 
+                                                    officials={officials ?? []} 
+                                                    trigger={<Button variant="ghost" size="icon"><FilePen className="h-4 w-4"/></Button>}
+                                                />
+                                                <AlertDialog>
+                                                  <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="text-destructive">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                  </AlertDialogTrigger>
+                                                  <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                      <AlertDialogTitle>Delete Purok?</AlertDialogTitle>
+                                                      <AlertDialogDescription>
+                                                        This action cannot be undone. This will permanently delete {purok.name}.
+                                                      </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                      <AlertDialogAction onClick={() => handleDelete(purok.purokId)} className="bg-destructive">
+                                                        Delete
+                                                      </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                  </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            )
         )}
     </div>
   );

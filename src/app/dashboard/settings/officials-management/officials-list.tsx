@@ -8,11 +8,11 @@ import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlo
 import { useToast } from '@/hooks/use-toast';
 import type { User as Official } from '@/lib/types';
 import { OfficialCard } from './official-card';
-import { AddOfficial, OfficialFormValues } from './officials-actions';
+import { AddOfficial, OfficialFormValues, EditOfficial } from './officials-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { officialsAndStaff, committeeAssignments, systemRoles } from '@/lib/data';
 import { Button } from '@/components/ui/button';
-import { RefreshCcw, Trash2, LayoutGrid, List } from 'lucide-react';
+import { RefreshCcw, Trash2, LayoutGrid, List, FilePen } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -23,13 +23,23 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { EditOfficial, DeleteOfficial } from './official-card'; // Assuming these are exported or I need to inline/refactor
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function OfficialsList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
     // The new schema stores users at the root level, not per-barangay
     const officialsCollectionRef = useMemoFirebase(() => {
@@ -90,7 +100,7 @@ export default function OfficialsList() {
                 batch.set(newDocRef, {
                     ...official,
                     userId: newDocRef.id,
-                    password_hash: 'default', // Placeholder
+                    password_hash: 'default', 
                 });
             });
             await batch.commit();
@@ -107,7 +117,6 @@ export default function OfficialsList() {
         try {
             const batch = writeBatch(firestore);
             officials.forEach((official) => {
-                // Prevent deleting the currently logged in user if possible to avoid self-lockout
                 if (official.userId !== user?.uid) {
                     const docRef = doc(firestore, `/users/${official.userId}`);
                     batch.delete(docRef);
@@ -139,25 +148,26 @@ export default function OfficialsList() {
   return (
     <div className="space-y-6">
         <div className="flex justify-between items-center">
-             <div className="flex items-center bg-muted rounded-md p-1">
+             <div className="flex items-center bg-muted p-1 rounded-lg border">
                 <Button 
-                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                    variant={viewMode === 'card' ? 'secondary' : 'ghost'} 
                     size="sm" 
-                    onClick={() => setViewMode('grid')}
-                    className="h-8 w-8 p-0"
+                    onClick={() => setViewMode('card')}
+                    className="px-3"
                 >
-                    <LayoutGrid className="h-4 w-4" />
+                    <LayoutGrid className="h-4 w-4 mr-2" /> Card
                 </Button>
                 <Button 
                     variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
                     size="sm" 
                     onClick={() => setViewMode('list')}
-                    className="h-8 w-8 p-0"
+                    className="px-3"
                 >
-                    <List className="h-4 w-4" />
+                    <List className="h-4 w-4 mr-2" /> List
                 </Button>
             </div>
-            <div className="flex justify-end gap-2">
+
+            <div className="flex gap-2">
                 <Button variant="outline" onClick={handleLoadDefaults}>
                     <RefreshCcw className="mr-2 h-4 w-4" />
                     Load Samples
@@ -180,8 +190,7 @@ export default function OfficialsList() {
                 No officials found. Click "Add Official" or "Load Samples" to get started.
             </div>
         ) : (
-            <>
-            {viewMode === 'grid' ? (
+            viewMode === 'card' ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {officials.map((official) => (
                         <OfficialCard 
@@ -196,12 +205,13 @@ export default function OfficialsList() {
                     ))}
                 </div>
             ) : (
-                <div className="rounded-md border">
+                <div className="border rounded-md">
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Official</TableHead>
+                                <TableHead>Name</TableHead>
                                 <TableHead>Position</TableHead>
+                                <TableHead>Committee</TableHead>
                                 <TableHead>Role</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
@@ -210,44 +220,52 @@ export default function OfficialsList() {
                         <TableBody>
                             {officials.map((official) => (
                                 <TableRow key={official.userId}>
-                                    <TableCell className="flex items-center gap-3">
-                                        <Avatar className="h-9 w-9">
-                                            <AvatarImage src={official.digitalSignatureUrl} alt={official.fullName} />
+                                    <TableCell className="font-medium flex items-center gap-3">
+                                        <Avatar className="h-8 w-8">
+                                            {/* <AvatarImage src={official.avatarUrl} /> */}
                                             <AvatarFallback>{official.fullName.charAt(0)}</AvatarFallback>
                                         </Avatar>
-                                        <div>
-                                            <div className="font-medium">{official.fullName}</div>
-                                            <div className="text-xs text-muted-foreground">{official.email}</div>
-                                        </div>
+                                        {official.fullName}
                                     </TableCell>
-                                    <TableCell>
-                                        <div className="font-medium">{official.position}</div>
-                                        {official.committee && <div className="text-xs text-muted-foreground">{official.committee}</div>}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline">{official.systemRole}</Badge>
-                                    </TableCell>
+                                    <TableCell>{official.position}</TableCell>
+                                    <TableCell>{official.committee || '-'}</TableCell>
+                                    <TableCell>{official.systemRole}</TableCell>
                                     <TableCell>
                                         <Badge variant={official.status === 'Active' ? 'default' : 'secondary'}>
                                             {official.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {/* Note: Reusing EditOfficial and DeleteOfficial would require exporting them from official-card or refactoring. 
-                                            Assuming OfficialCard exports them or I need to use a dropdown menu here.
-                                            For simplicity, I'll assume I need to extract them. 
-                                            Since I cannot see official-card.tsx exports, I will use OfficialCard but with a 'row' prop or similar if supported? 
-                                            No, OfficialCard is a Card component. 
-                                            I will need to replicate the Edit/Delete buttons logic here or refactor.
-                                            I'll check official-card.tsx imports if possible, but I'll just reuse the passed props onEdit and onDelete.
-                                        */}
                                         <div className="flex justify-end gap-2">
-                                            {/* I'll assume EditOfficial and DeleteOfficial are not exported. I'll reimplement basic buttons that call the handlers 
-                                                Wait, I can just use standard buttons for now or try to import if I knew they were exported.
-                                                Let's try to import them. If they fail, I'll fix.
-                                            */}
-                                            {/* Actually, I will update imports above to try to import them. */}
-                                            <OfficialRowActions official={official} onEdit={handleEdit} onDelete={handleDelete} positions={officialsAndStaff} committees={committeeAssignments} systemRoles={systemRoles} />
+                                            <EditOfficial 
+                                                record={official} 
+                                                onEdit={handleEdit} 
+                                                positions={officialsAndStaff} 
+                                                committees={committeeAssignments} 
+                                                systemRoles={systemRoles} 
+                                                trigger={<Button variant="ghost" size="icon"><FilePen className="h-4 w-4"/></Button>}
+                                            />
+                                            <AlertDialog>
+                                              <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="text-destructive">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              </AlertDialogTrigger>
+                                              <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                  <AlertDialogTitle>Delete Official?</AlertDialogTitle>
+                                                  <AlertDialogDescription>
+                                                    This action cannot be undone. This will permanently delete the record for {official.fullName}.
+                                                  </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                  <AlertDialogAction onClick={() => handleDelete(official.userId, official.fullName)} className="bg-destructive">
+                                                    Delete
+                                                  </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                              </AlertDialogContent>
+                                            </AlertDialog>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -255,21 +273,8 @@ export default function OfficialsList() {
                         </TableBody>
                     </Table>
                 </div>
-            )}
-            </>
+            )
         )}
     </div>
   );
-}
-
-// Helper component for row actions to avoid duplication (and circular dependency if extracting from card)
-import { EditOfficial as EditDialog, DeleteOfficial as DeleteDialog } from './official-card';
-
-function OfficialRowActions({ official, onEdit, onDelete, positions, committees, systemRoles }: any) {
-    return (
-        <div className="flex items-center gap-2">
-             <EditDialog official={official} onEdit={onEdit} positions={positions} committees={committees} systemRoles={systemRoles} triggerAsChild={false} variant="ghost" size="icon" />
-             <DeleteDialog id={official.userId} name={official.fullName} onDelete={onDelete} triggerAsChild={false} variant="ghost" size="icon" />
-        </div>
-    )
 }

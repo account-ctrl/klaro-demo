@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -10,8 +10,9 @@ import type { CertificateType } from '@/lib/types';
 import { AddDocumentType, EditDocumentType, DeleteDocumentType, DocumentTypeFormValues } from './document-type-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Tag, CircleDollarSign, CheckSquare } from 'lucide-react';
+import { FileText, Tag, CircleDollarSign, CheckSquare, RefreshCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
@@ -58,6 +59,53 @@ export default function DocumentTypeList() {
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Document Type Deleted", description: "The document type has been permanently deleted." });
     };
+
+    const handleLoadDefaults = async () => {
+        if (!firestore) return;
+
+        const sampleDocTypes = [
+            { name: 'Barangay Clearance', code: 'BC-001', fee: 100, validityInMonths: 6, requirements: ['Valid ID', 'Community Tax Certificate (Cedula)'] },
+            { name: 'Certificate of Indigency', code: 'IND-001', fee: 0, validityInMonths: 6, requirements: ['Valid ID', 'Proof of Income (Optional)'] },
+            { name: 'Certificate of Residency', code: 'RES-001', fee: 50, validityInMonths: 6, requirements: ['Valid ID'] },
+            { name: 'Business Clearance', code: 'BUS-001', fee: 500, validityInMonths: 12, requirements: ['DTI/SEC Registration', 'Contract of Lease'] },
+        ];
+
+        try {
+            const batch = writeBatch(firestore);
+            sampleDocTypes.forEach((docType) => {
+                const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/certificate_types`));
+                batch.set(newDocRef, {
+                    ...docType,
+                    certTypeId: newDocRef.id,
+                });
+            });
+            await batch.commit();
+            toast({ title: "Sample Data Loaded", description: "Default document types have been added." });
+        } catch (error) {
+            console.error("Error loading defaults:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to load sample data." });
+        }
+    };
+
+    const handleClearAll = async () => {
+        if (!firestore || !documentTypes) return;
+        
+        try {
+            const batch = writeBatch(firestore);
+            documentTypes.forEach((docType) => {
+                const docId = (docType as CertificateTypeWithId).id || docType.certTypeId;
+                if (docId) {
+                    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_types/${docId}`);
+                    batch.delete(docRef);
+                }
+            });
+            await batch.commit();
+            toast({ variant: "destructive", title: "Data Cleared", description: "All document types have been removed." });
+        } catch (error) {
+             console.error("Error clearing data:", error);
+             toast({ variant: "destructive", title: "Error", description: "Failed to clear data." });
+        }
+    }
     
     if (isLoading) {
         return (
@@ -76,13 +124,21 @@ export default function DocumentTypeList() {
 
   return (
     <div className="space-y-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleLoadDefaults}>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Load Samples
+            </Button>
+            <Button variant="destructive" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleClearAll} disabled={!documentTypes || documentTypes.length === 0}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Clear All
+            </Button>
             <AddDocumentType onAdd={handleAdd} />
         </div>
         
         {!documentTypes || documentTypes.length === 0 ? (
              <div className="text-muted-foreground col-span-full text-center py-10">
-                No document types found. Click "New Document Type" to get started.
+                No document types found. Click "New Document Type" or "Load Samples" to get started.
             </div>
         ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
