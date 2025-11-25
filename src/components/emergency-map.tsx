@@ -4,11 +4,12 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert } from '@/lib/types';
-import { useEffect } from 'react';
+import { EmergencyAlert, ResponderLocation } from '@/lib/types';
+import { useEffect, useState } from 'react';
 
 type EmergencyMapProps = {
     alerts: EmergencyAlert[];
+    responders?: ResponderLocation[];
     selectedAlertId: string | null;
     onSelectAlert: (id: string) => void;
 };
@@ -41,7 +42,19 @@ const createPulseIcon = (isSelected: boolean) => {
     });
 };
 
-export default function EmergencyMap({ alerts, selectedAlertId, onSelectAlert }: EmergencyMapProps) {
+const createResponderIcon = () => {
+    return L.divIcon({
+        className: '!bg-transparent border-none',
+        html: `<div class="relative flex h-6 w-6 items-center justify-center">
+                  <span class="relative inline-flex rounded-full h-4 w-4 bg-blue-600 border-2 border-white shadow-md"></span>
+                </div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12]
+    });
+};
+
+export default function EmergencyMap({ alerts, responders = [], selectedAlertId, onSelectAlert }: EmergencyMapProps) {
     // Default to roughly Quezon City area if no alerts
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     
@@ -51,8 +64,22 @@ export default function EmergencyMap({ alerts, selectedAlertId, onSelectAlert }:
         ? [selectedAlert.latitude, selectedAlert.longitude] as [number, number] 
         : (alerts.length > 0 ? [alerts[0].latitude, alerts[0].longitude] as [number, number] : defaultCenter);
 
+    // Fix for "Map container is already initialized"
+    // We generate a unique key on mount so that if the component remounts, 
+    // it forces a fresh MapContainer instance.
+    const [mapKey, setMapKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        setMapKey(`map-${Date.now()}`);
+    }, []);
+
+    if (!mapKey) {
+        return <div className="h-full w-full bg-muted/20 animate-pulse flex items-center justify-center text-xs text-muted-foreground">Initializing Map...</div>;
+    }
+
     return (
         <MapContainer 
+            key={mapKey}
             center={initialCenter} 
             zoom={13} 
             style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0 }}
@@ -76,7 +103,24 @@ export default function EmergencyMap({ alerts, selectedAlertId, onSelectAlert }:
                         <div className="font-sans text-sm">
                             <h3 className="font-bold">{alert.residentName}</h3>
                             <p className="text-xs text-gray-600 m-0">{alert.status}</p>
-                            <p className="text-[10px] text-gray-400 mt-1">{new Date().toLocaleDateString()}</p>
+                            <p className="text-[10px] text-gray-400 mt-1">
+                                {alert.timestamp?.toDate ? alert.timestamp.toDate().toLocaleDateString() : ''}
+                            </p>
+                        </div>
+                    </Popup>
+                </Marker>
+            ))}
+
+            {responders.map((responder) => (
+                <Marker
+                    key={responder.userId}
+                    position={[responder.latitude, responder.longitude]}
+                    icon={createResponderIcon()}
+                >
+                     <Popup>
+                        <div className="font-sans text-sm">
+                            <h3 className="font-bold">Responder</h3>
+                            <p className="text-xs text-gray-600 m-0">{responder.status}</p>
                         </div>
                     </Popup>
                 </Marker>

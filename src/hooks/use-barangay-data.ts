@@ -10,7 +10,8 @@ import {
     FinancialTransaction, 
     Household,
     DocumentTemplate,
-    EmergencyAlert
+    EmergencyAlert,
+    ResponderLocation
 } from '@/lib/types';
 
 // Exported for direct usage in doc() refs if needed, but prefer hooks.
@@ -64,4 +65,8 @@ export function useDocumentTemplates() {
 
 export function useEmergencyAlerts() {
     return useBarangayCollection<EmergencyAlert>('emergency_alerts');
+}
+
+export function useResponderLocations() {
+    return useBarangayCollection<ResponderLocation>('responder_locations');
 }

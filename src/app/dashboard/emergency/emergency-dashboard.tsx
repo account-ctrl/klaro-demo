@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID, useResponderLocations } from '@/hooks/use-barangay-data';
 import dynamic from 'next/dynamic';
 
 // Dynamically import the Map component to avoid SSR issues with Leaflet
@@ -262,6 +262,7 @@ export function EmergencyDashboard() {
   // Use hooks
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
+  const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
   
   // Collection ref for writing
   const alertsCollectionRef = useBarangayRef('emergency_alerts');
@@ -355,7 +356,7 @@ export function EmergencyDashboard() {
     if (selectedAlertId === alertId) setSelectedAlertId(null);
   };
 
-  const isLoading = isLoadingAlerts || isLoadingResidents;
+  const isLoading = isLoadingAlerts || isLoadingResidents || isLoadingResponders;
 
   return (
     <div className="flex h-[calc(100vh-10rem)] gap-6">
@@ -369,6 +370,7 @@ export function EmergencyDashboard() {
                 <CardContent className="h-[calc(100%-4.5rem)] p-0 relative">
                     <EmergencyMap 
                         alerts={alerts ?? []}
+                        responders={responders ?? []}
                         selectedAlertId={selectedAlertId}
                         onSelectAlert={setSelectedAlertId}
                     />
