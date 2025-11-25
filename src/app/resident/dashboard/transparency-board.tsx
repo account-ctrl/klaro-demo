@@ -56,7 +56,7 @@ export function TransparencyBoard() {
     }
 
     return (
-        <Card className="h-full">
+        <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Landmark className="h-5 w-5" /> Transparency Board

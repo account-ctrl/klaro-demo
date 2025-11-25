@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     DndContext, 
     closestCenter,
@@ -86,20 +86,28 @@ function ActiveRequests() {
     const firestore = useFirestore();
     const { user } = useUser();
 
+    // Removed orderBy and limit to avoid complex composite index requirement.
+    // We will filter and sort on the client side.
     const requestsQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return query(
             collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`),
-            where('residentId', '==', user.uid),
-            orderBy('dateRequested', 'desc'),
-            limit(5)
+            where('residentId', '==', user.uid)
         );
     }, [firestore, user]);
 
-    const { data: requests, isLoading } = useCollection<CertificateRequest>(requestsQuery);
+    const { data: rawRequests, isLoading } = useCollection<CertificateRequest>(requestsQuery);
+    
+    // Sort and limit in client memory
+    const requests = useMemo(() => {
+        if (!rawRequests) return [];
+        return [...rawRequests]
+            .sort((a, b) => (b.dateRequested?.seconds || 0) - (a.dateRequested?.seconds || 0))
+            .slice(0, 5);
+    }, [rawRequests]);
     
     return (
-         <Card className="h-full">
+         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><FileText /> My Active Requests</CardTitle>
                 <CardDescription>A summary of your recent document requests.</CardDescription>
@@ -149,6 +157,7 @@ function ActiveRequests() {
 function RecentAnnouncements() {
     const firestore = useFirestore();
     
+    // orderBy on a single field without where clause usually works fine with default indexes.
     const announcementsQuery = useMemoFirebase(() => {
         if (!firestore) return null;
         return query(
@@ -161,7 +170,7 @@ function RecentAnnouncements() {
     const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
 
     return (
-         <Card className="h-full">
+         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Megaphone /> Recent Announcements</CardTitle>
                 <CardDescription>Stay updated with the latest news from the barangay.</CardDescription>
@@ -213,15 +222,20 @@ function EmergencySOSButton() {
                 collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`),
                 where('residentId', '==', user.uid),
                 where('status', 'in', ['New', 'Acknowledged', 'Dispatched', 'On Scene']),
-                orderBy('timestamp', 'desc'),
-                limit(1)
+                // orderBy('timestamp', 'desc'), // REMOVED to avoid composite index error
+                // limit(1)
             );
             const snap = await getDocs(q);
             if (!snap.empty) {
-                const data = snap.docs[0].data();
-                setActiveAlertId(snap.docs[0].id);
-                setMessage(data.message || '');
-                setCategory(data.category || 'Unspecified');
+                // Manually find the latest one in Javascript
+                const alerts = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+                // Sort descending by timestamp
+                alerts.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                
+                const latest = alerts[0];
+                setActiveAlertId(latest.id);
+                setMessage(latest.message || '');
+                setCategory(latest.category || 'Unspecified');
             }
         }
         checkActive();
@@ -351,7 +365,7 @@ function EmergencySOSButton() {
     }
 
     return (
-        <Card className="bg-red-50 border-red-200 h-full">
+        <Card className="bg-red-50 border-red-200">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-red-700">
                     <Siren className="h-6 w-6 animate-pulse" />
@@ -487,7 +501,7 @@ function SortableItem({ id, children }: { id: string; children: React.ReactNode 
     };
 
     return (
-        <div ref={setNodeRef} style={style} className="h-full relative group">
+        <div ref={setNodeRef} style={style} className="relative group">
             {/* Drag Handle */}
             <div 
                 {...attributes} 
@@ -522,9 +536,9 @@ export default function ResidentDashboardPage() {
             case 'emergency': return <EmergencySOSButton />;
             case 'blotter_transparency': 
                 return (
-                     <div className="grid md:grid-cols-2 gap-6 h-full"> {/* Increased gap */}
-                         <div className="h-full"><BlotterWidget /></div>
-                         <div className="h-full"><TransparencyBoard /></div>
+                     <div className="grid md:grid-cols-2 gap-6"> {/* Removed h-full */}
+                         <div><BlotterWidget /></div>
+                         <div><TransparencyBoard /></div>
                     </div>
                 );
             case 'active_requests': return <ActiveRequests />;
