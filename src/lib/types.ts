@@ -212,7 +212,17 @@ export type EmergencyAlert = {
     status: 'New' | 'Acknowledged' | 'Dispatched' | 'On Scene' | 'Resolved' | 'False Alarm';
     category?: 'Medical' | 'Fire' | 'Crime' | 'Accident' | 'Unspecified';
     description?: string; // Admin's notes on the situation.
+    message?: string; // Resident's message.
+    contactNumber?: string;
+    householdId?: string;
+    householdMembersSnapshot?: { name: string; age?: string; relationship?: string }[];
     responder_team_id?: string; // ID of the responding user or vehicle.
+    responderDetails?: {
+        userId: string;
+        name: string;
+        contactNumber: string;
+        vehicleInfo?: string;
+    };
     acknowledgedByUserId?: string;
     resolvedAt?: Timestamp;
     notes?: string;

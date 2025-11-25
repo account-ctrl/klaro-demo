@@ -3,13 +3,13 @@
 
 import { useMemo, useState } from "react";
 import { doc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { EmergencyAlert, Resident } from "@/lib/types";
+import { EmergencyAlert, Resident, User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText, Trash2, MoreHorizontal } from "lucide-react";
+import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText, Trash2, MoreHorizontal, MessageSquare, Users, Truck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -25,7 +25,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID, useResponderLocations } from '@/hooks/use-barangay-data';
+import { collection } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
 
 // Dynamically import the Map component to avoid SSR issues with Leaflet
@@ -82,6 +90,84 @@ function ResolveAlertDialog({ alertId, onResolve, children }: { alertId: string,
     );
 }
 
+function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (responderId: string, vehicle: string) => void, children: React.ReactNode }) {
+    const [open, setOpen] = useState(false);
+    const [selectedResponder, setSelectedResponder] = useState<string>('');
+    const [vehicle, setVehicle] = useState<string>('Patrol Vehicle 1');
+    
+    // Fetch users to list as responders
+    const firestore = useFirestore();
+    const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/users`) : null, [firestore]);
+    const { data: users } = useCollection<User>(usersCollection);
+
+    // Filter for potential responders (e.g., systemRole 'Responder' or 'Admin')
+    const potentialResponders = users?.filter(u => ['Responder', 'Admin', 'Super Admin'].includes(u.systemRole)) || [];
+
+    const handleDispatch = () => {
+        if (selectedResponder) {
+            onDispatch(selectedResponder, vehicle);
+            setOpen(false);
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                {children}
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Dispatch Responder</DialogTitle>
+                    <DialogDescription>
+                        Select a responder and vehicle to assign to this incident.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Assign Responder</Label>
+                        <Select value={selectedResponder} onValueChange={setSelectedResponder}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a responder" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {potentialResponders.map(user => (
+                                    <SelectItem key={user.userId} value={user.userId}>
+                                        {user.fullName} ({user.systemRole})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-2">
+                        <Label>Vehicle / Unit</Label>
+                        <Select value={vehicle} onValueChange={setVehicle}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Vehicle" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Patrol Vehicle 1">Patrol Vehicle 1</SelectItem>
+                                <SelectItem value="Patrol Vehicle 2">Patrol Vehicle 2</SelectItem>
+                                <SelectItem value="Ambulance">Ambulance</SelectItem>
+                                <SelectItem value="Fire Truck">Fire Truck</SelectItem>
+                                <SelectItem value="Motorcycle Unit">Motorcycle Unit</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={handleDispatch} disabled={!selectedResponder}>
+                        <Siren className="mr-2 h-4 w-4" />
+                        Confirm Dispatch
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 const getAge = (dateString: string) => {
     if (!dateString) return 'N/A';
     const birthDate = new Date(dateString);
@@ -94,7 +180,7 @@ const getAge = (dateString: string) => {
     return age;
 }
 
-const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDelete }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
+const IncidentActionPanel = ({ alert, resident, onAcknowledge, onDispatch, onResolve, onDelete }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onDispatch: (alertId: string, responderId: string, vehicle: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
     const timeAgo = useMemo(() => {
         if (!alert.timestamp) return '...';
         return formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true });
@@ -126,7 +212,7 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDele
             <CardHeader>
                 <div className="flex justify-between items-center">
                     <CardTitle className="flex items-center gap-2">
-                        <Siren />
+                        <Siren className={alert.status === 'New' ? 'animate-pulse text-destructive' : ''} />
                         <span>Incident Details</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
@@ -150,45 +236,87 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDele
                     </div>
                 </div>
                 <CardDescription>
+                    {alert.category && <Badge variant="outline" className="mr-2">{alert.category}</Badge>}
                     Received {timeAgo}
                 </CardDescription>
             </CardHeader>
             <Separator />
             <CardContent className="pt-6 space-y-6 flex-grow overflow-y-auto">
+                 {/* Responder Info (if dispatched) */}
+                 {alert.responderDetails && (
+                    <>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
+                        <h4 className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2 text-sm mb-2">
+                            <Truck className="h-4 w-4" /> Dispatched Unit
+                        </h4>
+                        <div className="text-sm space-y-1">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Officer:</span>
+                                <span className="font-medium">{alert.responderDetails.name}</span>
+                            </div>
+                             <div className="flex justify-between">
+                                <span className="text-muted-foreground">Vehicle:</span>
+                                <span className="font-medium">{alert.responderDetails.vehicleInfo}</span>
+                            </div>
+                             <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-200/50">
+                                <span className="text-muted-foreground">Contact:</span>
+                                <a href={`tel:${alert.responderDetails.contactNumber}`} className="font-medium text-blue-600 hover:underline flex items-center gap-1">
+                                    <Phone className="h-3 w-3" /> {alert.responderDetails.contactNumber}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <Separator />
+                    </>
+                 )}
+
                  {/* Section A: Resident Profile */}
                  <div className="space-y-3">
-                    <h4 className="font-semibold text-primary">Applicant Information</h4>
-                    <div className="flex items-center gap-3">
-                        <UserIcon className="h-5 w-5 text-muted-foreground" />
+                    <h4 className="font-semibold text-primary flex items-center gap-2"><UserIcon className="h-4 w-4" /> Applicant Information</h4>
+                    <div className="flex items-center gap-3 pl-6">
                         <div>
-                            <p className="font-semibold">{alert.residentName ?? 'Unknown'}</p>
+                            <p className="font-semibold text-lg">{alert.residentName ?? 'Unknown'}</p>
                             <p className="text-sm text-muted-foreground">{resident ? `${getAge(resident.dateOfBirth)} y/o ${resident.gender}` : 'Resident data not found'}</p>
                         </div>
                     </div>
-                     <div className="flex items-center gap-3">
-                         <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                     <div className="flex items-center gap-3 pl-6">
                          <div className="flex flex-wrap gap-1">
                              {resident?.isPwd && <Badge variant="destructive">PWD</Badge>}
                              {getAge(resident?.dateOfBirth ?? '0') > 60 && <Badge variant="destructive">Senior Citizen</Badge>}
                              {/* Mock vulnerability tag */}
-                             <Badge variant="outline">Diabetic</Badge>
+                             {/* <Badge variant="outline">Diabetic</Badge> */}
                          </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                         <Phone className="h-5 w-5 text-muted-foreground" />
-                         <Button variant="outline" size="sm" asChild>
-                            <a href={`tel:${resident?.contactNumber}`}>{resident?.contactNumber || 'No contact #'}</a>
+                    <div className="flex items-center gap-3 pl-6">
+                         <Button variant="outline" size="sm" className="w-full flex items-center gap-2" asChild>
+                            <a href={`tel:${alert.contactNumber || resident?.contactNumber}`}>
+                                <Phone className="h-4 w-4" />
+                                {alert.contactNumber || resident?.contactNumber || 'No contact #'}
+                            </a>
                          </Button>
                     </div>
                 </div>
+                
                 <Separator />
+                
+                {/* Section A.2: Message / Description */}
+                {alert.message && (
+                    <div className="space-y-2">
+                        <h4 className="font-semibold text-primary flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Message from Resident</h4>
+                        <div className="p-3 bg-muted rounded-md text-sm pl-6 border-l-4 border-primary">
+                            "{alert.message}"
+                        </div>
+                    </div>
+                )}
+
+                <Separator />
+
                 {/* Section B: Location */}
                 <div className="space-y-3">
-                    <h4 className="font-semibold text-primary">Precise Location</h4>
-                    <div className="flex items-start gap-3">
-                        <MapPin className="h-5 w-5 text-muted-foreground" />
+                    <h4 className="font-semibold text-primary flex items-center gap-2"><MapPin className="h-4 w-4" /> Precise Location</h4>
+                    <div className="flex items-start gap-3 pl-6">
                         <div>
-                            <p className="font-semibold">GPS Coordinates</p>
+                            <p className="font-semibold text-sm">GPS Coordinates</p>
                             <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
                                 View on Google Maps ({alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)})
                             </a>
@@ -197,16 +325,21 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDele
                 </div>
 
                  <Separator />
-
-                {/* Section D: Incident Log */}
-                <div className="space-y-3">
-                    <h4 className="font-semibold text-primary">Incident Log</h4>
-                    <div className="text-sm text-muted-foreground space-y-2">
-                        <p>14:05 - Alert Received from App.</p>
-                        <p>14:06 - Admin accepted. Categorized as "Medical".</p>
+                 
+                 {/* Section C: Household Members */}
+                 {alert.householdMembersSnapshot && alert.householdMembersSnapshot.length > 0 && (
+                    <div className="space-y-3">
+                        <h4 className="font-semibold text-primary flex items-center gap-2"><Users className="h-4 w-4" /> Household Members</h4>
+                        <div className="pl-6 space-y-1">
+                            {alert.householdMembersSnapshot.map((member, idx) => (
+                                <div key={idx} className="text-sm flex justify-between items-center p-2 bg-muted/20 rounded">
+                                    <span>{member.name}</span>
+                                    <span className="text-muted-foreground text-xs">{member.age !== 'N/A' ? `${member.age} y/o` : ''}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
-
+                 )}
 
             </CardContent>
             <CardFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4">
@@ -217,10 +350,12 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onResolve, onDele
                     </Button>
                 )}
                 {alert.status === 'Acknowledged' && (
-                    <Button variant="default" className="w-full">
-                        <Siren className="mr-2" />
-                        Dispatch Responder
-                    </Button>
+                    <DispatchResponderDialog onDispatch={(rId, v) => onDispatch(alert.alertId, rId, v)}>
+                        <Button variant="default" className="w-full">
+                            <Siren className="mr-2" />
+                            Dispatch Responder
+                        </Button>
+                    </DispatchResponderDialog>
                 )}
                  {(alert.status === 'Acknowledged' || alert.status === 'Dispatched' || alert.status === 'On Scene') && (
                     <ResolveAlertDialog alertId={alert.alertId} onResolve={onResolve}>
@@ -244,10 +379,14 @@ const AlertFeedItem = ({ alert, onSelect, isSelected }: { alert: EmergencyAlert,
     return (
         <button onClick={onSelect} className={`w-full text-left p-3 rounded-lg border ${isSelected ? 'bg-primary/10 border-primary' : 'bg-card hover:bg-muted'}`}>
             <div className="flex justify-between items-center">
-                <p className="font-semibold">{alert.residentName}</p>
+                <div className="flex flex-col">
+                    <p className="font-semibold">{alert.residentName}</p>
+                    <span className="text-xs text-muted-foreground">{alert.category || 'Unspecified'}</span>
+                </div>
                 <Badge variant={alert.status === 'New' ? 'destructive' : 'secondary'}>{alert.status}</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{timeAgo}</p>
+            <p className="text-xs text-muted-foreground mt-1 truncate">{alert.message || 'No message provided.'}</p>
+            <p className="text-[10px] text-muted-foreground text-right mt-1">{timeAgo} ago</p>
         </button>
     )
 }
@@ -263,6 +402,10 @@ export function EmergencyDashboard() {
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
   const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
+  
+  // Use useMemoFirebase for users collection
+  const usersCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/users`) : null, [firestore]);
+  const { data: users } = useCollection<User>(usersCollectionRef);
   
   // Collection ref for writing
   const alertsCollectionRef = useBarangayRef('emergency_alerts');
@@ -308,6 +451,9 @@ export function EmergencyDashboard() {
             latitude,
             longitude,
             status: 'New',
+            category: 'Unspecified',
+            message: 'Simulated Alert via Admin Dashboard',
+            contactNumber: randomResident.contactNumber || '09123456789',
         };
 
         addDocumentNonBlocking(alertsCollectionRef, newAlert).then(docRef => {
@@ -334,6 +480,35 @@ export function EmergencyDashboard() {
         acknowledgedByUserId: user.uid,
     });
     toast({ title: "Alert Acknowledged", description: `You are now handling alert #${alertId}.`});
+  }
+
+  const handleDispatch = (alertId: string, responderId: string, vehicle: string) => {
+      if (!firestore || !users) return;
+      
+      const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${alertId}`);
+      const responderUser = users.find(u => u.userId === responderId);
+      
+      // If we can't find the user details (unlikely), fallback to basic info
+      const responderName = responderUser?.fullName || 'Assigned Officer';
+      const responderPhone = (responderUser as any)?.phoneNumber || '09123456789'; // Assuming phone is on user, or we need to fetch it from resident profile linked to user. 
+      // Note: User type has `residentId`. Ideally we fetch from there. 
+      // For now, I'll use a placeholder if not directly available on User type (User type currently has email/name).
+      
+      updateDocumentNonBlocking(docRef, {
+          status: 'Dispatched',
+          responder_team_id: responderId,
+          responderDetails: {
+              userId: responderId,
+              name: responderName,
+              contactNumber: responderPhone,
+              vehicleInfo: vehicle,
+          }
+      });
+      
+      toast({ 
+          title: "Responder Dispatched", 
+          description: `${responderName} has been assigned to this incident.`
+      });
   }
 
   const handleResolve = (alertId: string, notes: string) => {
@@ -421,6 +596,7 @@ export function EmergencyDashboard() {
                         alert={selectedAlert}
                         resident={selectedResident}
                         onAcknowledge={handleAcknowledge}
+                        onDispatch={handleDispatch}
                         onResolve={handleResolve}
                         onDelete={handleDelete}
                     />

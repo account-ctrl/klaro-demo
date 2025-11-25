@@ -86,9 +86,9 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
             />
             <MapUpdater center={selectedAlert ? [selectedAlert.latitude, selectedAlert.longitude] : null} />
             
-            {alerts.map(alert => (
+            {alerts.map((alert, index) => (
                 <Marker 
-                    key={alert.alertId} 
+                    key={alert.alertId || `alert-${index}`} 
                     position={[alert.latitude, alert.longitude]}
                     icon={createPulseIcon(alert.alertId === selectedAlertId)}
                     eventHandlers={{
@@ -107,9 +107,9 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 </Marker>
             ))}
 
-            {responders.map((responder) => (
+            {responders.map((responder, index) => (
                 <Marker
-                    key={responder.userId}
+                    key={responder.userId || `responder-${index}`}
                     position={[responder.latitude, responder.longitude]}
                     icon={createResponderIcon()}
                 >

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -19,14 +19,27 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2 } from "lucide-react";
+import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2, Phone, MessageSquare, Users, Truck } from "lucide-react";
 import { RequestDocumentCard } from "./request-document-card";
-import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, orderBy, limit, serverTimestamp, doc } from 'firebase/firestore';
-import { CertificateRequest, Announcement, EmergencyAlert } from '@/lib/types';
+import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { collection, query, where, orderBy, limit, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
+import { CertificateRequest, Announcement, EmergencyAlert, Resident } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -152,8 +165,46 @@ function EmergencySOSButton() {
     const { user } = useUser();
     const firestore = useFirestore();
     const [isSending, setIsSending] = useState(false);
+    const [openDialog, setOpenDialog] = useState(false);
+    const [activeAlertId, setActiveAlertId] = useState<string | null>(null);
+    const [category, setCategory] = useState<string>('Unspecified');
+    const [message, setMessage] = useState('');
+    const [contactNumber, setContactNumber] = useState('');
 
-    const handleSOS = () => {
+    // Fetch active alert document
+    const activeAlertRef = useMemoFirebase(() => {
+        if (!firestore || !activeAlertId) return null;
+        return doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
+    }, [firestore, activeAlertId]);
+
+    const { data: activeAlert } = useDoc<EmergencyAlert>(activeAlertRef);
+
+    // Initial check for existing active alert on mount
+    useEffect(() => {
+        if (!firestore || !user || activeAlertId) return; // Don't check if we already have one
+        
+        // Simple one-off check to restore state if page refreshed
+        const checkActive = async () => {
+             const q = query(
+                collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`),
+                where('residentId', '==', user.uid),
+                where('status', 'in', ['New', 'Acknowledged', 'Dispatched', 'On Scene']),
+                orderBy('timestamp', 'desc'),
+                limit(1)
+            );
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                setActiveAlertId(snap.docs[0].id);
+                setMessage(data.message || '');
+                setCategory(data.category || 'Unspecified');
+            }
+        }
+        checkActive();
+    }, [firestore, user, activeAlertId]);
+
+
+    const handleSendSOS = async () => {
         if (!user || !firestore) {
              toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to send an SOS.' });
              return;
@@ -167,6 +218,42 @@ function EmergencySOSButton() {
              return;
         }
 
+        // 1. Fetch Resident Profile to get Household ID and Contact
+        let residentData: Resident | undefined;
+        let householdMembersSnapshot: { name: string; age?: string; relationship?: string }[] = [];
+
+        try {
+            const residentRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
+            const residentSnap = await getDoc(residentRef);
+            if (residentSnap.exists()) {
+                residentData = residentSnap.data() as Resident;
+                if (!contactNumber && residentData.contactNumber) {
+                     setContactNumber(residentData.contactNumber); // Update local state for UI
+                }
+                
+                // 2. Fetch Household Members if householdId exists
+                if (residentData.householdId) {
+                    const membersQuery = query(
+                        collection(firestore, `/barangays/${BARANGAY_ID}/residents`),
+                        where('householdId', '==', residentData.householdId)
+                    );
+                    const membersSnap = await getDocs(membersQuery);
+                    membersSnap.forEach(doc => {
+                        const member = doc.data() as Resident;
+                        householdMembersSnapshot.push({
+                            name: `${member.firstName} ${member.lastName}`,
+                            relationship: member.residentId === user.uid ? 'Self' : 'Member', // Simplified
+                            // Calculate age
+                            age: member.dateOfBirth ? String(new Date().getFullYear() - new Date(member.dateOfBirth).getFullYear()) : 'N/A'
+                        });
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to fetch resident details, proceeding with basic alert.", e);
+        }
+
+
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
@@ -176,25 +263,29 @@ function EmergencySOSButton() {
                     
                     const newAlert: Omit<EmergencyAlert, 'alertId' | 'timestamp'> = {
                         residentId: user.uid,
-                        // We might not have the name immediately available in the user object if it's just auth.
-                        // Ideally, we'd fetch the resident profile, but for now, we'll use email or a placeholder.
-                        // In a real app, you'd probably fetch the resident doc or store name in auth profile.
-                        residentName: user.displayName || 'Resident', 
+                        residentName: user.displayName || residentData?.firstName ? `${residentData?.firstName} ${residentData?.lastName}` : 'Resident', 
                         latitude,
                         longitude,
                         status: 'New',
+                        category: category as any,
+                        message: message,
+                        contactNumber: contactNumber || residentData?.contactNumber || 'No contact #',
+                        householdId: residentData?.householdId,
+                        householdMembersSnapshot: householdMembersSnapshot,
                     };
 
                     const docRef = await addDocumentNonBlocking(alertsCollectionRef, newAlert);
                     if (docRef) {
                          await updateDocumentNonBlocking(docRef, { alertId: docRef.id, timestamp: serverTimestamp() });
+                         setActiveAlertId(docRef.id);
                     }
 
                     toast({ 
                         title: "SOS SENT!", 
-                        description: "Your emergency alert has been sent to barangay authorities with your current location.",
+                        description: "Help is on the way. Keep your phone close.",
                         className: "bg-red-600 text-white border-none"
                     });
+                    setOpenDialog(false);
                 } catch (error) {
                     console.error("Error sending SOS:", error);
                     toast({ variant: 'destructive', title: 'Failed to send SOS', description: 'Please try again or call emergency services directly.' });
@@ -204,21 +295,19 @@ function EmergencySOSButton() {
             },
             (error) => {
                 console.error("Geolocation error:", error);
-                let errorMessage = 'Could not get your location.';
-                if (error.code === error.PERMISSION_DENIED) {
-                    errorMessage = 'Location permission denied. Please enable location access.';
-                } else if (error.code === error.POSITION_UNAVAILABLE) {
-                    errorMessage = 'Location information is unavailable.';
-                } else if (error.code === error.TIMEOUT) {
-                    errorMessage = 'The request to get user location timed out.';
-                }
-                
-                toast({ variant: 'destructive', title: 'Location Error', description: errorMessage });
+                toast({ variant: 'destructive', title: 'Location Error', description: error.message });
                 setIsSending(false);
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     };
+
+    const handleUpdateMessage = async () => {
+         if (!activeAlertId || !firestore) return;
+         const alertRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
+         updateDocumentNonBlocking(alertRef, { message, category: category as any });
+         toast({ title: "Update Sent", description: "Incident details updated." });
+    }
 
     return (
         <Card className="bg-red-50 border-red-200">
@@ -231,23 +320,110 @@ function EmergencySOSButton() {
                     Press the button below to instantly alert barangay authorities and send your current location.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
-                <Button 
-                    variant="destructive" 
-                    size="lg" 
-                    className="w-full h-16 text-lg font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all"
-                    onClick={handleSOS}
-                    disabled={isSending}
-                >
-                    {isSending ? (
-                        <>
-                            <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                            Sending Alert...
-                        </>
-                    ) : (
-                        "SEND SOS ALERT"
-                    )}
-                </Button>
+            <CardContent className="space-y-4">
+                {!activeAlertId ? (
+                    <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                        <DialogTrigger asChild>
+                            <Button 
+                                variant="destructive" 
+                                size="lg" 
+                                className="w-full h-16 text-lg font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all"
+                            >
+                                SEND SOS ALERT
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle className="text-red-600 flex items-center gap-2"><Siren className="h-5 w-5"/> CONFIRM SOS ALERT</DialogTitle>
+                                <DialogDescription>
+                                    This will send your location and details to the Barangay Response Team immediately.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label>Nature of Emergency</Label>
+                                    <Select value={category} onValueChange={setCategory}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select Category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Medical">Medical Emergency</SelectItem>
+                                            <SelectItem value="Fire">Fire</SelectItem>
+                                            <SelectItem value="Crime">Crime / Public Safety</SelectItem>
+                                            <SelectItem value="Accident">Accident</SelectItem>
+                                            <SelectItem value="Unspecified">Other / Unspecified</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Additional Details (Optional)</Label>
+                                    <Textarea 
+                                        placeholder="Briefly describe what happened..." 
+                                        value={message} 
+                                        onChange={(e) => setMessage(e.target.value)} 
+                                    />
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label>Callback Number</Label>
+                                    <Input 
+                                        placeholder="Enter your phone number" 
+                                        value={contactNumber} 
+                                        onChange={(e) => setContactNumber(e.target.value)} 
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
+                                <Button variant="destructive" onClick={handleSendSOS} disabled={isSending}>
+                                    {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    CONFIRM & SEND
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                ) : (
+                    <div className="space-y-4">
+                         <div className="bg-red-100 text-red-800 p-4 rounded-md text-center border border-red-200">
+                            <h3 className="font-bold text-lg animate-pulse">ALERT ACTIVE</h3>
+                            <p className="text-sm mt-1">Help is on the way. Do not close this app if possible.</p>
+                            {activeAlert?.status === 'Acknowledged' && (
+                                <Badge variant="secondary" className="mt-2 bg-yellow-100 text-yellow-800 border-yellow-200">Received by Admin</Badge>
+                            )}
+                            {activeAlert?.status === 'Dispatched' && (
+                                <div className="mt-4 bg-white p-3 rounded shadow-sm text-left border border-blue-200 animate-in fade-in slide-in-from-bottom-2">
+                                    <div className="flex items-center gap-2 text-blue-700 font-bold mb-2">
+                                        <Truck className="h-5 w-5" /> RESPONDER DISPATCHED
+                                    </div>
+                                    {activeAlert.responderDetails && (
+                                        <div className="text-sm text-gray-700 space-y-1">
+                                            <p><span className="font-semibold">Officer:</span> {activeAlert.responderDetails.name}</p>
+                                            <p><span className="font-semibold">Vehicle:</span> {activeAlert.responderDetails.vehicleInfo}</p>
+                                            <Button size="sm" variant="outline" className="w-full mt-2 gap-2 text-blue-600 border-blue-200 hover:bg-blue-50" asChild>
+                                                <a href={`tel:${activeAlert.responderDetails.contactNumber}`}>
+                                                    <Phone className="h-4 w-4" /> Call Responder
+                                                </a>
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                         </div>
+                         <div className="space-y-2">
+                            <Label>Update Situation</Label>
+                            <Textarea 
+                                placeholder="Update message..." 
+                                value={message} 
+                                onChange={(e) => setMessage(e.target.value)} 
+                            />
+                            <Button onClick={handleUpdateMessage} size="sm" className="w-full">
+                                Update Message
+                            </Button>
+                         </div>
+                         <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveAlertId(null)}>
+                            Report Resolved / Close
+                         </Button>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
