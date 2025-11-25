@@ -1,6 +1,28 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import {
+    DndContext, 
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay,
+    defaultDropAnimationSideEffects,
+    DragStartEvent,
+    DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
+
 import {
   Card,
   CardContent,
@@ -22,8 +44,8 @@ import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2, Phone, Message
 import { RequestDocumentCard } from "./request-document-card";
 import { BlotterWidget } from "./blotter-widget"; 
 import { TransparencyBoard } from "./transparency-board"; 
-import { CommunityCalendar } from "./community-calendar"; // New Component
-import { MyHousehold } from "./household-pets-widget"; // New Component
+import { CommunityCalendar } from "./community-calendar";
+import { MyHousehold } from "./household-pets-widget";
 import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, query, where, orderBy, limit, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
 import { CertificateRequest, Announcement, EmergencyAlert, Resident } from '@/lib/types';
@@ -46,6 +68,8 @@ import { Input } from "@/components/ui/input";
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
+
+// --- COMPONENTS (Unchanged logic, just wrappers) ---
 
 const getStatusBadgeVariant = (status: CertificateRequest['status']) => {
     switch (status) {
@@ -78,7 +102,7 @@ function ActiveRequests() {
     const { data: requests, isLoading } = useCollection<CertificateRequest>(requestsQuery);
     
     return (
-         <Card>
+         <Card className="h-full">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><FileText /> My Active Requests</CardTitle>
                 <CardDescription>A summary of your recent document requests.</CardDescription>
@@ -140,7 +164,7 @@ function RecentAnnouncements() {
     const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
 
     return (
-         <Card>
+         <Card className="h-full">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Megaphone /> Recent Announcements</CardTitle>
                 <CardDescription>Stay updated with the latest news from the barangay.</CardDescription>
@@ -330,7 +354,7 @@ function EmergencySOSButton() {
     }
 
     return (
-        <Card className="bg-red-50 border-red-200">
+        <Card className="bg-red-50 border-red-200 h-full">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-red-700">
                     <Siren className="h-6 w-6 animate-pulse" />
@@ -449,8 +473,119 @@ function EmergencySOSButton() {
     );
 }
 
+// --- DRAGGABLE WRAPPER ---
+
+function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} className="h-full relative group">
+            {/* Drag Handle */}
+            <div 
+                {...attributes} 
+                {...listeners} 
+                className="absolute top-2 right-2 z-10 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+            >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
+            {children}
+        </div>
+    );
+}
+
 
 export default function ResidentDashboardPage() {
+    const [leftColumnItems, setLeftColumnItems] = useState([
+        'emergency',
+        'blotter_transparency', // Row container for blotter & transparency
+        'active_requests',
+        'announcements'
+    ]);
+
+    const [rightColumnItems, setRightColumnItems] = useState([
+        'household_pets',
+        'request_document',
+        'calendar'
+    ]);
+    
+    // We will just allow reordering vertically within columns for simplicity first.
+    // Full Drag and Drop across columns is more complex.
+    // Let's implement single-column sortable for now, or just two independent lists.
+    
+    // Actually, user asked for "balanced and draggable". 
+    // Let's create a 3-column layout where the items can be moved around? 
+    // Or stick to the 2-column layout (2/3 + 1/3) and allow reordering.
+    
+    // Let's try to map the IDs to components
+    const renderComponent = (id: string) => {
+        switch(id) {
+            case 'emergency': return <EmergencySOSButton />;
+            case 'blotter_transparency': 
+                return (
+                     <div className="grid md:grid-cols-2 gap-4 h-full">
+                         <BlotterWidget />
+                         <TransparencyBoard />
+                    </div>
+                );
+            case 'active_requests': return <ActiveRequests />;
+            case 'announcements': return <RecentAnnouncements />;
+            case 'household_pets': return <MyHousehold />;
+            case 'request_document': return <RequestDocumentCard />;
+            case 'calendar': return <CommunityCalendar />;
+            default: return null;
+        }
+    }
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    function handleDragEnd(event: DragEndEvent) {
+        const { active, over } = event;
+        
+        if (!over) return;
+
+        // Find which column the items belong to
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        const isLeft = leftColumnItems.includes(activeId);
+        const isRight = rightColumnItems.includes(activeId);
+        
+        // Dragging within Left Column
+        if (isLeft && leftColumnItems.includes(overId)) {
+            setLeftColumnItems((items) => {
+                const oldIndex = items.indexOf(activeId);
+                const newIndex = items.indexOf(overId);
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+        
+        // Dragging within Right Column
+        if (isRight && rightColumnItems.includes(overId)) {
+            setRightColumnItems((items) => {
+                const oldIndex = items.indexOf(activeId);
+                const newIndex = items.indexOf(overId);
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    }
+
+
   return (
     <div className="space-y-8">
       <div>
@@ -460,23 +595,41 @@ export default function ResidentDashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-3">
-        <div className="md:col-span-2 space-y-8">
-            <EmergencySOSButton />
-            <div className="grid md:grid-cols-2 gap-4">
-                 <BlotterWidget />
-                 <TransparencyBoard />
+      <DndContext 
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid gap-8 md:grid-cols-3">
+            {/* Left Column (2/3 width) */}
+            <div className="md:col-span-2 space-y-8">
+                <SortableContext 
+                    items={leftColumnItems}
+                    strategy={verticalListSortingStrategy}
+                >
+                    {leftColumnItems.map((id) => (
+                        <SortableItem key={id} id={id}>
+                            {renderComponent(id)}
+                        </SortableItem>
+                    ))}
+                </SortableContext>
             </div>
-            <ActiveRequests />
-            <RecentAnnouncements />
-        </div>
 
-        <div className="space-y-8">
-             <MyHousehold />
-             <RequestDocumentCard />
-             <CommunityCalendar />
+            {/* Right Column (1/3 width) */}
+            <div className="space-y-8">
+                 <SortableContext 
+                    items={rightColumnItems}
+                    strategy={verticalListSortingStrategy}
+                >
+                    {rightColumnItems.map((id) => (
+                        <SortableItem key={id} id={id}>
+                            {renderComponent(id)}
+                        </SortableItem>
+                    ))}
+                </SortableContext>
+            </div>
         </div>
-      </div>
+      </DndContext>
     </div>
   );
 }
