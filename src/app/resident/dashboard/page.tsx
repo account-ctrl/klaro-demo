@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     DndContext, 
     closestCenter,
@@ -8,9 +8,6 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
-    DragOverlay,
-    defaultDropAnimationSideEffects,
-    DragStartEvent,
     DragEndEvent,
 } from '@dnd-kit/core';
 import {
@@ -40,7 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2, Phone, MessageSquare, Users, Truck } from "lucide-react";
+import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2, Phone, Truck } from "lucide-react";
 import { RequestDocumentCard } from "./request-document-card";
 import { BlotterWidget } from "./blotter-widget"; 
 import { TransparencyBoard } from "./transparency-board"; 
@@ -508,7 +505,7 @@ function SortableItem({ id, children }: { id: string; children: React.ReactNode 
 export default function ResidentDashboardPage() {
     const [leftColumnItems, setLeftColumnItems] = useState([
         'emergency',
-        'blotter_transparency', // Row container for blotter & transparency
+        'blotter_transparency', // KEEPING THEM GROUPED
         'active_requests',
         'announcements'
     ]);
@@ -519,23 +516,15 @@ export default function ResidentDashboardPage() {
         'calendar'
     ]);
     
-    // We will just allow reordering vertically within columns for simplicity first.
-    // Full Drag and Drop across columns is more complex.
-    // Let's implement single-column sortable for now, or just two independent lists.
-    
-    // Actually, user asked for "balanced and draggable". 
-    // Let's create a 3-column layout where the items can be moved around? 
-    // Or stick to the 2-column layout (2/3 + 1/3) and allow reordering.
-    
     // Let's try to map the IDs to components
     const renderComponent = (id: string) => {
         switch(id) {
             case 'emergency': return <EmergencySOSButton />;
             case 'blotter_transparency': 
                 return (
-                     <div className="grid md:grid-cols-2 gap-4 h-full">
-                         <BlotterWidget />
-                         <TransparencyBoard />
+                     <div className="grid md:grid-cols-2 gap-6 h-full"> {/* Increased gap */}
+                         <div className="h-full"><BlotterWidget /></div>
+                         <div className="h-full"><TransparencyBoard /></div>
                     </div>
                 );
             case 'active_requests': return <ActiveRequests />;
@@ -587,7 +576,7 @@ export default function ResidentDashboardPage() {
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Resident Dashboard</h1>
         <p className="text-muted-foreground">
@@ -600,9 +589,9 @@ export default function ResidentDashboardPage() {
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid gap-8 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
             {/* Left Column (2/3 width) */}
-            <div className="md:col-span-2 space-y-8">
+            <div className="md:col-span-2 space-y-6">
                 <SortableContext 
                     items={leftColumnItems}
                     strategy={verticalListSortingStrategy}
@@ -616,7 +605,7 @@ export default function ResidentDashboardPage() {
             </div>
 
             {/* Right Column (1/3 width) */}
-            <div className="space-y-8">
+            <div className="space-y-6">
                  <SortableContext 
                     items={rightColumnItems}
                     strategy={verticalListSortingStrategy}
