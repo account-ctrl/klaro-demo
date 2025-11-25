@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -10,8 +10,16 @@ import type { DocumentTemplate } from '@/lib/types';
 import { AddTemplate, EditTemplate, DeleteTemplate, TemplateFormValues } from './template-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileCode } from 'lucide-react';
+import { FileCode, RefreshCcw } from 'lucide-react';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import {
+    DEFAULT_BARANGAY_CLEARANCE,
+    DEFAULT_INDIGENCY,
+    DEFAULT_RESIDENCY,
+    DEFAULT_BUSINESS_CLEARANCE,
+    DEFAULT_SUMMONS
+} from './default-templates';
 
 // In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
@@ -70,6 +78,49 @@ export default function TemplateList() {
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Template Deleted", description: "The document template has been permanently deleted." });
     };
+
+    const handleResetDefaults = async () => {
+        if (!firestore || !user) return;
+
+        const defaultTemplatesList = [
+            { name: 'Barangay Clearance', description: 'Standard clearance for general purposes.', content: DEFAULT_BARANGAY_CLEARANCE },
+            { name: 'Certificate of Indigency', description: 'Proof of indigent status for assistance.', content: DEFAULT_INDIGENCY },
+            { name: 'Certificate of Residency', description: 'Proof of residence in the barangay.', content: DEFAULT_RESIDENCY },
+            { name: 'Business Clearance', description: 'Clearance for business permit applications.', content: DEFAULT_BUSINESS_CLEARANCE },
+            { name: 'Summons (Patawag)', description: 'Standard summons template for lupon hearings.', content: DEFAULT_SUMMONS },
+        ];
+
+        try {
+            const batch = writeBatch(firestore);
+            
+            // We iterate and create new docs. In a more complex app, we might check for duplicates first.
+            // Here we just add them as new templates.
+            defaultTemplatesList.forEach(tpl => {
+                const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/document_templates`));
+                batch.set(newDocRef, {
+                    templateId: newDocRef.id,
+                    name: tpl.name,
+                    description: tpl.description,
+                    content: tpl.content,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+            });
+
+            await batch.commit();
+            toast({ 
+                title: "Defaults Restored", 
+                description: "Standard document templates have been added to your list." 
+            });
+        } catch (error) {
+            console.error("Error restoring defaults:", error);
+            toast({ 
+                variant: 'destructive', 
+                title: "Error", 
+                description: "Failed to restore default templates." 
+            });
+        }
+    };
     
     if (isLoading) {
         return (
@@ -88,13 +139,17 @@ export default function TemplateList() {
 
   return (
     <div className="space-y-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleResetDefaults}>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Load Defaults
+            </Button>
             <AddTemplate onAdd={handleAdd} />
         </div>
         
         {!templates || templates.length === 0 ? (
              <div className="text-muted-foreground col-span-full text-center py-10">
-                No document templates found. Click "New Template" to get started.
+                No document templates found. You can add one manually or click "Load Defaults" to start with standard templates.
             </div>
         ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

@@ -19,8 +19,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Users, FileText, Landmark, AlertCircle, ListTodo, Activity, Siren, FolderKanban, Sparkles, Plus, Gavel, UserPlus, Clock, Calendar } from "lucide-react";
-import { Project, Resident, CertificateRequest, FinancialTransaction, BlotterCase, ScheduleEvent } from "@/lib/types";
+import { Users, FileText, Landmark, AlertCircle, ListTodo, Activity, Siren, FolderKanban, Sparkles, Plus, Gavel, UserPlus, Clock, Calendar, ArrowRight, FileClock } from "lucide-react";
+import { Project, Resident, CertificateRequest, FinancialTransaction, BlotterCase, ScheduleEvent, EmergencyAlert } from "@/lib/types";
 import { DocumentIssuanceChart } from "./document-issuance-chart";
 import { BlotterAnalyticsChart } from "./blotter-analytics-chart";
 import { Progress } from "@/components/ui/progress";
@@ -153,6 +153,56 @@ function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], 
     )
 }
 
+function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts: number, pendingDocs: number, isLoading: boolean }) {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Link href="/dashboard/emergency" className="block group">
+                <Card className={`border-l-4 border-l-destructive/80 transition-all hover:shadow-md ${activeAlerts > 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-full ${activeAlerts > 0 ? 'bg-destructive/20 text-destructive animate-pulse' : 'bg-muted text-muted-foreground'}`}>
+                                <Siren className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Active SOS Alerts</p>
+                                {isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
+                                    <h3 className={`text-2xl font-bold ${activeAlerts > 0 ? 'text-destructive' : ''}`}>{activeAlerts}</h3>
+                                )}
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            {activeAlerts > 0 && <span className="text-xs font-semibold text-destructive uppercase tracking-wider">Action Needed</span>}
+                            <ArrowRight className="h-5 w-5 text-muted-foreground ml-auto mt-1 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </Link>
+
+             <Link href="/dashboard/documents" className="block group">
+                <Card className="border-l-4 border-l-primary/80 transition-all hover:shadow-md">
+                    <CardContent className="p-4 flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-full ${pendingDocs > 0 ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                <FileClock className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Pending Requests</p>
+                                {isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
+                                     <h3 className={`text-2xl font-bold ${pendingDocs > 0 ? 'text-primary' : ''}`}>{pendingDocs}</h3>
+                                )}
+                            </div>
+                        </div>
+                        <div className="text-right">
+                             {pendingDocs > 0 && <span className="text-xs font-semibold text-primary uppercase tracking-wider">To Process</span>}
+                             <ArrowRight className="h-5 w-5 text-muted-foreground ml-auto mt-1 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </Link>
+        </div>
+    )
+}
+
 export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState('');
   const firestore = useFirestore();
@@ -167,7 +217,8 @@ export default function DashboardPage() {
   const financialsCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/financial_transactions`) : null, [firestore]);
   const projectsCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/projects`) : null, [firestore]);
   const blotterCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`) : null, [firestore]);
-  
+  const emergencyCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`) : null, [firestore]);
+
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
@@ -191,6 +242,7 @@ export default function DashboardPage() {
   const { data: projects, isLoading: isLoadingProjs } = useCollection<Project>(projectsCollectionRef);
   const { data: blotterCases, isLoading: isLoadingBlotter } = useCollection<BlotterCase>(blotterCollectionRef);
   const { data: schedule, isLoading: isLoadingSchedule } = useCollection<ScheduleEvent>(scheduleQuery);
+  const { data: alerts, isLoading: isLoadingAlerts } = useCollection<EmergencyAlert>(emergencyCollectionRef);
 
 
   // Memoized calculations for KPI cards
@@ -205,6 +257,7 @@ export default function DashboardPage() {
     const start = startOfMonth(new Date());
     return documents?.filter(d => d.dateRequested && d.dateRequested.toDate() >= start).length ?? 0;
   }, [documents]);
+  const pendingDocsCount = useMemo(() => documents?.filter(d => d.status === 'Pending').length ?? 0, [documents]);
 
   const totalBlotterCasesYTD = useMemo(() => blotterCases?.length ?? 0, [blotterCases]);
   const pendingBlotterCases = useMemo(() => blotterCases?.filter(c => ['Open', 'Under Mediation'].includes(c.status)).length ?? 0, [blotterCases]);
@@ -220,6 +273,8 @@ export default function DashboardPage() {
         ?.filter(f => f.transactionType === 'Income' && f.status === 'Posted' && new Date(f.transaction_date) >= thirtyDaysAgo)
         .reduce((acc, curr) => acc + curr.amount, 0) ?? 0;
   }, [financials]);
+  
+  const activeAlertsCount = useMemo(() => alerts?.filter(a => ['New', 'Acknowledged', 'Dispatched'].includes(a.status)).length ?? 0, [alerts]);
 
   const recentProjects = useMemo(() => projects?.filter(p => p.status === 'Ongoing').slice(0, 5) ?? [], [projects]);
 
@@ -232,7 +287,7 @@ export default function DashboardPage() {
     }
   };
 
-  const isLoading = isLoadingResidents || isLoadingDocs || isLoadingFins || isLoadingProjs || isLoadingBlotter || isLoadingSchedule;
+  const isLoading = isLoadingResidents || isLoadingDocs || isLoadingFins || isLoadingProjs || isLoadingBlotter || isLoadingSchedule || isLoadingAlerts;
 
   return (
     <div className="flex flex-col gap-6">
@@ -256,6 +311,13 @@ export default function DashboardPage() {
                 </div>
             </div>
         </div>
+
+        {/* Action Widgets */}
+        <ActionWidgets 
+            activeAlerts={activeAlertsCount} 
+            pendingDocs={pendingDocsCount} 
+            isLoading={isLoading} 
+        />
 
         {/* AI Insight Widget */}
         <div id="ai-chat-widget">
