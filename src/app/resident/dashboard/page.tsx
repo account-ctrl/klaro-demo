@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Card,
   CardContent,
@@ -21,6 +20,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2, Phone, MessageSquare, Users, Truck } from "lucide-react";
 import { RequestDocumentCard } from "./request-document-card";
+import { BlotterWidget } from "./blotter-widget"; 
+import { TransparencyBoard } from "./transparency-board"; 
+import { CommunityCalendar } from "./community-calendar"; // New Component
+import { MyHousehold } from "./household-pets-widget"; // New Component
 import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
 import { collection, query, where, orderBy, limit, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
 import { CertificateRequest, Announcement, EmergencyAlert, Resident } from '@/lib/types';
@@ -460,12 +463,18 @@ export default function ResidentDashboardPage() {
       <div className="grid gap-8 md:grid-cols-3">
         <div className="md:col-span-2 space-y-8">
             <EmergencySOSButton />
+            <div className="grid md:grid-cols-2 gap-4">
+                 <BlotterWidget />
+                 <TransparencyBoard />
+            </div>
             <ActiveRequests />
             <RecentAnnouncements />
         </div>
 
         <div className="space-y-8">
-            <RequestDocumentCard />
+             <MyHousehold />
+             <RequestDocumentCard />
+             <CommunityCalendar />
         </div>
       </div>
     </div>
