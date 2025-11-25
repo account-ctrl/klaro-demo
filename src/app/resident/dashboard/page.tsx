@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -18,13 +18,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Megaphone, CheckCircle, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2 } from "lucide-react";
 import { RequestDocumentCard } from "./request-document-card";
-import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy, limit } from 'firebase/firestore';
-import { CertificateRequest, Announcement } from '@/lib/types';
+import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { collection, query, where, orderBy, limit, serverTimestamp, doc } from 'firebase/firestore';
+import { CertificateRequest, Announcement, EmergencyAlert } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { useToast } from "@/hooks/use-toast";
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -145,6 +147,112 @@ function RecentAnnouncements() {
     )
 }
 
+function EmergencySOSButton() {
+    const { toast } = useToast();
+    const { user } = useUser();
+    const firestore = useFirestore();
+    const [isSending, setIsSending] = useState(false);
+
+    const handleSOS = () => {
+        if (!user || !firestore) {
+             toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to send an SOS.' });
+             return;
+        }
+
+        setIsSending(true);
+
+        if (!navigator.geolocation) {
+             toast({ variant: 'destructive', title: 'Error', description: 'Geolocation is not supported by your browser.' });
+             setIsSending(false);
+             return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                
+                try {
+                    const alertsCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`);
+                    
+                    const newAlert: Omit<EmergencyAlert, 'alertId' | 'timestamp'> = {
+                        residentId: user.uid,
+                        // We might not have the name immediately available in the user object if it's just auth.
+                        // Ideally, we'd fetch the resident profile, but for now, we'll use email or a placeholder.
+                        // In a real app, you'd probably fetch the resident doc or store name in auth profile.
+                        residentName: user.displayName || 'Resident', 
+                        latitude,
+                        longitude,
+                        status: 'New',
+                    };
+
+                    const docRef = await addDocumentNonBlocking(alertsCollectionRef, newAlert);
+                    if (docRef) {
+                         await updateDocumentNonBlocking(docRef, { alertId: docRef.id, timestamp: serverTimestamp() });
+                    }
+
+                    toast({ 
+                        title: "SOS SENT!", 
+                        description: "Your emergency alert has been sent to barangay authorities with your current location.",
+                        className: "bg-red-600 text-white border-none"
+                    });
+                } catch (error) {
+                    console.error("Error sending SOS:", error);
+                    toast({ variant: 'destructive', title: 'Failed to send SOS', description: 'Please try again or call emergency services directly.' });
+                } finally {
+                    setIsSending(false);
+                }
+            },
+            (error) => {
+                console.error("Geolocation error:", error);
+                let errorMessage = 'Could not get your location.';
+                if (error.code === error.PERMISSION_DENIED) {
+                    errorMessage = 'Location permission denied. Please enable location access.';
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                    errorMessage = 'Location information is unavailable.';
+                } else if (error.code === error.TIMEOUT) {
+                    errorMessage = 'The request to get user location timed out.';
+                }
+                
+                toast({ variant: 'destructive', title: 'Location Error', description: errorMessage });
+                setIsSending(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
+
+    return (
+        <Card className="bg-red-50 border-red-200">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-700">
+                    <Siren className="h-6 w-6 animate-pulse" />
+                    Emergency Assistance
+                </CardTitle>
+                <CardDescription className="text-red-600/80">
+                    Press the button below to instantly alert barangay authorities and send your current location.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button 
+                    variant="destructive" 
+                    size="lg" 
+                    className="w-full h-16 text-lg font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all"
+                    onClick={handleSOS}
+                    disabled={isSending}
+                >
+                    {isSending ? (
+                        <>
+                            <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                            Sending Alert...
+                        </>
+                    ) : (
+                        "SEND SOS ALERT"
+                    )}
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
 
 export default function ResidentDashboardPage() {
   return (
@@ -158,6 +266,7 @@ export default function ResidentDashboardPage() {
 
       <div className="grid gap-8 md:grid-cols-3">
         <div className="md:col-span-2 space-y-8">
+            <EmergencySOSButton />
             <ActiveRequests />
             <RecentAnnouncements />
         </div>
