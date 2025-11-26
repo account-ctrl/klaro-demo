@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Users, FileText, Landmark, AlertCircle, ListTodo, Activity, Siren, FolderKanban, Sparkles, Plus, Gavel, UserPlus, Clock, Calendar, ArrowRight, FileClock } from "lucide-react";
+import { Users, FileText, Landmark, AlertCircle, ListTodo, Activity, Siren, FolderKanban, Sparkles, Plus, Gavel, UserPlus, Clock, Calendar, ArrowRight, FileClock, Move } from "lucide-react";
 import { Project, Resident, CertificateRequest, FinancialTransaction, BlotterCase, ScheduleEvent, EmergencyAlert } from "@/lib/types";
 import { DocumentIssuanceChart } from "./document-issuance-chart";
 import { BlotterAnalyticsChart } from "./blotter-analytics-chart";
@@ -40,7 +40,10 @@ const BARANGAY_ID = 'barangay_san_isidro';
 
 const KpiCard = ({ id, title, value, icon: Icon, note, isLoading }: { id: string, title: string, value: string, icon: React.ElementType, note: string, isLoading: boolean }) => {
   return (
-    <Card id={id} className="h-full w-full hover:shadow-md transition-shadow duration-200 cursor-grab active:cursor-grabbing">
+    <Card id={id} className="h-full w-full hover:shadow-lg transition-shadow duration-300 cursor-grab active:cursor-grabbing bg-card border rounded-xl overflow-hidden">
+      <div className="absolute top-3 right-3 text-muted-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity draggable-handle cursor-grab">
+          <Move className="h-4 w-4" />
+      </div>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <div className="p-2 rounded-full bg-primary/10">
@@ -71,27 +74,27 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
     const pendingHearings = useMemo(() => blotterCases.filter(c => c.status === 'Open' || c.status === 'Under Mediation'), [blotterCases]);
 
     return (
-        <Card className="h-full w-full cursor-grab active:cursor-grabbing">
+        <Card className="h-full w-full cursor-grab active:cursor-grabbing bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground"><AlertCircle className="text-destructive h-5 w-5" /> Alerts & Notifications</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                  {overdueProjects.length > 0 && (
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-4 p-3 rounded-lg bg-destructive/5 hover:bg-destructive/10 transition-colors">
                         <div className="p-2 rounded-full bg-destructive/10 mt-1">
                             <Siren className="h-4 w-4 text-destructive" />
                         </div>
                         <div>
                             <p className="font-medium text-sm text-foreground">{overdueProjects.length} Overdue Project{overdueProjects.length > 1 ? 's' : ''}</p>
                             <p className="text-xs text-muted-foreground">"{overdueProjects[0].projectName}" and {overdueProjects.length > 1 ? `${overdueProjects.length - 1} others are` : 'is'} behind schedule.</p>
-                            <Button variant="link" size="sm" className="p-0 h-auto text-primary" asChild>
+                            <Button variant="link" size="sm" className="p-0 h-auto text-primary font-semibold mt-1" asChild>
                                 <Link href="/dashboard/projects">View Projects</Link>
                             </Button>
                         </div>
                     </div>
                  )}
                 {pendingHearings.length > 0 && (
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-4 p-3 rounded-lg bg-amber-500/5 hover:bg-amber-500/10 transition-colors">
                         <div className="p-2 rounded-full bg-amber-500/10 mt-1">
                             <Gavel className="h-4 w-4 text-amber-600" />
                         </div>
@@ -100,14 +103,17 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
                             <p className="text-xs text-muted-foreground">
                                 Case{pendingHearings.length > 1 ? 's' : ''} {pendingHearings.slice(0, 2).map(c => `#${c.caseId}`).join(', ')} {pendingHearings.length > 2 ? ` and ${pendingHearings.length - 2} others` : ''} need scheduling.
                             </p>
-                             <Button variant="link" size="sm" className="p-0 h-auto text-primary" asChild>
+                             <Button variant="link" size="sm" className="p-0 h-auto text-primary font-semibold mt-1" asChild>
                                 <Link href="/dashboard/blotter">View Blotter</Link>
                              </Button>
                         </div>
                     </div>
                  )}
                  {overdueProjects.length === 0 && pendingHearings.length === 0 && (
-                    <div className="text-center text-muted-foreground py-4">
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-center text-muted-foreground">
+                        <div className="p-3 bg-muted/50 rounded-full mb-3">
+                            <Sparkles className="h-6 w-6 text-muted-foreground/50" />
+                        </div>
                         <p>No critical alerts right now.</p>
                     </div>
                  )}
@@ -118,37 +124,41 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
 
 function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], isLoading: boolean}) {
     return (
-        <Card className="h-full w-full cursor-grab active:cursor-grabbing">
+        <Card className="h-full w-full cursor-grab active:cursor-grabbing bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground"><Calendar className="h-5 w-5 text-primary"/> Today's Schedule</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
                     {isLoading && [...Array(3)].map((_, i) => (
-                        <div key={i} className="flex gap-4">
-                            <Skeleton className="h-10 w-16" />
-                            <div className="space-y-1 w-full">
-                                <Skeleton className="h-4 w-3/4" />
-                                <Skeleton className="h-3 w-1/2" />
+                        <div key={i} className="flex gap-4 p-2">
+                            <Skeleton className="h-10 w-16 rounded-md" />
+                            <div className="space-y-2 w-full">
+                                <Skeleton className="h-4 w-3/4 rounded-full" />
+                                <Skeleton className="h-3 w-1/2 rounded-full" />
                             </div>
                         </div>
                     ))}
                     {!isLoading && events.length > 0 ? (
                         events.map(event => (
-                            <div key={event.eventId} className="flex items-center gap-4">
-                                <div className="text-center font-semibold text-sm w-16 shrink-0 text-foreground">
-                                    {format(new Date(event.start), 'h:mm a')}
+                            <div key={event.eventId} className="flex items-start gap-4 p-3 hover:bg-muted/50 rounded-lg transition-colors group">
+                                <div className="flex flex-col items-center justify-center text-center font-semibold text-sm w-16 shrink-0 bg-primary/10 text-primary rounded-md py-2 h-full">
+                                    <span>{format(new Date(event.start), 'h:mm')}</span>
+                                    <span className="text-xs opacity-70">{format(new Date(event.start), 'a')}</span>
                                 </div>
-                                <div className="border-l-2 border-primary pl-4">
-                                    <p className="font-medium text-sm text-foreground">{event.title}</p>
-                                    <p className="text-xs text-muted-foreground">{event.category}</p>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">{event.title}</p>
+                                    <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 h-5 font-normal border-muted-foreground/20 text-muted-foreground">{event.category}</Badge>
                                 </div>
                             </div>
                         ))
                     ) : (
                         !isLoading && (
-                            <div className="text-center text-muted-foreground py-4">
-                                No events scheduled for today.
+                            <div className="flex flex-col items-center justify-center h-full py-8 text-center text-muted-foreground">
+                                <div className="p-3 bg-muted/50 rounded-full mb-3">
+                                    <Calendar className="h-6 w-6 text-muted-foreground/50" />
+                                </div>
+                                <p>No events scheduled for today.</p>
                             </div>
                         )
                     )}
@@ -162,44 +172,50 @@ function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts:
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
             <Link href="/dashboard/emergency" className="block group h-full cursor-pointer">
-                <Card className={`border-l-4 border-l-destructive/80 transition-all hover:shadow-md h-full ${activeAlerts > 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                    <CardContent className="p-4 flex items-center justify-between h-full">
+                <Card className={`border-0 shadow-sm ring-1 ring-inset transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] duration-200 h-full rounded-xl overflow-hidden relative ${activeAlerts > 0 ? 'bg-red-50/50 dark:bg-red-900/10 ring-destructive/30' : 'bg-card ring-border'}`}>
+                    {activeAlerts > 0 && <div className="absolute top-0 left-0 w-1 h-full bg-destructive animate-pulse" />}
+                    <CardContent className="p-5 flex items-center justify-between h-full">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-full ${activeAlerts > 0 ? 'bg-destructive/20 text-destructive animate-pulse' : 'bg-muted text-muted-foreground'}`}>
+                            <div className={`p-3.5 rounded-2xl shadow-sm ${activeAlerts > 0 ? 'bg-destructive text-destructive-foreground' : 'bg-primary/10 text-primary'}`}>
                                 <Siren className="h-6 w-6" />
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Active SOS Alerts</p>
-                                {isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
-                                    <h3 className={`text-2xl font-bold ${activeAlerts > 0 ? 'text-destructive' : 'text-foreground'}`}>{activeAlerts}</h3>
+                                {isLoading ? <Skeleton className="h-8 w-16 mt-1" /> : (
+                                    <h3 className={`text-3xl font-bold tracking-tight ${activeAlerts > 0 ? 'text-destructive' : 'text-foreground'}`}>{activeAlerts}</h3>
                                 )}
                             </div>
                         </div>
-                        <div className="text-right">
-                            {activeAlerts > 0 && <span className="text-xs font-semibold text-destructive uppercase tracking-wider">Action Needed</span>}
-                            <ArrowRight className="h-5 w-5 text-muted-foreground ml-auto mt-1 group-hover:translate-x-1 transition-transform" />
+                        <div className="flex flex-col items-end gap-1">
+                            {activeAlerts > 0 && <Badge variant="destructive" className="uppercase text-[10px] font-bold tracking-wider">Action Needed</Badge>}
+                            <div className="p-2 rounded-full bg-background/50 group-hover:bg-background group-hover:shadow-sm transition-all">
+                                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
             </Link>
 
              <Link href="/dashboard/documents" className="block group h-full cursor-pointer">
-                <Card className="border-l-4 border-l-primary/80 transition-all hover:shadow-md h-full">
-                    <CardContent className="p-4 flex items-center justify-between h-full">
+                <Card className="border-0 shadow-sm ring-1 ring-inset ring-border bg-card transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] duration-200 h-full rounded-xl overflow-hidden relative">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-primary/50" />
+                    <CardContent className="p-5 flex items-center justify-between h-full">
                          <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-full ${pendingDocs > 0 ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                            <div className={`p-3.5 rounded-2xl shadow-sm ${pendingDocs > 0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                                 <FileClock className="h-6 w-6" />
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Pending Requests</p>
-                                {isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
-                                     <h3 className={`text-2xl font-bold ${pendingDocs > 0 ? 'text-primary' : 'text-foreground'}`}>{pendingDocs}</h3>
+                                {isLoading ? <Skeleton className="h-8 w-16 mt-1" /> : (
+                                     <h3 className={`text-3xl font-bold tracking-tight ${pendingDocs > 0 ? 'text-primary' : 'text-foreground'}`}>{pendingDocs}</h3>
                                 )}
                             </div>
                         </div>
-                        <div className="text-right">
-                             {pendingDocs > 0 && <span className="text-xs font-semibold text-primary uppercase tracking-wider">To Process</span>}
-                             <ArrowRight className="h-5 w-5 text-muted-foreground ml-auto mt-1 group-hover:translate-x-1 transition-transform" />
+                        <div className="flex flex-col items-end gap-1">
+                             {pendingDocs > 0 && <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20 border-0 uppercase text-[10px] font-bold tracking-wider">To Process</Badge>}
+                             <div className="p-2 rounded-full bg-background/50 group-hover:bg-background group-hover:shadow-sm transition-all">
+                                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -363,7 +379,7 @@ export default function DashboardPage() {
             onLayoutChange={onLayoutChange}
             isDraggable
             isResizable
-            draggableHandle=".card-header, .card-title, .cursor-grab"
+            draggableHandle=".card-header, .card-title, .cursor-grab, .draggable-handle"
         >
             <div key="action-widgets">
                 <ActionWidgets 
@@ -374,7 +390,7 @@ export default function DashboardPage() {
             </div>
             
             <div key="ai-chat">
-                <div id="ai-chat-widget" className="h-full cursor-grab active:cursor-grabbing">
+                <div id="ai-chat-widget" className="h-full cursor-grab active:cursor-grabbing bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
                     <AIChatWidget 
                     residents={residents ?? []}
                     projects={projects ?? []}
@@ -398,7 +414,7 @@ export default function DashboardPage() {
             </div>
 
             <div key="chart-docs">
-                <Card className="h-full w-full cursor-grab active:cursor-grabbing">
+                <Card className="h-full w-full cursor-grab active:cursor-grabbing bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-300">
                     <CardHeader>
                         <CardTitle>Document Issuance Trend</CardTitle>
                         <CardDescription>Monthly documents issued for the last 6 months.</CardDescription>
@@ -410,7 +426,7 @@ export default function DashboardPage() {
             </div>
 
             <div key="table-projects">
-                <Card className="h-full w-full overflow-hidden cursor-grab active:cursor-grabbing">
+                <Card className="h-full w-full overflow-hidden cursor-grab active:cursor-grabbing bg-card border rounded-xl hover:shadow-lg transition-shadow duration-300">
                     <CardHeader>
                         <CardTitle>Active Projects</CardTitle>
                         <CardDescription>A snapshot of ongoing public works in the barangay.</CardDescription>
@@ -468,7 +484,7 @@ export default function DashboardPage() {
             </div>
 
             <div key="chart-blotter">
-                 {isLoadingBlotter ? <Skeleton className="h-full w-full" /> : <div className="h-full w-full cursor-grab active:cursor-grabbing"><BlotterAnalyticsChart blotterCases={blotterCases ?? []} /></div>}
+                 {isLoadingBlotter ? <Skeleton className="h-full w-full" /> : <div className="h-full w-full cursor-grab active:cursor-grabbing bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow duration-300"><BlotterAnalyticsChart blotterCases={blotterCases ?? []} /></div>}
             </div>
 
         </ResponsiveGridLayout>
