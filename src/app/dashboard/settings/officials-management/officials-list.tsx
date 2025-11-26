@@ -85,12 +85,12 @@ export default function OfficialsList() {
         if (!firestore) return;
 
         const sampleOfficials = [
-            { fullName: 'Juan Dela Cruz', position: 'Punong Barangay', email: 'kapitan@barangay.gov.ph', systemRole: 'Super Admin', status: 'Active' },
+            { fullName: 'Juan Dela Cruz', position: 'Punong Barangay (Barangay Captain)', email: 'kapitan@barangay.gov.ph', systemRole: 'Super Admin', status: 'Active' },
             { fullName: 'Maria Clara', position: 'Barangay Secretary', email: 'sec@barangay.gov.ph', systemRole: 'Admin', status: 'Active' },
             { fullName: 'Crisostomo Ibarra', position: 'Barangay Treasurer', email: 'treasurer@barangay.gov.ph', systemRole: 'Admin', status: 'Active' },
-            { fullName: 'Sisa Baliwag', position: 'Kagawad', committee: 'Committee on Health', email: 'kagawad1@barangay.gov.ph', systemRole: 'Encoder', status: 'Active' },
-            { fullName: 'Basilio Dimasalang', position: 'Kagawad', committee: 'Committee on Peace and Order', email: 'kagawad2@barangay.gov.ph', systemRole: 'Responder', status: 'Active' },
-            { fullName: 'Pedro Penduko', position: 'Tanod', email: 'tanod1@barangay.gov.ph', systemRole: 'Responder', status: 'Active' },
+            { fullName: 'Sisa Baliwag', position: 'Sangguniang Barangay Member (Barangay Kagawad)', committee: 'Committee on Health & Sanitation', email: 'kagawad1@barangay.gov.ph', systemRole: 'Encoder', status: 'Active' },
+            { fullName: 'Basilio Dimasalang', position: 'Sangguniang Barangay Member (Barangay Kagawad)', committee: 'Committee on Peace and Order & Public Safety', email: 'kagawad2@barangay.gov.ph', systemRole: 'Responder', status: 'Active' },
+            { fullName: 'Pedro Penduko', position: 'Barangay Tanod (BPSO - Barangay Public Safety Officer)', email: 'tanod1@barangay.gov.ph', systemRole: 'Responder', status: 'Active' },
         ];
 
         try {
@@ -237,13 +237,13 @@ export default function OfficialsList() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-2">
+                                            {/* Pass EditOfficial with trigger prop if implemented, or standard button */}
                                             <EditOfficial 
                                                 record={official} 
                                                 onEdit={handleEdit} 
                                                 positions={officialsAndStaff} 
                                                 committees={committeeAssignments} 
                                                 systemRoles={systemRoles} 
-                                                trigger={<Button variant="ghost" size="icon"><FilePen className="h-4 w-4"/></Button>}
                                             />
                                             <AlertDialog>
                                               <AlertDialogTrigger asChild>
