@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { format, subDays, startOfMonth } from 'date-fns';
 import {
   Card,
@@ -31,37 +30,17 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AIChatWidget } from './ai-chat-widget';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import GridLayout, { Responsive, WidthProvider } from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
-// --- Sortable Item Wrapper ---
-function SortableItem({ id, children, className }: { id: string, children: React.ReactNode, className?: string }) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-    } = useSortable({ id });
-  
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
-  
-    return (
-      <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={className}>
-        {children}
-      </div>
-    );
-}
-
 const KpiCard = ({ id, title, value, icon: Icon, note, isLoading }: { id: string, title: string, value: string, icon: React.ElementType, note: string, isLoading: boolean }) => {
   return (
-    <Card id={id} className="h-full hover:shadow-md transition-shadow duration-200">
+    <Card id={id} className="h-full w-full hover:shadow-md transition-shadow duration-200 cursor-grab active:cursor-grabbing">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <div className="p-2 rounded-full bg-primary/10">
@@ -92,7 +71,7 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
     const pendingHearings = useMemo(() => blotterCases.filter(c => c.status === 'Open' || c.status === 'Under Mediation'), [blotterCases]);
 
     return (
-        <Card className="h-full">
+        <Card className="h-full w-full cursor-grab active:cursor-grabbing">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground"><AlertCircle className="text-destructive h-5 w-5" /> Alerts & Notifications</CardTitle>
             </CardHeader>
@@ -139,7 +118,7 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
 
 function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], isLoading: boolean}) {
     return (
-        <Card className="h-full">
+        <Card className="h-full w-full cursor-grab active:cursor-grabbing">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground"><Calendar className="h-5 w-5 text-primary"/> Today's Schedule</CardTitle>
             </CardHeader>
@@ -181,8 +160,8 @@ function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], 
 
 function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts: number, pendingDocs: number, isLoading: boolean }) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link href="/dashboard/emergency" className="block group h-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+            <Link href="/dashboard/emergency" className="block group h-full cursor-pointer">
                 <Card className={`border-l-4 border-l-destructive/80 transition-all hover:shadow-md h-full ${activeAlerts > 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
                     <CardContent className="p-4 flex items-center justify-between h-full">
                         <div className="flex items-center gap-4">
@@ -204,7 +183,7 @@ function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts:
                 </Card>
             </Link>
 
-             <Link href="/dashboard/documents" className="block group h-full">
+             <Link href="/dashboard/documents" className="block group h-full cursor-pointer">
                 <Card className="border-l-4 border-l-primary/80 transition-all hover:shadow-md h-full">
                     <CardContent className="p-4 flex items-center justify-between h-full">
                          <div className="flex items-center gap-4">
@@ -315,30 +294,52 @@ export default function DashboardPage() {
 
   const isLoading = isLoadingResidents || isLoadingDocs || isLoadingFins || isLoadingProjs || isLoadingBlotter || isLoadingSchedule || isLoadingAlerts;
 
-  // DnD State
-  const [kpiOrder, setKpiOrder] = useState(['kpi-residents', 'kpi-documents', 'kpi-blotter', 'kpi-funds']);
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const initialLayout = {
+    lg: [
+      { i: 'action-widgets', x: 0, y: 0, w: 12, h: 4 },
+      { i: 'ai-chat', x: 0, y: 4, w: 12, h: 4 },
+      { i: 'kpi-residents', x: 0, y: 8, w: 3, h: 4 },
+      { i: 'kpi-documents', x: 3, y: 8, w: 3, h: 4 },
+      { i: 'kpi-blotter', x: 6, y: 8, w: 3, h: 4 },
+      { i: 'kpi-funds', x: 9, y: 8, w: 3, h: 4 },
+      { i: 'chart-docs', x: 0, y: 12, w: 8, h: 8 },
+      { i: 'schedule', x: 8, y: 12, w: 4, h: 6 },
+      { i: 'table-projects', x: 0, y: 20, w: 8, h: 8 },
+      { i: 'alerts', x: 8, y: 18, w: 4, h: 6 },
+      { i: 'chart-blotter', x: 8, y: 24, w: 4, h: 6 },
+    ],
+    md: [
+        { i: 'action-widgets', x: 0, y: 0, w: 10, h: 4 },
+        { i: 'ai-chat', x: 0, y: 4, w: 10, h: 4 },
+        { i: 'kpi-residents', x: 0, y: 8, w: 5, h: 4 },
+        { i: 'kpi-documents', x: 5, y: 8, w: 5, h: 4 },
+        { i: 'kpi-blotter', x: 0, y: 12, w: 5, h: 4 },
+        { i: 'kpi-funds', x: 5, y: 12, w: 5, h: 4 },
+        { i: 'chart-docs', x: 0, y: 16, w: 10, h: 8 },
+        { i: 'schedule', x: 0, y: 24, w: 5, h: 6 },
+        { i: 'alerts', x: 5, y: 24, w: 5, h: 6 },
+        { i: 'table-projects', x: 0, y: 30, w: 10, h: 8 },
+        { i: 'chart-blotter', x: 0, y: 38, w: 10, h: 6 },
+    ],
+    sm: [
+        { i: 'action-widgets', x: 0, y: 0, w: 6, h: 6 },
+        { i: 'ai-chat', x: 0, y: 6, w: 6, h: 6 },
+        { i: 'kpi-residents', x: 0, y: 12, w: 6, h: 4 },
+        { i: 'kpi-documents', x: 0, y: 16, w: 6, h: 4 },
+        { i: 'kpi-blotter', x: 0, y: 20, w: 6, h: 4 },
+        { i: 'kpi-funds', x: 0, y: 24, w: 6, h: 4 },
+        { i: 'chart-docs', x: 0, y: 28, w: 6, h: 8 },
+        { i: 'schedule', x: 0, y: 36, w: 6, h: 6 },
+        { i: 'alerts', x: 0, y: 42, w: 6, h: 6 },
+        { i: 'table-projects', x: 0, y: 48, w: 6, h: 8 },
+        { i: 'chart-blotter', x: 0, y: 56, w: 6, h: 6 },
+    ]
+  };
 
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
+  const [layouts, setLayouts] = useState(initialLayout);
 
-    if (active.id !== over.id) {
-      setKpiOrder((items) => {
-        const oldIndex = items.indexOf(active.id);
-        const newIndex = items.indexOf(over.id);
-        
-        // Simple swap logic for demo purposes, better logic needs arrayMove utility
-        const newItems = [...items];
-        const [removed] = newItems.splice(oldIndex, 1);
-        newItems.splice(newIndex, 0, removed);
-        return newItems;
-      });
-    }
+  const onLayoutChange = (layout: any, layouts: any) => {
+    setLayouts(layouts);
   };
 
   return (
@@ -353,64 +354,68 @@ export default function DashboardPage() {
             </div>
         </div>
 
-        {/* Action Widgets */}
-        <ActionWidgets 
-            activeAlerts={activeAlertsCount} 
-            pendingDocs={pendingDocsCount} 
-            isLoading={isLoading} 
-        />
-
-        {/* AI Insight Widget */}
-        <div id="ai-chat-widget">
-            <AIChatWidget 
-              residents={residents ?? []}
-              projects={projects ?? []}
-              blotterCases={blotterCases ?? []}
-              isLoading={isLoading}
-            />
-        </div>
-
-        {/* KPI Cards with DnD */}
-        <DndContext 
-            sensors={sensors} 
-            collisionDetection={closestCenter} 
-            onDragEnd={handleDragEnd}
+        <ResponsiveGridLayout
+            className="layout"
+            layouts={layouts}
+            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+            rowHeight={30}
+            onLayoutChange={onLayoutChange}
+            isDraggable
+            isResizable
+            draggableHandle=".card-header, .card-title, .cursor-grab"
         >
-            <SortableContext 
-                items={kpiOrder} 
-                strategy={rectSortingStrategy}
-            >
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" id="kpi-cards">
-                    {kpiOrder.map((id) => (
-                        <SortableItem key={id} id={id}>
-                            {id === 'kpi-residents' && <KpiCard id="kpi-residents" title="Total Residents" value={totalResidents.toLocaleString()} icon={Users} note={`+${newResidentsThisMonth} this month`} isLoading={isLoadingResidents} />}
-                            {id === 'kpi-documents' && <KpiCard id="kpi-documents" title="Documents Issued (YTD)" value={totalDocsIssuedYTD.toLocaleString()} icon={FileText} note={`+${docsRequestedThisMonth} requests this month`} isLoading={isLoadingDocs} />}
-                            {id === 'kpi-blotter' && <KpiCard id="kpi-blotter" title="Blotter Cases (YTD)" value={totalBlotterCasesYTD.toLocaleString()} icon={Gavel} note={`${pendingBlotterCases} cases pending`} isLoading={isLoadingBlotter} />}
-                            {id === 'kpi-funds' && <KpiCard id="kpi-funds" title="Funds Collected (YTD)" value={`₱${totalFundsCollectedYTD.toLocaleString()}`} icon={Landmark} note={`₱${fundsCollectedLast30Days.toLocaleString()} in last 30 days`} isLoading={isLoadingFins} />}
-                        </SortableItem>
-                    ))}
+            <div key="action-widgets">
+                <ActionWidgets 
+                    activeAlerts={activeAlertsCount} 
+                    pendingDocs={pendingDocsCount} 
+                    isLoading={isLoading} 
+                />
+            </div>
+            
+            <div key="ai-chat">
+                <div id="ai-chat-widget" className="h-full cursor-grab active:cursor-grabbing">
+                    <AIChatWidget 
+                    residents={residents ?? []}
+                    projects={projects ?? []}
+                    blotterCases={blotterCases ?? []}
+                    isLoading={isLoading}
+                    />
                 </div>
-            </SortableContext>
-        </DndContext>
+            </div>
 
-        {/* Main Content Grid */}
-         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-             <div className="lg:col-span-2 space-y-6">
-                <Card>
+            <div key="kpi-residents">
+                 <KpiCard id="kpi-residents" title="Total Residents" value={totalResidents.toLocaleString()} icon={Users} note={`+${newResidentsThisMonth} this month`} isLoading={isLoadingResidents} />
+            </div>
+            <div key="kpi-documents">
+                <KpiCard id="kpi-documents" title="Documents Issued (YTD)" value={totalDocsIssuedYTD.toLocaleString()} icon={FileText} note={`+${docsRequestedThisMonth} requests this month`} isLoading={isLoadingDocs} />
+            </div>
+            <div key="kpi-blotter">
+                <KpiCard id="kpi-blotter" title="Blotter Cases (YTD)" value={totalBlotterCasesYTD.toLocaleString()} icon={Gavel} note={`${pendingBlotterCases} cases pending`} isLoading={isLoadingBlotter} />
+            </div>
+            <div key="kpi-funds">
+                <KpiCard id="kpi-funds" title="Funds Collected (YTD)" value={`₱${totalFundsCollectedYTD.toLocaleString()}`} icon={Landmark} note={`₱${fundsCollectedLast30Days.toLocaleString()} in last 30 days`} isLoading={isLoadingFins} />
+            </div>
+
+            <div key="chart-docs">
+                <Card className="h-full w-full cursor-grab active:cursor-grabbing">
                     <CardHeader>
                         <CardTitle>Document Issuance Trend</CardTitle>
                         <CardDescription>Monthly documents issued for the last 6 months.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        {isLoadingDocs ? <Skeleton className="h-[250px]" /> : <DocumentIssuanceChart requests={documents ?? []} />}
+                    <CardContent className="h-[calc(100%-5rem)]">
+                        {isLoadingDocs ? <Skeleton className="h-full w-full" /> : <DocumentIssuanceChart requests={documents ?? []} />}
                     </CardContent>
                 </Card>
-                <Card>
+            </div>
+
+            <div key="table-projects">
+                <Card className="h-full w-full overflow-hidden cursor-grab active:cursor-grabbing">
                     <CardHeader>
                         <CardTitle>Active Projects</CardTitle>
                         <CardDescription>A snapshot of ongoing public works in the barangay.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="overflow-auto h-[calc(100%-5rem)]">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -453,12 +458,20 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
             </div>
-            <div className="space-y-6">
+
+            <div key="schedule">
                 <TodaysScheduleWidget events={schedule ?? []} isLoading={isLoadingSchedule} />
-                <AlertsPanel projects={projects ?? []} blotterCases={blotterCases ?? []} />
-                 {isLoadingBlotter ? <Skeleton className="h-full w-full" /> : <BlotterAnalyticsChart blotterCases={blotterCases ?? []} />}
             </div>
-        </div>
+
+            <div key="alerts">
+                 <AlertsPanel projects={projects ?? []} blotterCases={blotterCases ?? []} />
+            </div>
+
+            <div key="chart-blotter">
+                 {isLoadingBlotter ? <Skeleton className="h-full w-full" /> : <div className="h-full w-full cursor-grab active:cursor-grabbing"><BlotterAnalyticsChart blotterCases={blotterCases ?? []} /></div>}
+            </div>
+
+        </ResponsiveGridLayout>
     </div>
   );
 }
