@@ -350,17 +350,6 @@ export default function DashboardPage() {
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">Magandang Araw, Admin! 👋</h1>
                     <p className="text-muted-foreground">{currentDate} | Barangay San Isidro</p>
                 </div>
-                 <div className="flex items-center gap-2">
-                    <Button asChild className="bg-primary hover:bg-primary/90 text-white">
-                        <Link href="/dashboard/documents"><Plus className="mr-2 h-4 w-4" /> New Request</Link>
-                    </Button>
-                    <Button variant="destructive" asChild>
-                        <Link href="/dashboard/blotter"><Gavel className="mr-2 h-4 w-4" /> File Blotter</Link>
-                    </Button>
-                    <Button variant="secondary" asChild className="bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                        <Link href="/dashboard/residents"><UserPlus className="mr-2 h-4 w-4" /> Add Resident</Link>
-                    </Button>
-                </div>
             </div>
         </div>
 
