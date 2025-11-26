@@ -167,8 +167,8 @@ export default function ProjectsPage() {
             </p>
         </div>
         <div className="flex items-center gap-2">
-            <Button variant={view === 'card' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('card')}><LayoutGrid className="h-4 w-4" /></Button>
-            <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('list')}><List className="h-4 w-4" /></Button>
+            <Button variant={view === 'card' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('card')} className="border-input hover:bg-accent hover:text-accent-foreground"><LayoutGrid className="h-4 w-4" /></Button>
+            <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('list')} className="border-input hover:bg-accent hover:text-accent-foreground"><List className="h-4 w-4" /></Button>
             <AddProject onAdd={handleAdd} />
         </div>
       </div>

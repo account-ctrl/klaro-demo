@@ -272,7 +272,7 @@ export function AddResident({ onAdd, households }: { onAdd: (data: ResidentFormV
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="bg-[#409656] text-white hover:bg-[#409656]/90">
           <PlusCircle className="mr-2 h-4 w-4" />
           New Resident
         </Button>

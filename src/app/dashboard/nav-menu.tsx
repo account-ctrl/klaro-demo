@@ -165,7 +165,7 @@ export function NavMenu({ role }: { role: Role }) {
 
         {/* Command Center */}
         <NavigationMenuItem>
-          <NavigationMenuTrigger className="border border-transparent hover:border-amber-500/50 data-[state=open]:border-amber-500/50 font-semibold">
+          <NavigationMenuTrigger className="border border-transparent hover:border-[#ff7a59]/50 data-[state=open]:border-[#ff7a59]/50 font-semibold">
             <Activity className="mr-2 h-4 w-4" /> Command Center
           </NavigationMenuTrigger>
           <NavigationMenuContent>

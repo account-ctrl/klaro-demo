@@ -110,10 +110,10 @@ export function AnnouncementsTable() {
   return (
     <div className="space-y-4">
         <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleLoadSamples}>
+            <Button variant="outline" onClick={handleLoadSamples} className="border-input hover:bg-accent hover:text-accent-foreground">
                 <RefreshCcw className="mr-2 h-4 w-4" /> Load Samples
             </Button>
-             <Button variant="destructive" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleClearAll} disabled={!announcements || announcements.length === 0}>
+             <Button variant="outline" className="text-destructive hover:bg-destructive/10 border-input" onClick={handleClearAll} disabled={!announcements || announcements.length === 0}>
                 <Trash2 className="mr-2 h-4 w-4" /> Clear All
             </Button>
         </div>

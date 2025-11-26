@@ -15,8 +15,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 217 33% 17%;
 
-    /* Klaro Brand: Vibrant Blue (#29ABE2) -> HSL: 198, 77%, 52% */
-    --primary: 198 77% 52%; 
+    /* Updated Brand Color: #ff7a59 -> HSL: 12 100% 67% */
+    --primary: 12 100% 67%; 
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96%; /* Light slate gray for secondary actions */
@@ -37,14 +37,14 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 198 77% 52%; /* Matches Primary */
+    --ring: 12 100% 67%; /* Matches Primary */
 
     --radius: 0.5rem;
 
     /* Data visualization colors */
-    --chart-1: 198 77% 52%; /* Primary Blue */
+    --chart-1: 12 100% 67%; /* Primary Orange */
     --chart-2: 142 71% 45%; /* Growth Green (Success) */
-    --chart-3: 40 96% 56%; /* Warning Orange */
+    --chart-3: 198 77% 52%; /* Warning Blue */
     --chart-4: 0 84% 60%;  /* Destructive Red */
     --chart-5: 260 70% 65%; /* Purple */
   }
@@ -60,7 +60,7 @@
     --popover-foreground: 210 40% 98%;
 
     /* Dark Mode Primary: Slightly lighter blue for contrast */
-    --primary: 198 77% 60%;
+    --primary: 12 100% 67%;
     --primary-foreground: 222 47% 11%;
 
     --secondary: 217 33% 17%;
@@ -80,7 +80,7 @@
 
     --border: 217 33% 17%;
     --input: 217 33% 17%;
-    --ring: 198 77% 60%;
+    --ring: 12 100% 67%;
   }
 }
 
