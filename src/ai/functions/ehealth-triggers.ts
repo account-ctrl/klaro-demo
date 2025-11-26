@@ -1,12 +1,18 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
+import { getApps } from 'firebase-admin/app';
 
-admin.initializeApp();
+// Ensure Firebase Admin is initialized only once
+if (!getApps().length) {
+    admin.initializeApp();
+}
+
 const db = admin.firestore();
 
 // -------------------------------------------------------------------------
 // Feature 1: Calculate Child Nutritional Status (MCH)
 // Trigger: When a new height/weight is added to a child's record
+// NOTE: This function is intended to be deployed to Firebase Cloud Functions.
 // -------------------------------------------------------------------------
 export const calculateChildNutritionalStatus = functions.firestore
   .document('barangays/{barangayId}/mch_records/{mchId}/growth_measurements/{measureId}')
@@ -16,7 +22,7 @@ export const calculateChildNutritionalStatus = functions.firestore
 
     const { weight, height } = newData; // weight in kg, height in cm
 
-    if (!weight || !height) return null;
+    if (!weight || !height || height === 0) return null; // Prevent division by zero
 
     // BMI Calculation
     const heightInMeters = height / 100;
@@ -50,6 +56,8 @@ export const monitorDiseaseOutbreak = functions.firestore
   .document('barangays/{barangayId}/epidemiology_cases/{caseId}')
   .onCreate(async (snapshot, context) => {
     const data = snapshot.data();
+    if (!data) return;
+
     const { diseaseName, purok, diagnosisDate } = data;
     const barangayRef = db.collection('barangays').doc(context.params.barangayId);
 
@@ -58,6 +66,7 @@ export const monitorDiseaseOutbreak = functions.firestore
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     // Query: Count similar cases in the same area
+    // NOTE: This query requires a Firestore Composite Index on [diseaseName, purok, diagnosisDate]
     const casesQuery = await barangayRef.collection('epidemiology_cases')
       .where('diseaseName', '==', diseaseName)
       .where('purok', '==', purok)
@@ -69,7 +78,8 @@ export const monitorDiseaseOutbreak = functions.firestore
     // Create Alert if Threshold Breached
     if (casesQuery.size >= OUTBREAK_THRESHOLD) {
       // Prevent duplicate active alerts
-      const existingAlert = await barangayRef.collection('emergency_alerts') // Reusing existing alert collection or new 'alerts'
+      // NOTE: This query might require an index on [category, description, status]
+      const existingAlert = await barangayRef.collection('emergency_alerts')
         .where('category', '==', 'Health') // Assuming consistent category
         .where('description', '==', `OUTBREAK_WARNING: ${diseaseName} in ${purok}`)
         .where('status', 'in', ['New', 'Acknowledged'])
@@ -113,8 +123,10 @@ export const syncInventoryTotal = functions.firestore
       const batchData = doc.data();
       // Only sum Active batches
       if (batchData.status === 'Active') {
-          const qty = parseInt(batchData.quantityInBatch || batchData.quantity || 0);
-          totalQuantity += qty;
+          const qty = parseInt(batchData.quantityInBatch || batchData.quantity || '0');
+          if (!isNaN(qty)) {
+              totalQuantity += qty;
+          }
       }
     });
 

@@ -2,5 +2,6 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/barangay-data-insights.ts';
-import '@/ai/flows/ask-barangay-data.ts';
+// Import flows to register them
+import '@/ai/flows/barangay-data-insights';
+import '@/ai/flows/ask-barangay-data';

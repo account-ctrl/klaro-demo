@@ -2,12 +2,20 @@
 import axios from 'axios';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
+import { getApps } from 'firebase-admin/app';
 
-// Initialize Firebase Admin if not already (usually done in index.ts, but safe to re-init or check)
-if (!admin.apps.length) {
+// Initialize Firebase Admin if not already
+if (!getApps().length) {
     admin.initializeApp();
 }
-const db = admin.firestore();
+
+// Check if we can get Firestore (might fail if not in a server environment)
+let db: admin.firestore.Firestore;
+try {
+  db = admin.firestore();
+} catch (e) {
+  console.warn("Firestore admin not initialized (this is expected if running on client):", e);
+}
 
 interface BoundingBox {
     south: number;
@@ -68,6 +76,10 @@ const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: num
  * This is designed to be called via an HTTP Callable Function or Trigger.
  */
 export const scanZoneLogic = async (bbox: BoundingBox, barangayId: string) => {
+    if (!db) {
+        throw new Error("Firebase Admin not initialized. This function must run in a server environment.");
+    }
+
     const overpassUrl = 'https://overpass-api.de/api/interpreter';
     // Overpass QL: Get ways with [building] tag in bbox, recursively get nodes (>) to calculate center
     const query = `
@@ -170,6 +182,8 @@ export const scanZoneLogic = async (bbox: BoundingBox, barangayId: string) => {
 
     } catch (error: any) {
         console.error("Overpass Scan Error:", error);
-        throw new functions.https.HttpsError('internal', 'Failed to scan area: ' + error.message);
+        // Using standard Error if functions.https.HttpsError is not available in this context, 
+        // but since we imported it, we can try to use it or fallback.
+        throw new Error('Failed to scan area: ' + error.message);
     }
 };
