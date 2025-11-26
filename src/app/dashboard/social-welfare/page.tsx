@@ -14,10 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HandHeart, Plus, Calendar as CalendarIcon, Users, Search } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SocialWelfarePage() {
     const { data: programs, isLoading } = useAidPrograms();
     const programsRef = useSocialWelfareRef('aid_programs');
+    const { toast } = useToast();
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [newProgram, setNewProgram] = useState({
         title: '',
@@ -30,18 +32,39 @@ export default function SocialWelfarePage() {
 
     const handleCreateProgram = () => {
         if (!programsRef) return;
+
+        // Validation
+        if (!newProgram.title || !newProgram.budgetAllocated || !newProgram.startDate || !newProgram.endDate) {
+            toast({ variant: "destructive", title: "Missing Fields", description: "Please fill in all required fields." });
+            return;
+        }
+
+        const budget = parseFloat(newProgram.budgetAllocated);
+        if (isNaN(budget)) {
+             toast({ variant: "destructive", title: "Invalid Budget", description: "Budget must be a number." });
+             return;
+        }
+        
+        const start = new Date(newProgram.startDate);
+        const end = new Date(newProgram.endDate);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+             toast({ variant: "destructive", title: "Invalid Date", description: "Please provide valid start and end dates." });
+             return;
+        }
         
         addDocumentNonBlocking(programsRef, {
             title: newProgram.title,
             type: newProgram.type,
-            budgetAllocated: parseFloat(newProgram.budgetAllocated),
-            startDate: new Date(newProgram.startDate),
-            endDate: new Date(newProgram.endDate),
-            eligibilityCriteria: newProgram.eligibilityCriteria.split(',').map(s => s.trim()),
+            budgetAllocated: budget,
+            startDate: start,
+            endDate: end,
+            eligibilityCriteria: newProgram.eligibilityCriteria.split(',').map(s => s.trim()).filter(s => s !== ''),
             status: 'Active',
             createdAt: serverTimestamp()
         });
         
+        toast({ title: "Program Created", description: "New aid program has been added." });
         setIsAddOpen(false);
         setNewProgram({ title: '', type: 'Cash', budgetAllocated: '', startDate: '', endDate: '', eligibilityCriteria: '' });
     };
