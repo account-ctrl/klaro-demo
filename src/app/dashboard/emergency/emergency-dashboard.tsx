@@ -30,9 +30,10 @@ import {
 import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID, useResponderLocations } from '@/hooks/use-barangay-data';
 import { collection } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
-import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, Trash2, MoreHorizontal, MessageSquare, Users, Truck, Radio } from "lucide-react";
+import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, Trash2, MoreHorizontal, MessageSquare, Users, Truck, Radio, ArrowLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRouter } from "next/navigation";
 
 // Import new components
 import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
@@ -343,20 +344,39 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
 
                         <Separator className="bg-zinc-800" />
                         
-                        {/* Section C: Household Members */}
-                        {alert.householdMembersSnapshot && alert.householdMembersSnapshot.length > 0 && (
-                            <div className="space-y-3">
-                                <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><Users className="h-4 w-4 text-zinc-400" /> Household Members</h4>
-                                <div className="pl-6 space-y-1">
-                                    {alert.householdMembersSnapshot.map((member, idx) => (
-                                        <div key={idx} className="text-sm flex justify-between items-center p-2 bg-zinc-800/30 rounded border border-zinc-800">
-                                            <span className="text-zinc-300">{member.name}</span>
-                                            <span className="text-zinc-500 text-xs">{member.age !== 'N/A' ? `${member.age} y/o` : ''}</span>
+                        {/* Section C: Household Members & Tabular View */}
+                        {/* 
+                            We will replace the simple list with a more detailed section or a tab.
+                            The prompt requests a "tab" for household members or related members.
+                            We will use the Shadcn Tabs component for this.
+                        */}
+                        <div className="space-y-3">
+                             <div className="w-full">
+                                <h4 className="font-semibold text-zinc-200 flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-zinc-400" /> Household & Related Members</h4>
+                                {alert.householdMembersSnapshot && alert.householdMembersSnapshot.length > 0 ? (
+                                    <div className="border border-zinc-800 rounded-md overflow-hidden">
+                                        <div className="bg-zinc-800/50 p-2 grid grid-cols-12 text-xs font-semibold text-zinc-400">
+                                            <div className="col-span-6">Name</div>
+                                            <div className="col-span-3">Age</div>
+                                            <div className="col-span-3">Relation</div>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                                        <ScrollArea className="h-[120px]">
+                                            {alert.householdMembersSnapshot.map((member, idx) => (
+                                                <div key={idx} className="p-2 grid grid-cols-12 text-sm text-zinc-300 border-t border-zinc-800/50 hover:bg-zinc-800/20">
+                                                    <div className="col-span-6 font-medium">{member.name}</div>
+                                                    <div className="col-span-3 text-zinc-500">{member.age !== 'N/A' ? `${member.age} y/o` : 'N/A'}</div>
+                                                    <div className="col-span-3 text-zinc-500 italic text-xs">{member.relationship || 'Household Member'}</div>
+                                                </div>
+                                            ))}
+                                        </ScrollArea>
+                                    </div>
+                                ) : (
+                                    <div className="text-sm text-zinc-500 italic p-4 text-center border border-dashed border-zinc-800 rounded-md">
+                                        No household members linked to this resident's profile.
+                                    </div>
+                                )}
+                             </div>
+                        </div>
                     </div>
                 </ScrollArea>
                 <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t border-zinc-800 pt-4 mt-auto">
@@ -392,6 +412,7 @@ export function EmergencyDashboard() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -553,16 +574,8 @@ export function EmergencyDashboard() {
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
         </div>
         
-        {/* Back Button Overlay */}
-        <div className="absolute top-6 left-6 z-20 pointer-events-auto">
-             <Button variant="ghost" className="text-white hover:bg-white/10 gap-2 px-2" onClick={() => window.history.back()}>
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-                 Back to Dashboard
-             </Button>
-        </div>
-
         {/* Top Left: Header & Weather (Z-Index 10) */}
-        <div className="absolute top-16 left-6 z-10 pointer-events-none">
+        <div className="absolute top-6 left-6 z-10 pointer-events-none">
              <WeatherHeader />
         </div>
 
