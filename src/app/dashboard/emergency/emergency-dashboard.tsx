@@ -200,10 +200,15 @@ const getAge = (dateString: string) => {
 const ResponderStatusCard = ({ responders }: { responders: User[] }) => {
     // Use the improved filtering logic to include all relevant roles
     const responderList = responders.filter(u => {
+        // Check if position matches ANY of the responder roles
         const isResponderRole = RESPONDER_ROLES.includes(u.position);
-        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin';
-        // Note: Admin/Super Admin are included here as they might act as command center staff/responders too in small barangays
-        return isResponderRole || isSystemResponder;
+        // Check if system role is Responder, Admin, or Super Admin
+        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin' || u.systemRole === 'Encoder'; // Added Encoder as some might double up
+        
+        // Specific check for "Barangay Tanod" because sometimes exact string matching fails due to whitespace/formatting
+        const isTanod = u.position && u.position.toLowerCase().includes('tanod');
+
+        return isResponderRole || isSystemResponder || isTanod;
     });
     
     return (
