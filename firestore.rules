@@ -90,6 +90,16 @@ service cloud.firestore {
         allow read, write: if isBarangayOfficial();
     }
     
+    // SOCIAL WELFARE (Aid Programs & Claims)
+    // Explicitly listing permissions for clarity and debugging
+    match /barangays/{barangayId}/aid_programs/{programId} {
+        allow create: if isBarangayOfficial();
+        allow read, update, delete: if isBarangayOfficial();
+    }
+    match /barangays/{barangayId}/aid_claims/{claimId} {
+        allow read, write: if isBarangayOfficial();
+    }
+
     // ANNOUNCEMENTS can be read by any signed-in user.
     match /barangays/{barangayId}/announcements/{announcementId} {
         allow read: if isSignedIn();

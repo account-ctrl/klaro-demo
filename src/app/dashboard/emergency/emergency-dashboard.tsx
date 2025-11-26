@@ -571,7 +571,8 @@ export function EmergencyDashboard() {
       const responderUser = users.find(u => u.userId === responderId);
       
       const responderName = responderUser?.fullName || 'Assigned Officer';
-      const responderPhone = (responderUser as any)?.phoneNumber || '09123456789';
+      // Use 'contactNumber' field if 'phoneNumber' is missing or use dummy as fallback
+      const responderPhone = (responderUser as any)?.phoneNumber || (responderUser as any)?.contactNumber || '09123456789';
       
       updateDocumentNonBlocking(docRef, {
           status: 'Dispatched',
