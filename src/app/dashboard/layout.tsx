@@ -14,7 +14,10 @@ import {
   Bell,
   Settings,
   HelpCircle,
-  LayoutDashboard
+  LayoutDashboard,
+  Plus,
+  Gavel,
+  UserPlus
 } from 'lucide-react';
 import { SidebarNav } from './sidebar-nav';
 import { Button } from '@/components/ui/button';
@@ -118,8 +121,23 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
 
-        {/* RIGHT: Utilities */}
+        {/* RIGHT: Utilities & Quick Actions */}
         <div className="flex items-center gap-1 min-w-[200px] justify-end">
+           {/* QUICK ACTIONS (Global) */}
+           <div className="hidden lg:flex items-center gap-2 mr-2">
+              <Button asChild size="sm" className="h-8 bg-[#29ABE2] hover:bg-[#29ABE2]/90 text-white border-0">
+                  <Link href="/dashboard/documents"><Plus className="mr-1 h-3 w-3" /> Request</Link>
+              </Button>
+              <Button variant="destructive" size="sm" asChild className="h-8">
+                  <Link href="/dashboard/blotter"><Gavel className="mr-1 h-3 w-3" /> Blotter</Link>
+              </Button>
+              <Button variant="secondary" size="sm" asChild className="h-8 bg-white/10 text-white hover:bg-white/20 border-0">
+                  <Link href="/dashboard/residents"><UserPlus className="mr-1 h-3 w-3" /> Resident</Link>
+              </Button>
+           </div>
+
+           <div className="h-6 w-[1px] bg-white/20 mx-1 hidden lg:block"></div>
+
            <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
              <Sparkles size={18} />
            </Button>
