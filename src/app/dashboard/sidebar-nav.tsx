@@ -26,7 +26,8 @@ import {
   Microscope,
   HandHeart,
   Scale,
-  Truck // Added for Assets & Fleet
+  Truck,
+  Map // Added for Mapped Households
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -127,6 +128,7 @@ export function SidebarNav() {
           <div className="space-y-0">
             <NavItem icon={<Users size={18} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} />
             <NavItem icon={<HomeIcon size={18} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Map size={18} />} label="Mapped Households" href="/dashboard/mapped-households" pathname={pathname} getHref={getHref} />
             <NavItem icon={<PawPrint size={18} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} />
             <NavItem icon={<HandHeart size={18} />} label="Social Welfare" href="/dashboard/social-welfare" pathname={pathname} getHref={getHref} />
           </div>

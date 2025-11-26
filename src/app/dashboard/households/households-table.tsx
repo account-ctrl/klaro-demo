@@ -4,6 +4,7 @@ import React from 'react';
 import {
   doc,
   serverTimestamp,
+  writeBatch
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
@@ -13,6 +14,19 @@ import { DataTable } from './data-table';
 import { HouseholdFormValues } from './household-actions';
 import { useToast } from '@/hooks/use-toast';
 import { useHouseholds, useResidents, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type HouseholdWithId = Household & { id?: string };
 
@@ -73,6 +87,27 @@ export function HouseholdsTable() {
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Household Deleted' });
   };
+
+  const handleDeleteAll = async () => {
+      if (!firestore || !households || households.length === 0) return;
+
+      try {
+          const batch = writeBatch(firestore);
+          households.forEach(h => {
+               // Handle both id (from hook) and householdId (field) to be safe
+               const docId = (h as any).id || h.householdId;
+               if(docId) {
+                   const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${docId}`);
+                   batch.delete(docRef);
+               }
+          });
+          await batch.commit();
+          toast({ title: "All Households Deleted", description: "The database has been cleared." });
+      } catch (error) {
+          console.error("Delete All Error:", error);
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete all households." });
+      }
+  }
   
    const handleMemberChange = (residentId: string, householdId: string | null) => {
     if (!firestore || !residentId) return;
@@ -91,12 +126,39 @@ export function HouseholdsTable() {
   const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, residents ?? [], handleMemberChange), [residents]);
 
   return (
-    <DataTable
-        columns={columns}
-        data={households ?? []}
-        isLoading={isLoadingHouseholds || isLoadingResidents}
-        onAdd={handleAdd}
-        residents={residents ?? []}
-      />
+    <div className="space-y-4">
+        <div className="flex justify-end">
+            {households && households.length > 0 && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" className="mb-2">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete All Households
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete ALL {households.length} households from the database. Residents associated with these households will remain but will be unlinked.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90">
+                                Confirm Delete All
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+        </div>
+        <DataTable
+            columns={columns}
+            data={households ?? []}
+            isLoading={isLoadingHouseholds || isLoadingResidents}
+            onAdd={handleAdd}
+            residents={residents ?? []}
+        />
+    </div>
   );
 }
