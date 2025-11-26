@@ -85,7 +85,7 @@ const generatePetIdHtml = (pet: Pet, owner?: Resident) => {
             background-color: white;
         }
         .header {
-            background-color: #007bff;
+            background-color: #ff7a59;
             color: white;
             padding: 8px;
             text-align: center;

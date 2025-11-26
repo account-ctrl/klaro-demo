@@ -125,7 +125,7 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="flex items-center gap-1 min-w-[200px] justify-end">
            {/* QUICK ACTIONS (Global) */}
            <div className="hidden lg:flex items-center gap-2 mr-2">
-              <Button asChild size="sm" className="h-8 bg-[#29ABE2] hover:bg-[#29ABE2]/90 text-white border-0">
+              <Button asChild size="sm" className="h-8 bg-[#ff7a59] hover:bg-[#ff7a59]/90 text-white border-0">
                   <Link href="/dashboard/documents"><Plus className="mr-1 h-3 w-3" /> Request</Link>
               </Button>
               <Button variant="destructive" size="sm" asChild className="h-8">
