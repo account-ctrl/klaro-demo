@@ -21,7 +21,9 @@ import {
   ChevronRight,
   Stethoscope, // Added for eHealth
   Pill, // Added for Inventory
-  HeartPulse // Added for Patient Records
+  HeartPulse, // Added for Patient Records
+  Baby, // For MCH
+  Microscope // For Epidemiology
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -143,8 +145,11 @@ export function SidebarNav() {
           <div className="space-y-0">
             <NavItem icon={<Pill size={18} />} label="Inventory" href="/dashboard/ehealth/inventory" pathname={pathname} getHref={getHref} />
             <NavItem icon={<Stethoscope size={18} />} label="Dispensing" href="/dashboard/ehealth/dispensing" pathname={pathname} getHref={getHref} />
-            {/* Patient Records is usually a sub-view of Residents but a shortcut is useful */}
             <NavItem icon={<HeartPulse size={18} />} label="Patient Records" href="/dashboard/ehealth/patients" pathname={pathname} getHref={getHref} />
+            
+            {/* NEW ADVANCED MODULES */}
+            <NavItem icon={<Baby size={18} />} label="Maternal & Child" href="/dashboard/ehealth/mch" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Microscope size={18} />} label="Disease Surveillance" href="/dashboard/ehealth/epidemiology" pathname={pathname} getHref={getHref} />
           </div>
 
           <NavGroupHeader label="System" />
