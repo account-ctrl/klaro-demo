@@ -109,14 +109,11 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
     const [vehicle, setVehicle] = useState<string>('Patrol Vehicle 1');
     
     // Fetch users to list as responders
-    // Updated to use the root /users collection instead of per-barangay
     const firestore = useFirestore();
     const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
     const { data: users } = useCollection<User>(usersCollection);
 
     // Filter for potential responders:
-    // 1. Must be an active user
-    // 2. Must have a responder role OR system role of 'Responder'
     const activeResponders = users?.filter(u => {
         const isResponderRole = RESPONDER_ROLES.includes(u.position);
         const isSystemResponder = u.systemRole === 'Responder';
@@ -208,14 +205,9 @@ const getAge = (dateString: string) => {
 }
 
 const ResponderStatusCard = ({ responders }: { responders: User[] }) => {
-    // Use the improved filtering logic to include all relevant roles
     const responderList = responders.filter(u => {
-        // Check if position matches ANY of the responder roles
         const isResponderRole = RESPONDER_ROLES.includes(u.position);
-        // Check if system role is Responder, Admin, or Super Admin
-        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin' || u.systemRole === 'Encoder'; // Added Encoder as some might double up
-        
-        // Specific check for "Barangay Tanod" because sometimes exact string matching fails due to whitespace/formatting
+        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin' || u.systemRole === 'Encoder';
         const positionLower = u.position ? u.position.toLowerCase() : '';
         const isTanod = positionLower.includes('tanod');
         const isKagawad = positionLower.includes('kagawad');
@@ -273,7 +265,7 @@ const ResponderStatusCard = ({ responders }: { responders: User[] }) => {
     )
 }
 
-const IncidentActionPanel = ({ alert, resident, onAcknowledge, onDispatch, onResolve, onDelete }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onDispatch: (alertId: string, responderId: string, vehicle: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
+const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onResolve, onDelete, isOpen, onClose }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onDispatch: (alertId: string, responderId: string, vehicle: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; isOpen: boolean; onClose: () => void; }) => {
     const timeAgo = useMemo(() => {
         if (!alert.timestamp) return '...';
         return formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true });
@@ -281,15 +273,6 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onDispatch, onRes
 
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`;
     
-    const cardVariant = {
-        New: "border-destructive",
-        Acknowledged: "border-amber-500",
-        Dispatched: "border-blue-500",
-        'On Scene': "border-blue-500",
-        Resolved: "border-green-500",
-        'False Alarm': "border-gray-500"
-    }[alert.status];
-
     const statusBadgeVariant = {
         New: "destructive",
         Acknowledged: "secondary",
@@ -299,167 +282,167 @@ const IncidentActionPanel = ({ alert, resident, onAcknowledge, onDispatch, onRes
         'False Alarm': "outline"
     }[alert.status] as "default" | "secondary" | "outline" | "destructive";
 
-
     return (
-        <Card className={`flex flex-col h-full ${cardVariant}`}>
-            <CardHeader>
-                <div className="flex justify-between items-center">
-                    <CardTitle className="flex items-center gap-2">
-                        <Siren className={alert.status === 'New' ? 'animate-pulse text-destructive' : ''} />
-                        <span>Incident Details</span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                        <Badge variant={statusBadgeVariant}>{alert.status}</Badge>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                    className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
-                                    onClick={() => onDelete(alert.id || alert.alertId)}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Alert
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                    {alert.category && <Badge variant="outline">{alert.category}</Badge>}
-                    <span>Received {timeAgo}</span>
-                </div>
-            </CardHeader>
-            <Separator />
-            <CardContent className="pt-6 space-y-6 flex-grow overflow-y-auto">
-                 {/* Responder Info (if dispatched) */}
-                 {alert.responderDetails && (
-                    <>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
-                        <h4 className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2 text-sm mb-2">
-                            <Truck className="h-4 w-4" /> Dispatched Unit
-                        </h4>
-                        <div className="text-sm space-y-1">
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Officer:</span>
-                                <span className="font-medium">{alert.responderDetails.name}</span>
-                            </div>
-                             <div className="flex justify-between">
-                                <span className="text-muted-foreground">Vehicle:</span>
-                                <span className="font-medium">{alert.responderDetails.vehicleInfo}</span>
-                            </div>
-                             <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-200/50">
-                                <span className="text-muted-foreground">Contact:</span>
-                                <a href={`tel:${alert.responderDetails.contactNumber}`} className="font-medium text-blue-600 hover:underline flex items-center gap-1">
-                                    <Phone className="h-3 w-3" /> {alert.responderDetails.contactNumber}
-                                </a>
-                            </div>
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                    <div className="flex justify-between items-center mr-8">
+                        <DialogTitle className="flex items-center gap-2">
+                            <Siren className={alert.status === 'New' ? 'animate-pulse text-destructive' : ''} />
+                            <span>Incident Details</span>
+                        </DialogTitle>
+                        <div className="flex items-center gap-2">
+                            <Badge variant={statusBadgeVariant}>{alert.status}</Badge>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem 
+                                        className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
+                                        onClick={() => onDelete(alert.id || alert.alertId)}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete Alert
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     </div>
-                    <Separator />
-                    </>
-                 )}
-
-                 {/* Section A: Resident Profile */}
-                 <div className="space-y-3">
-                    <h4 className="font-semibold text-primary flex items-center gap-2"><UserIcon className="h-4 w-4" /> Applicant Information</h4>
-                    <div className="flex items-center gap-3 pl-6">
-                        <div>
-                            <p className="font-semibold text-lg">{alert.residentName ?? 'Unknown'}</p>
-                            <p className="text-sm text-muted-foreground">{resident ? `${getAge(resident.dateOfBirth)} y/o ${resident.gender}` : 'Resident data not found'}</p>
-                        </div>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                        {alert.category && <Badge variant="outline">{alert.category}</Badge>}
+                        <span>Received {timeAgo}</span>
                     </div>
-                     <div className="flex items-center gap-3 pl-6">
-                         <div className="flex flex-wrap gap-1">
-                             {resident?.isPwd && <Badge variant="destructive">PWD</Badge>}
-                             {getAge(resident?.dateOfBirth ?? '0') > 60 && <Badge variant="destructive">Senior Citizen</Badge>}
-                             {/* Mock vulnerability tag */}
-                             {/* <Badge variant="outline">Diabetic</Badge> */}
-                         </div>
-                    </div>
-                    <div className="flex items-center gap-3 pl-6">
-                         <Button variant="outline" size="sm" className="w-full flex items-center gap-2" asChild>
-                            <a href={`tel:${alert.contactNumber || resident?.contactNumber}`}>
-                                <Phone className="h-4 w-4" />
-                                {alert.contactNumber || resident?.contactNumber || 'No contact #'}
-                            </a>
-                         </Button>
-                    </div>
-                </div>
-                
+                </DialogHeader>
                 <Separator />
-                
-                {/* Section A.2: Message / Description */}
-                {alert.message && (
-                    <div className="space-y-2">
-                        <h4 className="font-semibold text-primary flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Message from Resident</h4>
-                        <div className="p-3 bg-muted rounded-md text-sm pl-6 border-l-4 border-primary">
-                            "{alert.message}"
-                        </div>
-                    </div>
-                )}
-
-                <Separator />
-
-                {/* Section B: Location */}
-                <div className="space-y-3">
-                    <h4 className="font-semibold text-primary flex items-center gap-2"><MapPin className="h-4 w-4" /> Precise Location</h4>
-                    <div className="flex items-start gap-3 pl-6">
-                        <div>
-                            <p className="font-semibold text-sm">GPS Coordinates</p>
-                            <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
-                                View on Google Maps ({alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)})
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                 <Separator />
-                 
-                 {/* Section C: Household Members */}
-                 {alert.householdMembersSnapshot && alert.householdMembersSnapshot.length > 0 && (
-                    <div className="space-y-3">
-                        <h4 className="font-semibold text-primary flex items-center gap-2"><Users className="h-4 w-4" /> Household Members</h4>
-                        <div className="pl-6 space-y-1">
-                            {alert.householdMembersSnapshot.map((member, idx) => (
-                                <div key={idx} className="text-sm flex justify-between items-center p-2 bg-muted/20 rounded">
-                                    <span>{member.name}</span>
-                                    <span className="text-muted-foreground text-xs">{member.age !== 'N/A' ? `${member.age} y/o` : ''}</span>
+                <ScrollArea className="flex-grow pr-4">
+                    <div className="space-y-6 py-4">
+                        {/* Responder Info (if dispatched) */}
+                        {alert.responderDetails && (
+                            <>
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
+                                <h4 className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2 text-sm mb-2">
+                                    <Truck className="h-4 w-4" /> Dispatched Unit
+                                </h4>
+                                <div className="text-sm space-y-1">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Officer:</span>
+                                        <span className="font-medium">{alert.responderDetails.name}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Vehicle:</span>
+                                        <span className="font-medium">{alert.responderDetails.vehicleInfo}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-200/50">
+                                        <span className="text-muted-foreground">Contact:</span>
+                                        <a href={`tel:${alert.responderDetails.contactNumber}`} className="font-medium text-blue-600 hover:underline flex items-center gap-1">
+                                            <Phone className="h-3 w-3" /> {alert.responderDetails.contactNumber}
+                                        </a>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                 )}
+                            </div>
+                            <Separator />
+                            </>
+                        )}
 
-            </CardContent>
-            <CardFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4">
-                {alert.status === 'New' && (
-                     <Button variant="secondary" onClick={() => onAcknowledge(alert.alertId)} className="w-full">
-                        <ShieldCheck className="mr-2" />
-                        Acknowledge
-                    </Button>
-                )}
-                {alert.status === 'Acknowledged' && (
-                    <DispatchResponderDialog onDispatch={(rId, v) => onDispatch(alert.alertId, rId, v)}>
-                        <Button variant="default" className="w-full">
-                            <Siren className="mr-2" />
-                            Dispatch Responder
+                        {/* Section A: Resident Profile */}
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-primary flex items-center gap-2"><UserIcon className="h-4 w-4" /> Applicant Information</h4>
+                            <div className="flex items-center gap-3 pl-6">
+                                <div>
+                                    <p className="font-semibold text-lg">{alert.residentName ?? 'Unknown'}</p>
+                                    <p className="text-sm text-muted-foreground">{resident ? `${getAge(resident.dateOfBirth)} y/o ${resident.gender}` : 'Resident data not found'}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 pl-6">
+                                <div className="flex flex-wrap gap-1">
+                                    {resident?.isPwd && <Badge variant="destructive">PWD</Badge>}
+                                    {getAge(resident?.dateOfBirth ?? '0') > 60 && <Badge variant="destructive">Senior Citizen</Badge>}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 pl-6">
+                                <Button variant="outline" size="sm" className="w-full flex items-center gap-2" asChild>
+                                    <a href={`tel:${alert.contactNumber || resident?.contactNumber}`}>
+                                        <Phone className="h-4 w-4" />
+                                        {alert.contactNumber || resident?.contactNumber || 'No contact #'}
+                                    </a>
+                                </Button>
+                            </div>
+                        </div>
+                        
+                        <Separator />
+                        
+                        {/* Section A.2: Message / Description */}
+                        {alert.message && (
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-primary flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Message from Resident</h4>
+                                <div className="p-3 bg-muted rounded-md text-sm pl-6 border-l-4 border-primary">
+                                    "{alert.message}"
+                                </div>
+                            </div>
+                        )}
+
+                        <Separator />
+
+                        {/* Section B: Location */}
+                        <div className="space-y-3">
+                            <h4 className="font-semibold text-primary flex items-center gap-2"><MapPin className="h-4 w-4" /> Precise Location</h4>
+                            <div className="flex items-start gap-3 pl-6">
+                                <div>
+                                    <p className="font-semibold text-sm">GPS Coordinates</p>
+                                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
+                                        View on Google Maps ({alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)})
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+                        
+                        {/* Section C: Household Members */}
+                        {alert.householdMembersSnapshot && alert.householdMembersSnapshot.length > 0 && (
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-primary flex items-center gap-2"><Users className="h-4 w-4" /> Household Members</h4>
+                                <div className="pl-6 space-y-1">
+                                    {alert.householdMembersSnapshot.map((member, idx) => (
+                                        <div key={idx} className="text-sm flex justify-between items-center p-2 bg-muted/20 rounded">
+                                            <span>{member.name}</span>
+                                            <span className="text-muted-foreground text-xs">{member.age !== 'N/A' ? `${member.age} y/o` : ''}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </ScrollArea>
+                <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4 mt-auto">
+                    {alert.status === 'New' && (
+                        <Button variant="secondary" onClick={() => onAcknowledge(alert.alertId)} className="w-full sm:w-auto">
+                            <ShieldCheck className="mr-2 h-4 w-4" />
+                            Acknowledge
                         </Button>
-                    </DispatchResponderDialog>
-                )}
-                 {(alert.status === 'Acknowledged' || alert.status === 'Dispatched' || alert.status === 'On Scene') && (
-                    <ResolveAlertDialog alertId={alert.alertId} onResolve={onResolve}>
-                        <Button variant="default" className="w-full">
-                            <CheckCircle className="mr-2" />
-                            Resolve Alert
-                        </Button>
-                    </ResolveAlertDialog>
-                )}
-            </CardFooter>
-        </Card>
+                    )}
+                    {alert.status === 'Acknowledged' && (
+                        <DispatchResponderDialog onDispatch={(rId, v) => onDispatch(alert.alertId, rId, v)}>
+                            <Button variant="default" className="w-full sm:w-auto">
+                                <Siren className="mr-2 h-4 w-4" />
+                                Dispatch Responder
+                            </Button>
+                        </DispatchResponderDialog>
+                    )}
+                    {(alert.status === 'Acknowledged' || alert.status === 'Dispatched' || alert.status === 'On Scene') && (
+                        <ResolveAlertDialog alertId={alert.alertId} onResolve={onResolve}>
+                            <Button variant="default" className="w-full sm:w-auto">
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Resolve Alert
+                            </Button>
+                        </ResolveAlertDialog>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };
 
@@ -490,14 +473,13 @@ export function EmergencyDashboard() {
   const { toast } = useToast();
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Use hooks
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
   const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
   
-  // Use useMemoFirebase for users collection
-  // NOTE: Users are now at the root level '/users', not per-barangay for authentication/system roles
   const usersCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
   const { data: users } = useCollection<User>(usersCollectionRef);
   
@@ -513,10 +495,6 @@ export function EmergencyDashboard() {
   }, [alerts]);
 
   const selectedAlert = useMemo(() => {
-      if (!selectedAlertId && sortedAlerts.length > 0) {
-          setSelectedAlertId(sortedAlerts[0].alertId);
-          return sortedAlerts[0] as EmergencyAlertWithId;
-      }
       return sortedAlerts.find(a => a.alertId === selectedAlertId) as EmergencyAlertWithId | undefined;
   }, [selectedAlertId, sortedAlerts]);
 
@@ -524,6 +502,16 @@ export function EmergencyDashboard() {
       if(!selectedAlert || !residents) return undefined;
       return residents.find(r => r.residentId === selectedAlert.residentId);
   }, [selectedAlert, residents])
+
+  const handleAlertSelect = (id: string) => {
+      setSelectedAlertId(id);
+      setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+      setIsModalOpen(false);
+      setSelectedAlertId(null);
+  };
 
   const handleSimulateSOS = () => {
     if (!residents || residents.length === 0) {
@@ -582,11 +570,8 @@ export function EmergencyDashboard() {
       const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${alertId}`);
       const responderUser = users.find(u => u.userId === responderId);
       
-      // If we can't find the user details (unlikely), fallback to basic info
       const responderName = responderUser?.fullName || 'Assigned Officer';
-      const responderPhone = (responderUser as any)?.phoneNumber || '09123456789'; // Assuming phone is on user, or we need to fetch it from resident profile linked to user. 
-      // Note: User type has `residentId`. Ideally we fetch from there. 
-      // For now, I'll use a placeholder if not directly available on User type (User type currently has email/name).
+      const responderPhone = (responderUser as any)?.phoneNumber || '09123456789';
       
       updateDocumentNonBlocking(docRef, {
           status: 'Dispatched',
@@ -615,6 +600,7 @@ export function EmergencyDashboard() {
         notes: notes,
     });
      toast({ title: "Alert Resolved", description: `Alert #${alertId} has been marked as resolved.`});
+     setIsModalOpen(false);
   };
 
   const handleDelete = (alertId: string) => {
@@ -622,7 +608,10 @@ export function EmergencyDashboard() {
     const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${alertId}`);
     deleteDocumentNonBlocking(docRef);
     toast({ title: "Alert Deleted", description: "The alert has been permanently removed." });
-    if (selectedAlertId === alertId) setSelectedAlertId(null);
+    if (selectedAlertId === alertId) {
+        setSelectedAlertId(null);
+        setIsModalOpen(false);
+    }
   };
 
   const isLoading = isLoadingAlerts || isLoadingResidents || isLoadingResponders;
@@ -642,7 +631,7 @@ export function EmergencyDashboard() {
                         alerts={alerts ?? []}
                         responders={responders ?? []}
                         selectedAlertId={selectedAlertId}
-                        onSelectAlert={setSelectedAlertId}
+                        onSelectAlert={handleAlertSelect}
                     />
                 </CardContent>
             </Card>
@@ -650,13 +639,13 @@ export function EmergencyDashboard() {
 
         {/* Side Panel */}
         <div className="w-1/3 h-full flex flex-col gap-4">
-            {/* Responder Status Card (NEW) */}
+            {/* Responder Status Card */}
             <ResponderStatusCard responders={users ?? []} />
 
             {/* Active Alert Feed Card */}
-            <div className="flex-none">
-                <Card>
-                    <CardHeader className="py-3 px-4">
+            <div className="flex-grow overflow-hidden">
+                <Card className="h-full flex flex-col">
+                    <CardHeader className="py-3 px-4 flex-none">
                          <div className="flex justify-between items-center">
                             <CardTitle className="text-sm font-medium">Active Alert Feed</CardTitle>
                              <Button onClick={handleSimulateSOS} disabled={isLoading || isSimulating} size="sm" variant="outline" className="h-7 text-xs">
@@ -664,8 +653,8 @@ export function EmergencyDashboard() {
                             </Button>
                         </div>
                     </CardHeader>
-                    <CardContent className="py-0 px-4 pb-3">
-                        <ScrollArea className="h-48">
+                    <CardContent className="py-0 px-4 pb-3 flex-grow overflow-hidden">
+                        <ScrollArea className="h-full">
                             <div className="space-y-2">
                             {isLoading && (
                                 <div className="space-y-2">
@@ -679,7 +668,7 @@ export function EmergencyDashboard() {
                                 <AlertFeedItem 
                                     key={alert.alertId} 
                                     alert={alert}
-                                    onSelect={() => setSelectedAlertId(alert.alertId)}
+                                    onSelect={() => handleAlertSelect(alert.alertId)}
                                     isSelected={selectedAlertId === alert.alertId}
                                 />
                             ))}
@@ -688,31 +677,21 @@ export function EmergencyDashboard() {
                     </CardContent>
                 </Card>
             </div>
-
-            {/* Incident Detail Panel */}
-            <div className="flex-grow min-h-0">
-                {isLoading && <Skeleton className="h-full w-full" />}
-                {!isLoading && selectedAlert && (
-                    <IncidentActionPanel 
-                        alert={selectedAlert}
-                        resident={selectedResident}
-                        onAcknowledge={handleAcknowledge}
-                        onDispatch={handleDispatch}
-                        onResolve={handleResolve}
-                        onDelete={handleDelete}
-                    />
-                )}
-                 {!isLoading && sortedAlerts.length === 0 && (
-                    <Card className="h-full flex items-center justify-center border-dashed">
-                         <div className="text-center">
-                            <ShieldCheck className="mx-auto h-12 w-12 text-green-500 opacity-50" />
-                            <h3 className="mt-4 text-lg font-medium text-muted-foreground">All Clear!</h3>
-                            <p className="mt-1 text-sm text-muted-foreground">There are no active emergency alerts.</p>
-                         </div>
-                    </Card>
-                )}
-            </div>
         </div>
+
+        {/* Incident Modal */}
+        {selectedAlert && (
+            <IncidentActionModal 
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                alert={selectedAlert}
+                resident={selectedResident}
+                onAcknowledge={handleAcknowledge}
+                onDispatch={handleDispatch}
+                onResolve={handleResolve}
+                onDelete={handleDelete}
+            />
+        )}
     </div>
   );
 }
