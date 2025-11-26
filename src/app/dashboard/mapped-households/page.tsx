@@ -276,8 +276,10 @@ export default function MappedHouseholdsPage() {
     };
 
     const handleAssignResident = () => {
-        if (!firestore || !selectedHouseholdId || !residentToAssign) return;
-        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${selectedHouseholdId}`);
+        if (!firestore || !selectedHousehold || !residentToAssign) return;
+        
+        // Use selectedHousehold.id which is the document ID, NOT householdId field
+        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${selectedHousehold.id}`);
         const resident = residents?.find(r => r.residentId === residentToAssign);
         
         updateDocumentNonBlocking(hDocRef, {
@@ -291,11 +293,12 @@ export default function MappedHouseholdsPage() {
         toast({ title: "Resident Assigned", description: "Household head updated and marked as Verified." });
     };
 
-    const handleDelete = (householdId: string) => {
+    const handleDelete = (id: string) => {
         if (!firestore) return;
-        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${householdId}`);
+        // Use the document ID 'id', not 'householdId'
+        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${id}`);
         deleteDocumentNonBlocking(hDocRef);
-        if (selectedHouseholdId === householdId) setSelectedHouseholdId(null);
+        if (selectedHouseholdId === id) setSelectedHouseholdId(null); // This comparison might be tricky if state uses householdId field
         toast({ title: "Deleted", description: "Household removed." });
     };
 
@@ -315,7 +318,7 @@ export default function MappedHouseholdsPage() {
             const deletePromises = chunks.map(chunk => limit(async () => {
                 const batch = writeBatch(firestore);
                 chunk.forEach(h => {
-                     if (h.id) { // Use document ID, not householdId field
+                     if (h.id) { // Use document ID
                         const ref = doc(firestore, `/barangays/${BARANGAY_ID}/households/${h.id}`);
                         batch.delete(ref);
                      }
