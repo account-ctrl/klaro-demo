@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { MapPin, Search, Scan, Loader2, UserPlus, Save, X, Trash2 } from 'lucide-react';
+import { MapPin, Search, Scan, Loader2, UserPlus, Save, X, Trash2, UserMinus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import pLimit from 'p-limit';
 
@@ -293,6 +293,18 @@ export default function MappedHouseholdsPage() {
         toast({ title: "Resident Assigned", description: "Household head updated and marked as Verified." });
     };
 
+    const handleUnassignResident = (id: string) => {
+        if (!firestore || !id) return;
+        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${id}`);
+        
+        updateDocumentNonBlocking(hDocRef, {
+            household_head_id: null, // Use null instead of deleteField() for simplicity if types allow, or empty string
+            name: 'Unverified Structure', // Reset name
+            status: 'Unverified' // Revert status
+        });
+        toast({ title: "Unassigned", description: "Resident removed from household." });
+    };
+
     const handleDelete = (id: string) => {
         if (!firestore) return;
         // Use the document ID 'id', not 'householdId'
@@ -427,9 +439,20 @@ export default function MappedHouseholdsPage() {
                                 <p className="text-xs text-muted-foreground truncate">{h.address}</p>
                                 {selectedHouseholdId === h.householdId && (
                                     <div className="mt-3 pt-3 border-t flex gap-2">
-                                        <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => setIsAssignOpen(true)}>
-                                            <UserPlus className="w-3 h-3 mr-1"/> Assign Resident
+                                        <Button size="sm" variant="outline" className="w-full h-7 text-xs flex-1" onClick={() => setIsAssignOpen(true)}>
+                                            <UserPlus className="w-3 h-3 mr-1"/> {h.household_head_id ? 'Change Resident' : 'Assign Resident'}
                                         </Button>
+                                        {h.household_head_id && (
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" 
+                                                onClick={(e) => { e.stopPropagation(); handleUnassignResident(h.id); }}
+                                                title="Unassign Resident"
+                                            >
+                                                <UserMinus className="w-4 h-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                 )}
                             </div>
