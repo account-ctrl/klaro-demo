@@ -143,6 +143,7 @@ export function DataTable<TData extends CertificateRequest, TValue>({
         size="sm"
         onClick={() => table.previousPage()}
         disabled={!table.getCanPreviousPage()}
+        className="border-input hover:bg-accent hover:text-accent-foreground"
         >
         Previous
         </Button>
@@ -151,6 +152,7 @@ export function DataTable<TData extends CertificateRequest, TValue>({
         size="sm"
         onClick={() => table.nextPage()}
         disabled={!table.getCanNextPage()}
+         className="border-input hover:bg-accent hover:text-accent-foreground"
         >
         Next
         </Button>

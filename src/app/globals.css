@@ -15,8 +15,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 217 33% 17%;
 
-    /* Updated Brand Color: #ff7a59 -> HSL: 12 100% 67% */
-    --primary: 12 100% 67%; 
+    /* Klaro Brand: Vibrant Blue (#29ABE2) -> HSL: 198, 77%, 52% */
+    --primary: 12 100% 67%; /* #ff7a59 -> HSL: 12, 100%, 67% */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96%; /* Light slate gray for secondary actions */
