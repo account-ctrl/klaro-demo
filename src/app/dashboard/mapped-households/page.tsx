@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useHouseholds, useResidents, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MapPin, Search, Scan, Loader2, UserPlus, Save, X, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import pLimit from 'p-limit';
 
 // --- Custom Map Components ---
 // ... (BoxDrawer, MapUpdater, and Icons remain the same) ...
@@ -102,19 +103,19 @@ function MapUpdater({ center }: { center: [number, number] | null }) {
 }
 
 // Icons
-const createVerifiedIcon = () => L.divIcon({
+const createVerifiedIcon = (isSelected: boolean) => L.divIcon({
     className: '!bg-transparent border-none',
     html: `<div class="relative flex h-4 w-4 items-center justify-center">
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500 border border-white shadow-sm"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 ${isSelected ? 'bg-green-600 ring-2 ring-green-300' : 'bg-green-500'} border border-white shadow-sm"></span>
             </div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8]
 });
 
-const createUnverifiedIcon = () => L.divIcon({
+const createUnverifiedIcon = (isSelected: boolean) => L.divIcon({
     className: '!bg-transparent border-none',
     html: `<div class="relative flex h-4 w-4 items-center justify-center">
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-gray-400 border border-white shadow-sm"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 ${isSelected ? 'bg-red-500 ring-2 ring-red-300' : 'bg-gray-400'} border border-white shadow-sm"></span>
             </div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8]
@@ -149,9 +150,10 @@ export default function MappedHouseholdsPage() {
     const [mapMode, setMapMode] = useState<'view' | 'scan'>('view');
     const [scanBounds, setScanBounds] = useState<L.LatLngBounds | null>(null);
     const [isScanning, setIsScanning] = useState(false);
-    const [scannedPoints, setScannedPoints] = useState<{lat: number, lng: number, type: string}[]>([]);
+    const [scannedPoints, setScannedPoints] = useState<{lat: number, lng: number, type: string, geometry?: {lat: number, lng: number}[]}[]>([]);
     const [showScanModal, setShowScanModal] = useState(false);
     const [isSavingScan, setIsSavingScan] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Assign Resident State
     const [isAssignOpen, setIsAssignOpen] = useState(false);
@@ -188,12 +190,13 @@ export default function MappedHouseholdsPage() {
         if (!scanBounds) return;
         setIsScanning(true);
         
+        // Updated query to fetch geometry (polygon points)
         const query = `
             [out:json][timeout:25];
             (
               way["building"](${scanBounds.getSouth()},${scanBounds.getWest()},${scanBounds.getNorth()},${scanBounds.getEast()});
             );
-            out center;
+            out geom;
         `;
 
         try {
@@ -203,17 +206,33 @@ export default function MappedHouseholdsPage() {
             });
             const data = await response.json();
             const newPoints = data.elements
-                .filter((el: any) => el.type === 'way' && el.center)
-                .map((el: any) => ({
-                    lat: el.center.lat,
-                    lng: el.center.lon,
-                    type: el.tags.building || 'structure'
-                }));
+                .filter((el: any) => el.type === 'way')
+                .map((el: any) => {
+                    // Calculate center if geometry exists
+                    let lat = 0, lng = 0;
+                    const geometry = el.geometry ? el.geometry.map((g: any) => ({lat: g.lat, lng: g.lon})) : [];
+                    
+                    if (geometry.length > 0) {
+                        lat = geometry.reduce((sum: number, p: any) => sum + p.lat, 0) / geometry.length;
+                        lng = geometry.reduce((sum: number, p: any) => sum + p.lng, 0) / geometry.length;
+                    } else if (el.center) {
+                        lat = el.center.lat;
+                        lng = el.center.lon;
+                    }
+
+                    return {
+                        lat,
+                        lng,
+                        type: el.tags.building || 'structure',
+                        geometry // Store the polygon points
+                    };
+                });
             
             setScannedPoints(newPoints);
             setShowScanModal(false);
             if(newPoints.length === 0) toast({ title: "No buildings found", description: "Try selecting a different area." });
         } catch (e) {
+            console.error(e);
             toast({ variant: "destructive", title: "Scan Failed", description: "Could not fetch map data." });
         } finally {
             setIsScanning(false);
@@ -241,7 +260,8 @@ export default function MappedHouseholdsPage() {
                         address: `Lat: ${point.lat.toFixed(5)}, Lon: ${point.lng.toFixed(5)}`,
                         status: 'Unverified',
                         scannedAt: serverTimestamp(),
-                        housing_material: 'Unknown'
+                        housing_material: 'Unknown',
+                        boundary: point.geometry // Save the polygon boundary
                     });
                     count++;
                  }
@@ -280,31 +300,38 @@ export default function MappedHouseholdsPage() {
     };
 
     const handleDeleteAll = async () => {
-        if (!firestore || !households) return;
+        if (!firestore || !households || isDeleting) return;
+        
+        setIsDeleting(true);
         try {
-            const BATCH_SIZE = 400; // Keep safely under the 500 limit
+            const BATCH_SIZE = 400; 
             const chunks = [];
-            
+            const limit = pLimit(5); // Limit concurrent batch operations
+
             for (let i = 0; i < households.length; i += BATCH_SIZE) {
                 chunks.push(households.slice(i, i + BATCH_SIZE));
             }
 
-            for (const chunk of chunks) {
+            const deletePromises = chunks.map(chunk => limit(async () => {
                 const batch = writeBatch(firestore);
                 chunk.forEach(h => {
-                     if (h.householdId) {
-                        const ref = doc(firestore, `/barangays/${BARANGAY_ID}/households/${h.householdId}`);
+                     if (h.id) { // Use document ID, not householdId field
+                        const ref = doc(firestore, `/barangays/${BARANGAY_ID}/households/${h.id}`);
                         batch.delete(ref);
                      }
                 });
                 await batch.commit();
-            }
+            }));
+
+            await Promise.all(deletePromises);
 
             toast({ title: "All Cleared", description: "All households have been deleted." });
             setSelectedHouseholdId(null);
         } catch (e) {
             console.error("Delete all error:", e);
             toast({ variant: "destructive", title: "Error", description: "Failed to delete all households." });
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -321,7 +348,7 @@ export default function MappedHouseholdsPage() {
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" title="Delete All">
-                                            <Trash2 className="h-4 w-4" />
+                                            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                         </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
@@ -331,7 +358,9 @@ export default function MappedHouseholdsPage() {
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
                                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive">Confirm Delete All</AlertDialogAction>
+                                            <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive" disabled={isDeleting}>
+                                                {isDeleting ? "Deleting..." : "Confirm Delete All"}
+                                            </AlertDialogAction>
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
@@ -368,7 +397,7 @@ export default function MappedHouseholdsPage() {
                     <div className="divide-y">
                         {filteredHouseholds.map(h => (
                             <div 
-                                key={h.householdId}
+                                key={h.id}
                                 className={`p-4 cursor-pointer hover:bg-muted transition-colors group ${selectedHouseholdId === h.householdId ? 'bg-muted' : ''}`}
                                 onClick={() => setSelectedHouseholdId(h.householdId)}
                             >
@@ -386,7 +415,7 @@ export default function MappedHouseholdsPage() {
                                                 <AlertDialogHeader><AlertDialogTitle>Delete Household?</AlertDialogTitle></AlertDialogHeader>
                                                 <AlertDialogFooter>
                                                     <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={(e) => { e.stopPropagation(); handleDelete(h.householdId); }} className="bg-destructive">Delete</AlertDialogAction>
+                                                    <AlertDialogAction onClick={(e) => { e.stopPropagation(); handleDelete(h.id); }} className="bg-destructive">Delete</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>
@@ -464,11 +493,37 @@ export default function MappedHouseholdsPage() {
                     {/* Render Existing Households */}
                     {filteredHouseholds.map(h => {
                          if (!h.latitude || !h.longitude) return null;
+                         const isSelected = selectedHouseholdId === h.householdId;
+                         
+                         // Render Polygon if boundary exists
+                         if (h.boundary && h.boundary.length > 0) {
+                            return (
+                                <Polygon
+                                    key={h.id}
+                                    positions={h.boundary}
+                                    pathOptions={{
+                                        color: h.status === 'Unverified' ? (isSelected ? 'red' : 'gray') : (isSelected ? 'green' : 'lime'),
+                                        weight: isSelected ? 3 : 1,
+                                        fillOpacity: isSelected ? 0.6 : 0.4
+                                    }}
+                                    eventHandlers={{ click: () => setSelectedHouseholdId(h.householdId) }}
+                                >
+                                     <Popup>
+                                        <div className="font-sans text-xs">
+                                            <strong>{h.name}</strong><br/>
+                                            {h.address}
+                                        </div>
+                                    </Popup>
+                                </Polygon>
+                            )
+                         }
+
+                         // Fallback to Marker
                          return (
                             <Marker 
-                                key={h.householdId} 
+                                key={h.id} 
                                 position={[h.latitude, h.longitude]}
-                                icon={h.status === 'Unverified' ? createUnverifiedIcon() : createVerifiedIcon()}
+                                icon={h.status === 'Unverified' ? createUnverifiedIcon(isSelected) : createVerifiedIcon(isSelected)}
                                 eventHandlers={{ click: () => setSelectedHouseholdId(h.householdId) }}
                             >
                                 <Popup>
@@ -481,10 +536,13 @@ export default function MappedHouseholdsPage() {
                          )
                     })}
 
-                    {/* Render Scanned Points (Temp) */}
-                    {scannedPoints.map((p, i) => (
-                        <Marker key={`scan-${i}`} position={[p.lat, p.lng]} icon={createScannedIcon()} />
-                    ))}
+                    {/* Render Scanned Points (Temp) - Show as polygons if available */}
+                    {scannedPoints.map((p, i) => {
+                        if (p.geometry && p.geometry.length > 0) {
+                             return <Polygon key={`scan-${i}`} positions={p.geometry} pathOptions={{ color: 'blue', weight: 1, dashArray: '5, 5' }} />
+                        }
+                        return <Marker key={`scan-${i}`} position={[p.lat, p.lng]} icon={createScannedIcon()} />
+                    })}
 
                     {/* Drawing Tool */}
                     <BoxDrawer active={mapMode === 'scan'} onBoxDrawn={handleBoxDrawn} />

@@ -29,7 +29,11 @@ export type Household = {
     water_source?: 'Piped' | 'Deep Well' | 'Shared Faucet' | 'Buying Water';
     toilet_facility?: 'Water-sealed' | 'Antipolo type' | 'None';
     electricity?: 'Direct Connection' | 'Sub-meter' | 'Jumper' | 'Solar/None';
+    latitude?: number;
+    longitude?: number;
+    boundary?: {lat: number, lng: number}[]; // GeoJSON-like polygon points
     createdAt?: Timestamp;
+    status?: 'Verified' | 'Unverified'; // Explicitly adding status as it's used in the app
 };
 
 export type HouseholdMember = {
