@@ -8,11 +8,6 @@ import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlo
 import { EmergencyAlert, Resident, User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText, Trash2, MoreHorizontal, MessageSquare, Users, Truck, Radio } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatDistanceToNow } from "date-fns";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,18 +30,25 @@ import {
 import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID, useResponderLocations } from '@/hooks/use-barangay-data';
 import { collection } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, Trash2, MoreHorizontal, MessageSquare, Users, Truck, Radio } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Import new components
+import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
+import { WeatherHeader } from "./components/weather-header";
+import { MapControls } from "./components/map-controls";
 
 // Dynamically import the Map component to avoid SSR issues with Leaflet
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
-    loading: () => <div className="h-full w-full flex items-center justify-center bg-muted/50 animate-pulse"><p className="text-muted-foreground font-medium">Loading Map...</p></div>
+    loading: () => <div className="h-full w-full flex items-center justify-center bg-zinc-900"><p className="text-zinc-500 font-medium animate-pulse">Initializing Map System...</p></div>
 });
 
 // Utility type to ensure we can access the doc ID
 type EmergencyAlertWithId = EmergencyAlert & { id?: string };
 
-// Roles that are considered "Responders" - COPIED FROM RESPONDER PAGE FOR CONSISTENCY
+// Roles that are considered "Responders"
 const RESPONDER_ROLES = [
     'Barangay Tanod (BPSO - Barangay Public Safety Officer)',
     'Chief Tanod (Executive Officer)',
@@ -73,27 +75,28 @@ function ResolveAlertDialog({ alertId, onResolve, children }: { alertId: string,
             <DialogTrigger asChild>
                 {children}
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
                 <DialogHeader>
                     <DialogTitle>Resolve Emergency Alert</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="text-zinc-400">
                         Add resolution notes before closing alert #{alertId}. This action cannot be undone.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2">
-                    <Label htmlFor="notes">Resolution Notes</Label>
+                    <Label htmlFor="notes" className="text-zinc-300">Resolution Notes</Label>
                     <Textarea
                         id="notes"
                         placeholder="e.g., False alarm, resident confirmed safe. Or, medical assistance provided."
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                     />
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white">Cancel</Button>
                     </DialogClose>
-                    <Button onClick={handleResolve}>
+                    <Button onClick={handleResolve} className="bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                         <CheckCircle className="mr-2" />
                         Mark as Resolved
                     </Button>
@@ -133,29 +136,29 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
             <DialogTrigger asChild>
                 {children}
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
                 <DialogHeader>
                     <DialogTitle>Dispatch Responder</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="text-zinc-400">
                         Select a responder and vehicle to assign to this incident.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label>Assign Responder</Label>
+                        <Label className="text-zinc-300">Assign Responder</Label>
                         <Select value={selectedResponder} onValueChange={setSelectedResponder}>
-                            <SelectTrigger>
+                            <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100">
                                 <SelectValue placeholder="Select a responder" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-100">
                                 {activeResponders.length > 0 ? (
                                     activeResponders.map(user => (
-                                        <SelectItem key={user.userId} value={user.userId}>
+                                        <SelectItem key={user.userId} value={user.userId} className="focus:bg-zinc-700 focus:text-white">
                                             {user.fullName} ({user.position || user.systemRole})
                                         </SelectItem>
                                     ))
                                 ) : (
-                                    <div className="p-2 text-sm text-muted-foreground text-center">
+                                    <div className="p-2 text-sm text-zinc-400 text-center">
                                         No active responders available
                                     </div>
                                 )}
@@ -163,26 +166,26 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
                         </Select>
                     </div>
                      <div className="space-y-2">
-                        <Label>Vehicle / Unit</Label>
+                        <Label className="text-zinc-300">Vehicle / Unit</Label>
                         <Select value={vehicle} onValueChange={setVehicle}>
-                            <SelectTrigger>
+                            <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100">
                                 <SelectValue placeholder="Select Vehicle" />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Patrol Vehicle 1">Patrol Vehicle 1</SelectItem>
-                                <SelectItem value="Patrol Vehicle 2">Patrol Vehicle 2</SelectItem>
-                                <SelectItem value="Ambulance">Ambulance</SelectItem>
-                                <SelectItem value="Fire Truck">Fire Truck</SelectItem>
-                                <SelectItem value="Motorcycle Unit">Motorcycle Unit</SelectItem>
+                            <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-100">
+                                <SelectItem value="Patrol Vehicle 1" className="focus:bg-zinc-700 focus:text-white">Patrol Vehicle 1</SelectItem>
+                                <SelectItem value="Patrol Vehicle 2" className="focus:bg-zinc-700 focus:text-white">Patrol Vehicle 2</SelectItem>
+                                <SelectItem value="Ambulance" className="focus:bg-zinc-700 focus:text-white">Ambulance</SelectItem>
+                                <SelectItem value="Fire Truck" className="focus:bg-zinc-700 focus:text-white">Fire Truck</SelectItem>
+                                <SelectItem value="Motorcycle Unit" className="focus:bg-zinc-700 focus:text-white">Motorcycle Unit</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white">Cancel</Button>
                     </DialogClose>
-                    <Button onClick={handleDispatch} disabled={!selectedResponder}>
+                    <Button onClick={handleDispatch} disabled={!selectedResponder} className="bg-blue-600 hover:bg-blue-700 text-white border-0">
                         <Siren className="mr-2 h-4 w-4" />
                         Confirm Dispatch
                     </Button>
@@ -204,67 +207,6 @@ const getAge = (dateString: string) => {
     return age;
 }
 
-const ResponderStatusCard = ({ responders }: { responders: User[] }) => {
-    const responderList = responders.filter(u => {
-        const isResponderRole = RESPONDER_ROLES.includes(u.position);
-        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin' || u.systemRole === 'Encoder';
-        const positionLower = u.position ? u.position.toLowerCase() : '';
-        const isTanod = positionLower.includes('tanod');
-        const isKagawad = positionLower.includes('kagawad');
-        const isResponder = positionLower.includes('responder');
-
-        return isResponderRole || isSystemResponder || isTanod || isKagawad || isResponder;
-    });
-    
-    return (
-        <Card className="flex-none border-l-4 border-l-blue-500 mb-4 shadow-sm">
-            <CardHeader className="py-3 px-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Radio className="h-4 w-4 text-blue-600" />
-                        <h3 className="font-semibold text-sm">Available Responders</h3>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">{responderList.length} Total</Badge>
-                </div>
-            </CardHeader>
-            <CardContent className="py-0 px-4 pb-3">
-                <ScrollArea className="h-32 pr-2">
-                    {responderList.length === 0 ? (
-                        <div className="text-xs text-muted-foreground text-center py-4">No responders found.</div>
-                    ) : (
-                        <div className="space-y-2">
-                            {responderList.map(responder => (
-                                <div key={responder.userId} className="flex items-center justify-between text-sm p-2 bg-muted/40 rounded-md">
-                                    <div className="flex items-center gap-2">
-                                        <Avatar className="h-6 w-6">
-                                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${responder.fullName}`} />
-                                            <AvatarFallback>{responder.fullName?.substring(0,1)}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-xs truncate max-w-[100px]">{responder.fullName}</span>
-                                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{responder.position || responder.systemRole}</span>
-                                        </div>
-                                    </div>
-                                    <Badge 
-                                        variant="outline" 
-                                        className={`text-[10px] px-1 py-0 h-5 border-0 ${
-                                            responder.status === 'Active' ? 'bg-green-100 text-green-700' : 
-                                            responder.status === 'Busy' ? 'bg-amber-100 text-amber-700' : 
-                                            'bg-slate-100 text-slate-600'
-                                        }`}
-                                    >
-                                        {responder.status === 'Active' ? 'On Duty' : responder.status || 'Offline'}
-                                    </Badge>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </ScrollArea>
-            </CardContent>
-        </Card>
-    )
-}
-
 const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onResolve, onDelete, isOpen, onClose }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onDispatch: (alertId: string, responderId: string, vehicle: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; isOpen: boolean; onClose: () => void; }) => {
     const timeAgo = useMemo(() => {
         if (!alert.timestamp) return '...';
@@ -284,24 +226,24 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col bg-zinc-900 border-zinc-800 text-zinc-100">
                 <DialogHeader>
                     <div className="flex justify-between items-center mr-8">
-                        <DialogTitle className="flex items-center gap-2">
-                            <Siren className={alert.status === 'New' ? 'animate-pulse text-destructive' : ''} />
+                        <DialogTitle className="flex items-center gap-2 text-white">
+                            <Siren className={alert.status === 'New' ? 'animate-pulse text-red-500' : 'text-zinc-400'} />
                             <span>Incident Details</span>
                         </DialogTitle>
                         <div className="flex items-center gap-2">
-                            <Badge variant={statusBadgeVariant}>{alert.status}</Badge>
+                            <Badge variant={statusBadgeVariant} className="uppercase tracking-wider">{alert.status}</Badge>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800">
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent align="end" className="bg-zinc-800 border-zinc-700">
                                     <DropdownMenuItem 
-                                        className="text-destructive focus:bg-destructive/10 focus:text-destructive" 
+                                        className="text-red-400 focus:bg-red-900/20 focus:text-red-300" 
                                         onClick={() => onDelete(alert.id || alert.alertId)}
                                     >
                                         <Trash2 className="mr-2 h-4 w-4" />
@@ -311,49 +253,49 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                             </DropdownMenu>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                        {alert.category && <Badge variant="outline">{alert.category}</Badge>}
+                    <div className="flex items-center gap-2 mt-1 text-sm text-zinc-400">
+                        {alert.category && <Badge variant="outline" className="border-zinc-600 text-zinc-300">{alert.category}</Badge>}
                         <span>Received {timeAgo}</span>
                     </div>
                 </DialogHeader>
-                <Separator />
+                <Separator className="bg-zinc-800" />
                 <ScrollArea className="flex-grow pr-4">
                     <div className="space-y-6 py-4">
                         {/* Responder Info (if dispatched) */}
                         {alert.responderDetails && (
                             <>
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
-                                <h4 className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2 text-sm mb-2">
+                            <div className="bg-blue-900/20 p-3 rounded-md border border-blue-800">
+                                <h4 className="font-semibold text-blue-300 flex items-center gap-2 text-sm mb-2">
                                     <Truck className="h-4 w-4" /> Dispatched Unit
                                 </h4>
-                                <div className="text-sm space-y-1">
+                                <div className="text-sm space-y-1 text-zinc-300">
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Officer:</span>
-                                        <span className="font-medium">{alert.responderDetails.name}</span>
+                                        <span className="text-zinc-500">Officer:</span>
+                                        <span className="font-medium text-white">{alert.responderDetails.name}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Vehicle:</span>
-                                        <span className="font-medium">{alert.responderDetails.vehicleInfo}</span>
+                                        <span className="text-zinc-500">Vehicle:</span>
+                                        <span className="font-medium text-white">{alert.responderDetails.vehicleInfo}</span>
                                     </div>
-                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-200/50">
-                                        <span className="text-muted-foreground">Contact:</span>
-                                        <a href={`tel:${alert.responderDetails.contactNumber}`} className="font-medium text-blue-600 hover:underline flex items-center gap-1">
+                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-800/50">
+                                        <span className="text-zinc-500">Contact:</span>
+                                        <a href={`tel:${alert.responderDetails.contactNumber}`} className="font-medium text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1">
                                             <Phone className="h-3 w-3" /> {alert.responderDetails.contactNumber}
                                         </a>
                                     </div>
                                 </div>
                             </div>
-                            <Separator />
+                            <Separator className="bg-zinc-800" />
                             </>
                         )}
 
                         {/* Section A: Resident Profile */}
                         <div className="space-y-3">
-                            <h4 className="font-semibold text-primary flex items-center gap-2"><UserIcon className="h-4 w-4" /> Applicant Information</h4>
+                            <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><UserIcon className="h-4 w-4 text-zinc-400" /> Applicant Information</h4>
                             <div className="flex items-center gap-3 pl-6">
                                 <div>
-                                    <p className="font-semibold text-lg">{alert.residentName ?? 'Unknown'}</p>
-                                    <p className="text-sm text-muted-foreground">{resident ? `${getAge(resident.dateOfBirth)} y/o ${resident.gender}` : 'Resident data not found'}</p>
+                                    <p className="font-semibold text-lg text-white">{alert.residentName ?? 'Unknown'}</p>
+                                    <p className="text-sm text-zinc-400">{resident ? `${getAge(resident.dateOfBirth)} y/o ${resident.gender}` : 'Resident data not found'}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 pl-6">
@@ -363,7 +305,7 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 pl-6">
-                                <Button variant="outline" size="sm" className="w-full flex items-center gap-2" asChild>
+                                <Button variant="outline" size="sm" className="w-full flex items-center gap-2 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white" asChild>
                                     <a href={`tel:${alert.contactNumber || resident?.contactNumber}`}>
                                         <Phone className="h-4 w-4" />
                                         {alert.contactNumber || resident?.contactNumber || 'No contact #'}
@@ -372,44 +314,44 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                             </div>
                         </div>
                         
-                        <Separator />
+                        <Separator className="bg-zinc-800" />
                         
                         {/* Section A.2: Message / Description */}
                         {alert.message && (
                             <div className="space-y-2">
-                                <h4 className="font-semibold text-primary flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Message from Resident</h4>
-                                <div className="p-3 bg-muted rounded-md text-sm pl-6 border-l-4 border-primary">
+                                <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-zinc-400" /> Message from Resident</h4>
+                                <div className="p-3 bg-zinc-800/50 rounded-md text-sm pl-6 border-l-4 border-zinc-500 text-zinc-300 italic">
                                     "{alert.message}"
                                 </div>
                             </div>
                         )}
 
-                        <Separator />
+                        <Separator className="bg-zinc-800" />
 
                         {/* Section B: Location */}
                         <div className="space-y-3">
-                            <h4 className="font-semibold text-primary flex items-center gap-2"><MapPin className="h-4 w-4" /> Precise Location</h4>
+                            <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><MapPin className="h-4 w-4 text-zinc-400" /> Precise Location</h4>
                             <div className="flex items-start gap-3 pl-6">
                                 <div>
-                                    <p className="font-semibold text-sm">GPS Coordinates</p>
-                                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
+                                    <p className="font-semibold text-sm text-zinc-300">GPS Coordinates</p>
+                                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 underline hover:text-blue-300">
                                         View on Google Maps ({alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)})
                                     </a>
                                 </div>
                             </div>
                         </div>
 
-                        <Separator />
+                        <Separator className="bg-zinc-800" />
                         
                         {/* Section C: Household Members */}
                         {alert.householdMembersSnapshot && alert.householdMembersSnapshot.length > 0 && (
                             <div className="space-y-3">
-                                <h4 className="font-semibold text-primary flex items-center gap-2"><Users className="h-4 w-4" /> Household Members</h4>
+                                <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><Users className="h-4 w-4 text-zinc-400" /> Household Members</h4>
                                 <div className="pl-6 space-y-1">
                                     {alert.householdMembersSnapshot.map((member, idx) => (
-                                        <div key={idx} className="text-sm flex justify-between items-center p-2 bg-muted/20 rounded">
-                                            <span>{member.name}</span>
-                                            <span className="text-muted-foreground text-xs">{member.age !== 'N/A' ? `${member.age} y/o` : ''}</span>
+                                        <div key={idx} className="text-sm flex justify-between items-center p-2 bg-zinc-800/30 rounded border border-zinc-800">
+                                            <span className="text-zinc-300">{member.name}</span>
+                                            <span className="text-zinc-500 text-xs">{member.age !== 'N/A' ? `${member.age} y/o` : ''}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -417,16 +359,16 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                         )}
                     </div>
                 </ScrollArea>
-                <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t pt-4 mt-auto">
+                <DialogFooter className="flex flex-col sm:flex-row gap-2 border-t border-zinc-800 pt-4 mt-auto">
                     {alert.status === 'New' && (
-                        <Button variant="secondary" onClick={() => onAcknowledge(alert.alertId)} className="w-full sm:w-auto">
+                        <Button variant="secondary" onClick={() => onAcknowledge(alert.alertId)} className="w-full sm:w-auto bg-zinc-700 text-white hover:bg-zinc-600">
                             <ShieldCheck className="mr-2 h-4 w-4" />
                             Acknowledge
                         </Button>
                     )}
                     {alert.status === 'Acknowledged' && (
                         <DispatchResponderDialog onDispatch={(rId, v) => onDispatch(alert.alertId, rId, v)}>
-                            <Button variant="default" className="w-full sm:w-auto">
+                            <Button variant="default" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">
                                 <Siren className="mr-2 h-4 w-4" />
                                 Dispatch Responder
                             </Button>
@@ -434,7 +376,7 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                     )}
                     {(alert.status === 'Acknowledged' || alert.status === 'Dispatched' || alert.status === 'On Scene') && (
                         <ResolveAlertDialog alertId={alert.alertId} onResolve={onResolve}>
-                            <Button variant="default" className="w-full sm:w-auto">
+                            <Button variant="default" className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white">
                                 <CheckCircle className="mr-2 h-4 w-4" />
                                 Resolve Alert
                             </Button>
@@ -445,27 +387,6 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
         </Dialog>
     );
 };
-
-const AlertFeedItem = ({ alert, onSelect, isSelected }: { alert: EmergencyAlert, onSelect: () => void, isSelected: boolean }) => {
-     const timeAgo = useMemo(() => {
-        if (!alert.timestamp) return '...';
-        return formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true });
-    }, [alert.timestamp]);
-
-    return (
-        <button onClick={onSelect} className={`w-full text-left p-3 rounded-lg border ${isSelected ? 'bg-primary/10 border-primary' : 'bg-card hover:bg-muted'}`}>
-            <div className="flex justify-between items-center">
-                <div className="flex flex-col">
-                    <p className="font-semibold">{alert.residentName}</p>
-                    <span className="text-xs text-muted-foreground">{alert.category || 'Unspecified'}</span>
-                </div>
-                <Badge variant={alert.status === 'New' ? 'destructive' : 'secondary'}>{alert.status}</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 truncate">{alert.message || 'No message provided.'}</p>
-            <p className="text-[10px] text-muted-foreground text-right mt-1">{timeAgo} ago</p>
-        </button>
-    )
-}
 
 export function EmergencyDashboard() {
   const firestore = useFirestore();
@@ -618,67 +539,64 @@ export function EmergencyDashboard() {
   const isLoading = isLoadingAlerts || isLoadingResidents || isLoadingResponders;
 
   return (
-    <div className="flex h-[calc(100vh-10rem)] gap-6">
-        {/* Main Panel */}
-        <div className="w-2/3 h-full flex flex-col">
-            {/* Map Visualization Card */}
-            <Card className="flex-grow overflow-hidden">
-                <CardHeader>
-                    <CardTitle>Map Visualization</CardTitle>
-                    <CardDescription>Real-time location of alerts and responders.</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[calc(100%-4.5rem)] p-0 relative">
-                    <EmergencyMap 
-                        alerts={alerts ?? []}
-                        responders={responders ?? []}
-                        selectedAlertId={selectedAlertId}
-                        onSelectAlert={handleAlertSelect}
-                    />
-                </CardContent>
-            </Card>
+    <div className="relative w-screen h-screen overflow-hidden bg-zinc-950 text-white font-sans">
+        
+        {/* Full Screen Map Layer (Z-Index 0) */}
+        <div className="absolute inset-0 z-0">
+            <EmergencyMap 
+                alerts={alerts ?? []}
+                responders={responders ?? []}
+                selectedAlertId={selectedAlertId}
+                onSelectAlert={handleAlertSelect}
+            />
+             {/* Gradient Overlay for better text readability at edges */}
+            <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
+        </div>
+        
+        {/* Back Button Overlay */}
+        <div className="absolute top-6 left-6 z-20 pointer-events-auto">
+             <Button variant="ghost" className="text-white hover:bg-white/10 gap-2 px-2" onClick={() => window.history.back()}>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                 Back to Dashboard
+             </Button>
         </div>
 
-        {/* Side Panel */}
-        <div className="w-1/3 h-full flex flex-col gap-4">
-            {/* Responder Status Card */}
-            <ResponderStatusCard responders={users ?? []} />
+        {/* Top Left: Header & Weather (Z-Index 10) */}
+        <div className="absolute top-16 left-6 z-10 pointer-events-none">
+             <WeatherHeader />
+        </div>
 
-            {/* Active Alert Feed Card */}
-            <div className="flex-grow overflow-hidden">
-                <Card className="h-full flex flex-col">
-                    <CardHeader className="py-3 px-4 flex-none">
-                         <div className="flex justify-between items-center">
-                            <CardTitle className="text-sm font-medium">Active Alert Feed</CardTitle>
-                             <Button onClick={handleSimulateSOS} disabled={isLoading || isSimulating} size="sm" variant="outline" className="h-7 text-xs">
-                                {isSimulating ? '...' : 'Simulate SOS'}
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="py-0 px-4 pb-3 flex-grow overflow-hidden">
-                        <ScrollArea className="h-full">
-                            <div className="space-y-2">
-                            {isLoading && (
-                                <div className="space-y-2">
-                                    {[...Array(3)].map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}
-                                </div>
-                            )}
-                            {!isLoading && sortedAlerts.length === 0 && (
-                                <div className="text-center text-muted-foreground pt-8">No active alerts.</div>
-                            )}
-                            {sortedAlerts.map(alert => (
-                                <AlertFeedItem 
-                                    key={alert.alertId} 
-                                    alert={alert}
-                                    onSelect={() => handleAlertSelect(alert.alertId)}
-                                    isSelected={selectedAlertId === alert.alertId}
-                                />
-                            ))}
-                            </div>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
+        {/* Right Sidebar: Lists (Z-Index 10) */}
+        <div className="absolute right-6 top-6 bottom-24 z-10 flex flex-col gap-4 overflow-y-auto pointer-events-none w-80 pr-2">
+            <div className="pointer-events-auto">
+                <ActiveAlertFeed 
+                    alerts={sortedAlerts} 
+                    onSelectAlert={handleAlertSelect}
+                    selectedAlertId={selectedAlertId}
+                />
+            </div>
+            <div className="pointer-events-auto">
+                <ResponderStatusList responders={users ?? []} />
+            </div>
+            <div className="pointer-events-auto">
+                 <AssetList />
             </div>
         </div>
+
+        {/* Bottom Left: Controls (Z-Index 10) */}
+        <div className="absolute bottom-6 left-6 z-10 pointer-events-none">
+            <MapControls />
+        </div>
+
+        {/* Floating Broadcast Button (Bottom Right) */}
+        <Button 
+            className="absolute bottom-6 right-6 z-50 h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 shadow-[0_0_40px_-10px_rgba(220,38,38,0.7)] border-4 border-red-800 animate-pulse hover:animate-none transition-all scale-100 hover:scale-110 flex items-center justify-center"
+            onClick={handleSimulateSOS} // Using simulate SOS as the action for now as per previous logic
+            disabled={isLoading || isSimulating}
+            title="Broadcast Emergency Alert"
+        >
+            <Siren className="h-8 w-8 text-white" />
+        </Button>
 
         {/* Incident Modal */}
         {selectedAlert && (

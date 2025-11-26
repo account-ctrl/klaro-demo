@@ -3,15 +3,8 @@ import { EmergencyDashboard } from "./emergency-dashboard";
 
 export default function EmergencyPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-            <h1 className="text-2xl font-bold tracking-tight">Emergency Command Center</h1>
-            <p className="text-muted-foreground">
-            Monitor and respond to real-time resident alerts.
-            </p>
-        </div>
-      </div>
+    // Removed standard page headers/layout wrapper to allow full-screen dashboard
+    <div className="absolute top-0 left-0 w-full h-full bg-zinc-950 overflow-hidden">
       <EmergencyDashboard />
     </div>
   );

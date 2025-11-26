@@ -161,6 +161,10 @@ type ScannedPoint = {
     type?: string;
 };
 
+// Use a dark map style from a different provider or style it via CSS filter if possible.
+// For simplicity, we'll stick to OSM but apply a dark mode CSS filter to the tile layer.
+const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)';
+
 export default function EmergencyMap({ alerts, responders = [], selectedAlertId, onSelectAlert }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = alerts.find(a => a.alertId === selectedAlertId);
@@ -288,13 +292,26 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
 
     return (
         <div className="relative h-full w-full">
-            <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-end">
-                <div className="bg-white/90 backdrop-blur p-1 rounded-md shadow-md border flex gap-1">
+             {/* Map Controls - Removed absolute controls that are now managed by parent */}
+            
+            {/* Keeping the Import/Scan controls but ensuring they are positioned carefully, or maybe just removing them from 'view' if not in planning mode? 
+                The prompt mentioned 'overlapping something from behind'. It's likely the map control buttons inside this component.
+                The previous image showed controls top-right. Let's make sure they don't overlap the new right-sidebar.
+                Right sidebar has width w-80 (320px).
+                We should move these controls to the left or make them position relative to the sidebar.
+                Or just hide them if not needed, but scanning is a feature.
+                Let's move the scan controls to Top-Center or further Left.
+            */}
+
+            {/* Moving Scanning controls to avoid Right Sidebar (which is top-right/right side) */}
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[400] flex flex-col gap-2 items-center">
+                 {/* Only show these if explicitly in a mode that needs them, or keep them unobtrusive */}
+                 <div className="bg-black/60 backdrop-blur-md p-1 rounded-md shadow-md border border-white/10 flex gap-1">
                     <Button 
                         size="sm" 
                         variant={mapMode === 'monitor' ? 'default' : 'ghost'} 
                         onClick={() => setMapMode('monitor')}
-                        className="h-8 text-xs"
+                        className={`h-8 text-xs ${mapMode === 'monitor' ? 'bg-blue-600 text-white' : 'text-zinc-300 hover:text-white hover:bg-white/10'}`}
                     >
                         <Eye className="w-3 h-3 mr-1" /> Monitor
                     </Button>
@@ -302,30 +319,32 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                         size="sm" 
                         variant={mapMode === 'planning' ? 'default' : 'ghost'} 
                         onClick={() => setMapMode('planning')}
-                        className="h-8 text-xs"
+                        className={`h-8 text-xs ${mapMode === 'planning' ? 'bg-blue-600 text-white' : 'text-zinc-300 hover:text-white hover:bg-white/10'}`}
                     >
                         <Scan className="w-3 h-3 mr-1" /> Planning
                     </Button>
                 </div>
-                
-                {scannedPoints.length > 0 && (
-                    <div className="bg-white/90 backdrop-blur p-2 rounded-md shadow-md border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 w-48">
-                        <div className="text-xs font-semibold text-muted-foreground text-center">
+
+                 {scannedPoints.length > 0 && (
+                    <div className="bg-black/80 backdrop-blur-md p-3 rounded-md shadow-md border border-white/10 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 w-48">
+                        <div className="text-xs font-semibold text-zinc-300 text-center">
                             {scannedPoints.length} Unverified Points
                         </div>
-                        <Button size="sm" className="h-7 text-xs w-full" onClick={handleSaveScanned} disabled={isSaving}>
+                        <Button size="sm" className="h-7 text-xs w-full bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleSaveScanned} disabled={isSaving}>
                             {isSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1"/> : <Save className="w-3 h-3 mr-1"/>}
                             Import to Households
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 text-xs w-full text-destructive hover:text-destructive" onClick={handleClearScanned}>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs w-full text-red-400 hover:text-red-300 hover:bg-red-900/20" onClick={handleClearScanned}>
                             <X className="w-3 h-3 mr-1"/> Clear Results
                         </Button>
                     </div>
                 )}
             </div>
+            
+            {/* Removed the top-right controls container entirely to prevent overlap */}
 
             {mapMode === 'planning' && (
-                <div className="absolute top-16 right-4 z-[400] bg-blue-600 text-white text-xs px-3 py-2 rounded shadow-lg animate-in fade-in pointer-events-none">
+                <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-[400] bg-blue-600/90 text-white text-xs px-3 py-2 rounded shadow-lg animate-in fade-in pointer-events-none backdrop-blur-sm">
                     Click and drag to draw a scan zone...
                 </div>
             )}
@@ -334,12 +353,28 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 ref={mapRef}
                 center={initialCenter} 
                 zoom={16} 
-                style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0 }}
+                style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0, background: '#09090b' }}
             >
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    className="map-tiles-dark" // We will inject CSS for this class
                 />
+                 {/* Inject Styles for Dark Mode Map */}
+                 <style jsx global>{`
+                    .map-tiles-dark {
+                        filter: ${DARK_MAP_FILTER};
+                    }
+                    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+                        background-color: #18181b !important; /* zinc-900 */
+                        color: #f4f4f5 !important; /* zinc-100 */
+                        border: 1px solid #27272a; /* zinc-800 */
+                    }
+                    .leaflet-popup-content {
+                        margin: 10px;
+                    }
+                `}</style>
+
                 <MapUpdater center={selectedAlert ? [selectedAlert.latitude, selectedAlert.longitude] : null} />
                 
                 {mapMode === 'monitor' && (
@@ -353,10 +388,10 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                             >
                                 <Popup>
                                     <div className="font-sans text-sm">
-                                        <h3 className="font-bold">{alert.residentName}</h3>
+                                        <h3 className="font-bold text-white">{alert.residentName}</h3>
                                         <div className="flex items-center gap-1 mt-1">
-                                            <span className="text-xs font-semibold px-1.5 py-0.5 bg-gray-100 rounded border">{alert.category || 'Unspecified'}</span>
-                                            <span className="text-xs text-gray-600">{alert.status}</span>
+                                            <span className="text-xs font-semibold px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700 text-zinc-300">{alert.category || 'Unspecified'}</span>
+                                            <span className="text-xs text-zinc-400">{alert.status}</span>
                                         </div>
                                     </div>
                                 </Popup>
@@ -371,9 +406,9 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                             >
                                 <Popup>
                                     <div className="font-sans text-sm">
-                                        <h3 className="font-bold">{responder.name || 'Responder'}</h3>
-                                        <p className="text-xs text-gray-500">{responder.role}</p>
-                                        <p className="text-xs text-gray-600 mt-1 status-badge">{responder.status}</p>
+                                        <h3 className="font-bold text-white">{responder.name || 'Responder'}</h3>
+                                        <p className="text-xs text-zinc-400">{responder.role}</p>
+                                        <p className="text-xs text-zinc-500 mt-1 status-badge">{responder.status}</p>
                                     </div>
                                 </Popup>
                             </Marker>
@@ -389,35 +424,35 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                     >
                         <Popup>
                             <div className="font-sans text-xs">
-                                <strong>Unverified Structure</strong><br/>
-                                Type: {point.type}
+                                <strong className="text-white">Unverified Structure</strong><br/>
+                                <span className="text-zinc-400">Type: {point.type}</span>
                             </div>
                         </Popup>
                     </Marker>
                 ))}
 
                 {scanBounds && !isScanning && (
-                   <Rectangle bounds={scanBounds} pathOptions={{ color: 'gray', weight: 1, fillOpacity: 0.1, dashArray: '5, 5' }} />
+                   <Rectangle bounds={scanBounds} pathOptions={{ color: '#3b82f6', weight: 1, fillOpacity: 0.1, dashArray: '5, 5' }} />
                 )}
 
                 <BoxDrawer active={mapMode === 'planning'} onBoxDrawn={handleBoxDrawn} />
             </MapContainer>
 
             <Dialog open={showScanModal} onOpenChange={setShowScanModal}>
-                <DialogContent>
+                <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
                     <DialogHeader>
                         <DialogTitle>Scan Zone for Households?</DialogTitle>
-                        <DialogDescription>
+                        <DialogDescription className="text-zinc-400">
                             This will analyze the selected area using OpenStreetMap data to identify building footprints and potential unmapped households.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4 text-sm text-muted-foreground bg-muted p-3 rounded">
-                        <p>Selected Area: <strong>Custom Zone</strong></p>
+                    <div className="py-4 text-sm text-zinc-400 bg-zinc-800/50 p-3 rounded border border-zinc-800">
+                        <p>Selected Area: <strong className="text-zinc-200">Custom Zone</strong></p>
                         <p className="mt-1">Coordinates: {scanBounds?.getNorthWest().lat.toFixed(4)}, {scanBounds?.getNorthWest().lng.toFixed(4)}</p>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowScanModal(false)}>Cancel</Button>
-                        <Button onClick={executeScan} disabled={isScanning}>
+                        <Button variant="outline" onClick={() => setShowScanModal(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white">Cancel</Button>
+                        <Button onClick={executeScan} disabled={isScanning} className="bg-blue-600 hover:bg-blue-700 text-white border-0">
                             {isScanning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Start Scan
                         </Button>
