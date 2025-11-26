@@ -18,7 +18,10 @@ import {
   CalendarDays,
   FolderOpen,
   HomeIcon,
-  ChevronRight
+  ChevronRight,
+  Stethoscope, // Added for eHealth
+  Pill, // Added for Inventory
+  HeartPulse // Added for Patient Records
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -134,6 +137,14 @@ export function SidebarNav() {
             <NavItem icon={<FolderOpen size={18} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} />
             <NavItem icon={<BarChart size={18} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} />
             <NavItem icon={<CalendarDays size={18} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} />
+          </div>
+
+          <NavGroupHeader label="eHealth Center" />
+          <div className="space-y-0">
+            <NavItem icon={<Pill size={18} />} label="Inventory" href="/dashboard/ehealth/inventory" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Stethoscope size={18} />} label="Dispensing" href="/dashboard/ehealth/dispensing" pathname={pathname} getHref={getHref} />
+            {/* Patient Records is usually a sub-view of Residents but a shortcut is useful */}
+            <NavItem icon={<HeartPulse size={18} />} label="Patient Records" href="/dashboard/ehealth/patients" pathname={pathname} getHref={getHref} />
           </div>
 
           <NavGroupHeader label="System" />
