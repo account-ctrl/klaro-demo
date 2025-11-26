@@ -82,7 +82,7 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="flex items-center gap-3 transition-all duration-300" style={{ width: isCollapsed ? '80px' : '256px' }}>
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="rounded-full p-2 hover:bg-white/10 text-white/80 md:hidden"
+            className="rounded-full p-2 hover:bg-white/10 text-white/80"
           >
             <Menu size={20} />
           </button>

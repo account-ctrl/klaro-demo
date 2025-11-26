@@ -9,8 +9,8 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from '@/components/ui/chart';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label, Pie, PieChart, Cell } from 'recharts';
+import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label, Pie, PieChart, Cell, ResponsiveContainer } from 'recharts';
 import type { BlotterCase } from "@/lib/types";
 
 const chartConfig = {
@@ -56,13 +56,13 @@ export function BlotterAnalyticsChart({ blotterCases }: BlotterAnalyticsChartPro
 
 
   return (
-    <Card>
-        <CardHeader>
-            <CardTitle>Blotter Case Analytics</CardTitle>
+    <div className="flex flex-col h-full">
+        <CardHeader className="pb-0">
+            <CardTitle className="text-[#33475b]">Blotter Case Analytics</CardTitle>
             <CardDescription>Breakdown of current cases by status.</CardDescription>
         </CardHeader>
-        <CardContent>
-            <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[200px]">
+        <div className="flex-1 pb-4 min-h-0">
+            <ChartContainer config={chartConfig} className="mx-auto aspect-square h-full max-h-[250px]">
                 <PieChart>
                   <ChartTooltip
                     cursor={false}
@@ -88,14 +88,14 @@ export function BlotterAnalyticsChart({ blotterCases }: BlotterAnalyticsChartPro
                               <tspan
                                 x={viewBox.cx}
                                 y={viewBox.cy}
-                                className="fill-foreground text-3xl font-bold"
+                                className="fill-[#33475b] text-3xl font-bold"
                               >
                                 {totalValue.toLocaleString()}
                               </tspan>
                               <tspan
                                 x={viewBox.cx}
                                 y={(viewBox.cy || 0) + 24}
-                                className="fill-muted-foreground"
+                                className="fill-muted-foreground text-xs"
                               >
                                 Total Cases
                               </tspan>
@@ -111,8 +111,8 @@ export function BlotterAnalyticsChart({ blotterCases }: BlotterAnalyticsChartPro
                     />
                 </PieChart>
               </ChartContainer>
-        </CardContent>
-    </Card>
+        </div>
+    </div>
     
   );
 }
