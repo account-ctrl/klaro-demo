@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 const chartConfig = {
   issued: {
     label: 'Documents Issued',
-    color: 'hsl(var(--chart-1))',
+    color: '#ff7a59',
   },
 };
 
@@ -64,11 +64,11 @@ export function DocumentIssuanceChart({ requests }: DocumentIssuanceChartProps) 
           <ChartTooltip content={<ChartTooltipContent indicator="dot" />} cursor={true} />
           <defs>
             <linearGradient id="colorIssued" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--color-issued)" stopOpacity={0.8}/>
-              <stop offset="95%" stopColor="var(--color-issued)" stopOpacity={0.1}/>
+              <stop offset="5%" stopColor="#ff7a59" stopOpacity={0.8}/>
+              <stop offset="95%" stopColor="#ff7a59" stopOpacity={0.1}/>
             </linearGradient>
           </defs>
-          <Area type="monotone" dataKey="issued" stroke="var(--color-issued)" strokeWidth={2} fillOpacity={1} fill="url(#colorIssued)" />
+          <Area type="monotone" dataKey="issued" stroke="#ff7a59" strokeWidth={2} fillOpacity={1} fill="url(#colorIssued)" />
         </AreaChart>
     </ChartContainer>
   );

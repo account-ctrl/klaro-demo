@@ -95,7 +95,7 @@ export const getColumns = (onEdit: (record: Project) => void, onDelete: (id: str
     header: "Progress",
     cell: ({ row }) => (
         <div className="flex items-center gap-2">
-            <Progress value={row.original.percentComplete ?? 0} className="h-2 w-[80px]" />
+            <Progress value={row.original.percentComplete ?? 0} className="h-2 w-[80px] bg-muted [&>div]:bg-[#ff7a59]" />
             <span className="text-muted-foreground text-xs">{row.original.percentComplete ?? 0}%</span>
         </div>
     )

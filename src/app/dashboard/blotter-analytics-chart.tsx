@@ -23,7 +23,7 @@ const chartConfig = {
     },
     pending: {
         label: "Pending",
-        color: "hsl(var(--chart-3))",
+        color: "#ff7a59",
     },
     referred: {
         label: "Referred",
@@ -44,7 +44,7 @@ export function BlotterAnalyticsChart({ blotterCases }: BlotterAnalyticsChartPro
         
         return [
             { status: "settled", label: "Settled/Dismissed", value: settled, fill: "var(--color-settled)" },
-            { status: "pending", label: "Pending/Mediation", value: pending, fill: "var(--color-pending)" },
+            { status: "pending", label: "Pending/Mediation", value: pending, fill: "#ff7a59" },
             { status: "referred", label: "Referred/CFA", value: referred, fill: "var(--color-referred)" },
         ];
     }, [blotterCases]);
