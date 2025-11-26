@@ -31,16 +31,42 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AIChatWidget } from './ai-chat-widget';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
+// --- Sortable Item Wrapper ---
+function SortableItem({ id, children, className }: { id: string, children: React.ReactNode, className?: string }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+    } = useSortable({ id });
+  
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+  
+    return (
+      <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={className}>
+        {children}
+      </div>
+    );
+}
 
 const KpiCard = ({ id, title, value, icon: Icon, note, isLoading }: { id: string, title: string, value: string, icon: React.ElementType, note: string, isLoading: boolean }) => {
   return (
-    <Card id={id}>
+    <Card id={id} className="h-full hover:shadow-md transition-shadow duration-200">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <div className="p-2 rounded-full bg-primary/10">
+            <Icon className="h-4 w-4 text-primary" />
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -50,7 +76,7 @@ const KpiCard = ({ id, title, value, icon: Icon, note, isLoading }: { id: string
             </>
         ) : (
             <>
-                <div className="text-2xl font-bold">{value}</div>
+                <div className="text-2xl font-bold text-foreground">{value}</div>
                 <p className="text-xs text-muted-foreground">
                     {note}
                 </p>
@@ -66,9 +92,9 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
     const pendingHearings = useMemo(() => blotterCases.filter(c => c.status === 'Open' || c.status === 'Under Mediation'), [blotterCases]);
 
     return (
-        <Card>
+        <Card className="h-full">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><AlertCircle className="text-destructive h-5 w-5" /> Alerts & Notifications</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-foreground"><AlertCircle className="text-destructive h-5 w-5" /> Alerts & Notifications</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                  {overdueProjects.length > 0 && (
@@ -77,9 +103,9 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
                             <Siren className="h-4 w-4 text-destructive" />
                         </div>
                         <div>
-                            <p className="font-medium text-sm">{overdueProjects.length} Overdue Project{overdueProjects.length > 1 ? 's' : ''}</p>
+                            <p className="font-medium text-sm text-foreground">{overdueProjects.length} Overdue Project{overdueProjects.length > 1 ? 's' : ''}</p>
                             <p className="text-xs text-muted-foreground">"{overdueProjects[0].projectName}" and {overdueProjects.length > 1 ? `${overdueProjects.length - 1} others are` : 'is'} behind schedule.</p>
-                            <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                            <Button variant="link" size="sm" className="p-0 h-auto text-primary" asChild>
                                 <Link href="/dashboard/projects">View Projects</Link>
                             </Button>
                         </div>
@@ -91,11 +117,11 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
                             <Gavel className="h-4 w-4 text-amber-600" />
                         </div>
                         <div>
-                             <p className="font-medium text-sm">{pendingHearings.length} Pending Hearing{pendingHearings.length > 1 ? 's' : ''} This Week</p>
+                             <p className="font-medium text-sm text-foreground">{pendingHearings.length} Pending Hearing{pendingHearings.length > 1 ? 's' : ''} This Week</p>
                             <p className="text-xs text-muted-foreground">
                                 Case{pendingHearings.length > 1 ? 's' : ''} {pendingHearings.slice(0, 2).map(c => `#${c.caseId}`).join(', ')} {pendingHearings.length > 2 ? ` and ${pendingHearings.length - 2} others` : ''} need scheduling.
                             </p>
-                             <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                             <Button variant="link" size="sm" className="p-0 h-auto text-primary" asChild>
                                 <Link href="/dashboard/blotter">View Blotter</Link>
                              </Button>
                         </div>
@@ -113,9 +139,9 @@ const AlertsPanel = ({ projects, blotterCases }: { projects: Project[], blotterC
 
 function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], isLoading: boolean}) {
     return (
-        <Card>
+        <Card className="h-full">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5"/> Today's Schedule</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-foreground"><Calendar className="h-5 w-5 text-primary"/> Today's Schedule</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
@@ -131,11 +157,11 @@ function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], 
                     {!isLoading && events.length > 0 ? (
                         events.map(event => (
                             <div key={event.eventId} className="flex items-center gap-4">
-                                <div className="text-center font-semibold text-sm w-16 shrink-0">
+                                <div className="text-center font-semibold text-sm w-16 shrink-0 text-foreground">
                                     {format(new Date(event.start), 'h:mm a')}
                                 </div>
                                 <div className="border-l-2 border-primary pl-4">
-                                    <p className="font-medium text-sm">{event.title}</p>
+                                    <p className="font-medium text-sm text-foreground">{event.title}</p>
                                     <p className="text-xs text-muted-foreground">{event.category}</p>
                                 </div>
                             </div>
@@ -156,9 +182,9 @@ function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], 
 function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts: number, pendingDocs: number, isLoading: boolean }) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link href="/dashboard/emergency" className="block group">
-                <Card className={`border-l-4 border-l-destructive/80 transition-all hover:shadow-md ${activeAlerts > 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                    <CardContent className="p-4 flex items-center justify-between">
+            <Link href="/dashboard/emergency" className="block group h-full">
+                <Card className={`border-l-4 border-l-destructive/80 transition-all hover:shadow-md h-full ${activeAlerts > 0 ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
+                    <CardContent className="p-4 flex items-center justify-between h-full">
                         <div className="flex items-center gap-4">
                             <div className={`p-3 rounded-full ${activeAlerts > 0 ? 'bg-destructive/20 text-destructive animate-pulse' : 'bg-muted text-muted-foreground'}`}>
                                 <Siren className="h-6 w-6" />
@@ -166,7 +192,7 @@ function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts:
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Active SOS Alerts</p>
                                 {isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
-                                    <h3 className={`text-2xl font-bold ${activeAlerts > 0 ? 'text-destructive' : ''}`}>{activeAlerts}</h3>
+                                    <h3 className={`text-2xl font-bold ${activeAlerts > 0 ? 'text-destructive' : 'text-foreground'}`}>{activeAlerts}</h3>
                                 )}
                             </div>
                         </div>
@@ -178,9 +204,9 @@ function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts:
                 </Card>
             </Link>
 
-             <Link href="/dashboard/documents" className="block group">
-                <Card className="border-l-4 border-l-primary/80 transition-all hover:shadow-md">
-                    <CardContent className="p-4 flex items-center justify-between">
+             <Link href="/dashboard/documents" className="block group h-full">
+                <Card className="border-l-4 border-l-primary/80 transition-all hover:shadow-md h-full">
+                    <CardContent className="p-4 flex items-center justify-between h-full">
                          <div className="flex items-center gap-4">
                             <div className={`p-3 rounded-full ${pendingDocs > 0 ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
                                 <FileClock className="h-6 w-6" />
@@ -188,7 +214,7 @@ function ActionWidgets({ activeAlerts, pendingDocs, isLoading }: { activeAlerts:
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Pending Requests</p>
                                 {isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
-                                     <h3 className={`text-2xl font-bold ${pendingDocs > 0 ? 'text-primary' : ''}`}>{pendingDocs}</h3>
+                                     <h3 className={`text-2xl font-bold ${pendingDocs > 0 ? 'text-primary' : 'text-foreground'}`}>{pendingDocs}</h3>
                                 )}
                             </div>
                         </div>
@@ -289,23 +315,49 @@ export default function DashboardPage() {
 
   const isLoading = isLoadingResidents || isLoadingDocs || isLoadingFins || isLoadingProjs || isLoadingBlotter || isLoadingSchedule || isLoadingAlerts;
 
+  // DnD State
+  const [kpiOrder, setKpiOrder] = useState(['kpi-residents', 'kpi-documents', 'kpi-blotter', 'kpi-funds']);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      setKpiOrder((items) => {
+        const oldIndex = items.indexOf(active.id);
+        const newIndex = items.indexOf(over.id);
+        
+        // Simple swap logic for demo purposes, better logic needs arrayMove utility
+        const newItems = [...items];
+        const [removed] = newItems.splice(oldIndex, 1);
+        newItems.splice(newIndex, 0, removed);
+        return newItems;
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
         {/* Hero Header */}
         <div className="w-full">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Magandang Araw, Admin! 👋</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Magandang Araw, Admin! 👋</h1>
                     <p className="text-muted-foreground">{currentDate} | Barangay San Isidro</p>
                 </div>
                  <div className="flex items-center gap-2">
-                    <Button asChild>
+                    <Button asChild className="bg-primary hover:bg-primary/90 text-white">
                         <Link href="/dashboard/documents"><Plus className="mr-2 h-4 w-4" /> New Request</Link>
                     </Button>
                     <Button variant="destructive" asChild>
                         <Link href="/dashboard/blotter"><Gavel className="mr-2 h-4 w-4" /> File Blotter</Link>
                     </Button>
-                    <Button variant="secondary" asChild>
+                    <Button variant="secondary" asChild className="bg-secondary text-secondary-foreground hover:bg-secondary/80">
                         <Link href="/dashboard/residents"><UserPlus className="mr-2 h-4 w-4" /> Add Resident</Link>
                     </Button>
                 </div>
@@ -329,13 +381,28 @@ export default function DashboardPage() {
             />
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" id="kpi-cards">
-            <KpiCard id="kpi-residents" title="Total Residents" value={totalResidents.toLocaleString()} icon={Users} note={`+${newResidentsThisMonth} this month`} isLoading={isLoadingResidents} />
-            <KpiCard id="kpi-documents" title="Documents Issued (YTD)" value={totalDocsIssuedYTD.toLocaleString()} icon={FileText} note={`+${docsRequestedThisMonth} requests this month`} isLoading={isLoadingDocs} />
-            <KpiCard id="kpi-blotter" title="Blotter Cases (YTD)" value={totalBlotterCasesYTD.toLocaleString()} icon={Gavel} note={`${pendingBlotterCases} cases pending`} isLoading={isLoadingBlotter} />
-            <KpiCard id="kpi-funds" title="Funds Collected (YTD)" value={`₱${totalFundsCollectedYTD.toLocaleString()}`} icon={Landmark} note={`₱${fundsCollectedLast30Days.toLocaleString()} in last 30 days`} isLoading={isLoadingFins} />
-        </div>
+        {/* KPI Cards with DnD */}
+        <DndContext 
+            sensors={sensors} 
+            collisionDetection={closestCenter} 
+            onDragEnd={handleDragEnd}
+        >
+            <SortableContext 
+                items={kpiOrder} 
+                strategy={rectSortingStrategy}
+            >
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" id="kpi-cards">
+                    {kpiOrder.map((id) => (
+                        <SortableItem key={id} id={id}>
+                            {id === 'kpi-residents' && <KpiCard id="kpi-residents" title="Total Residents" value={totalResidents.toLocaleString()} icon={Users} note={`+${newResidentsThisMonth} this month`} isLoading={isLoadingResidents} />}
+                            {id === 'kpi-documents' && <KpiCard id="kpi-documents" title="Documents Issued (YTD)" value={totalDocsIssuedYTD.toLocaleString()} icon={FileText} note={`+${docsRequestedThisMonth} requests this month`} isLoading={isLoadingDocs} />}
+                            {id === 'kpi-blotter' && <KpiCard id="kpi-blotter" title="Blotter Cases (YTD)" value={totalBlotterCasesYTD.toLocaleString()} icon={Gavel} note={`${pendingBlotterCases} cases pending`} isLoading={isLoadingBlotter} />}
+                            {id === 'kpi-funds' && <KpiCard id="kpi-funds" title="Funds Collected (YTD)" value={`₱${totalFundsCollectedYTD.toLocaleString()}`} icon={Landmark} note={`₱${fundsCollectedLast30Days.toLocaleString()} in last 30 days`} isLoading={isLoadingFins} />}
+                        </SortableItem>
+                    ))}
+                </div>
+            </SortableContext>
+        </DndContext>
 
         {/* Main Content Grid */}
          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -372,24 +439,24 @@ export default function DashboardPage() {
                                 )) : recentProjects.length > 0 ? recentProjects.map((project) => (
                                     <TableRow key={project.projectId}>
                                         <TableCell>
-                                            <div className="font-medium">{project.projectName}</div>
+                                            <div className="font-medium text-foreground">{project.projectName}</div>
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={getStatusBadgeVariant(project.status)} className="font-normal">{project.status}</Badge>
                                         </TableCell>
-                                        <TableCell className="text-right font-mono">
+                                        <TableCell className="text-right font-mono text-muted-foreground">
                                         ₱{(project.budget_amount ?? 0).toLocaleString()}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Progress value={project.percentComplete ?? 0} className="h-2" />
+                                                <Progress value={project.percentComplete ?? 0} className="h-2 bg-muted [&>div]:bg-primary" />
                                                 <span className="text-xs text-muted-foreground">{project.percentComplete ?? 0}%</span>
                                             </div>
                                         </TableCell>
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="h-24 text-center">No ongoing projects.</TableCell>
+                                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No ongoing projects.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>

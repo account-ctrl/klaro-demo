@@ -5,72 +5,82 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71% 4%;
+    /* Base (Light) */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 217 33% 17%; /* #1D2939 (Slate-900) - softer than pure black */
 
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 217 33% 17%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
+    --popover-foreground: 217 33% 17%;
 
-    --primary: 221 83% 53%; /* Google Blue */
+    /* Klaro Brand: Vibrant Blue (#29ABE2) -> HSL: 198, 77%, 52% */
+    --primary: 198 77% 52%; 
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 215 28% 97%;
-    --secondary-foreground: 224 71% 4%;
+    --secondary: 210 40% 96%; /* Light slate gray for secondary actions */
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 216 12% 84%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 217 91% 96%;
-    --accent-foreground: 221 83% 43%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 215 20% 90%; 
-    --input: 215 20% 90%;
-    --ring: 221 83% 53%;
+    /* Growth Green (#90EE90) for Success -> HSL: 120, 73%, 75% (Light Green) -> Adjusted for text readability: 142, 71%, 45% (#22C55E) */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 198 77% 52%; /* Matches Primary */
 
     --radius: 0.5rem;
 
     /* Data visualization colors */
-    --chart-1: 221 83% 53%;
-    --chart-2: 120 73% 75%;
-    --chart-3: 40 96% 56%;
-    --chart-4: 0 84% 60%;
-    --chart-5: 260 70% 65%;
+    --chart-1: 198 77% 52%; /* Primary Blue */
+    --chart-2: 142 71% 45%; /* Growth Green (Success) */
+    --chart-3: 40 96% 56%; /* Warning Orange */
+    --chart-4: 0 84% 60%;  /* Destructive Red */
+    --chart-5: 260 70% 65%; /* Purple */
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 220 20% 98%;
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
 
-    --card: 226 50% 9%;
-    --card-foreground: 220 20% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 224 71% 4%;
-    --popover-foreground: 220 20% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 224 71% 4%;
+    /* Dark Mode Primary: Slightly lighter blue for contrast */
+    --primary: 198 77% 60%;
+    --primary-foreground: 222 47% 11%;
 
-    --secondary: 226 50% 14%;
-    --secondary-foreground: 220 20% 98%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 226 50% 14%;
-    --muted-foreground: 220 9% 55%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 217 91% 96% / 0.1;
-    --accent-foreground: 217 91% 60%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 63% 31%;
-    --destructive-foreground: 220 20% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 226 50% 14%;
-    --input: 226 50% 14%;
-    --ring: 217 91% 60%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 198 77% 60%;
   }
 }
 
