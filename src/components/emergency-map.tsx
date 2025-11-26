@@ -292,20 +292,7 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
 
     return (
         <div className="relative h-full w-full">
-             {/* Map Controls - Removed absolute controls that are now managed by parent */}
-            
-            {/* Keeping the Import/Scan controls but ensuring they are positioned carefully, or maybe just removing them from 'view' if not in planning mode? 
-                The prompt mentioned 'overlapping something from behind'. It's likely the map control buttons inside this component.
-                The previous image showed controls top-right. Let's make sure they don't overlap the new right-sidebar.
-                Right sidebar has width w-80 (320px).
-                We should move these controls to the left or make them position relative to the sidebar.
-                Or just hide them if not needed, but scanning is a feature.
-                Let's move the scan controls to Top-Center or further Left.
-            */}
-
-            {/* Moving Scanning controls to avoid Right Sidebar (which is top-right/right side) */}
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[400] flex flex-col gap-2 items-center">
-                 {/* Only show these if explicitly in a mode that needs them, or keep them unobtrusive */}
                  <div className="bg-black/60 backdrop-blur-md p-1 rounded-md shadow-md border border-white/10 flex gap-1">
                     <Button 
                         size="sm" 
@@ -341,8 +328,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 )}
             </div>
             
-            {/* Removed the top-right controls container entirely to prevent overlap */}
-
             {mapMode === 'planning' && (
                 <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-[400] bg-blue-600/90 text-white text-xs px-3 py-2 rounded shadow-lg animate-in fade-in pointer-events-none backdrop-blur-sm">
                     Click and drag to draw a scan zone...
@@ -353,12 +338,13 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 ref={mapRef}
                 center={initialCenter} 
                 zoom={16} 
+                zoomControl={false} // Disable default zoom controls
                 style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0, background: '#09090b' }}
             >
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    className="map-tiles-dark" // We will inject CSS for this class
+                    className="map-tiles-dark" 
                 />
                  {/* Inject Styles for Dark Mode Map */}
                  <style jsx global>{`
