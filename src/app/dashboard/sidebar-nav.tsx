@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -23,6 +22,17 @@ import {
   Activity,
   BrainCircuit,
   AlertTriangle,
+  Radio,
+  FileClock,
+  FolderKanban,
+  LineChart,
+  BarChart,
+  CalendarDays,
+  FileBox,
+  MegaphoneIcon,
+  FolderOpen,
+  HomeIcon,
+  UserIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -40,6 +50,7 @@ const NavItem = ({
   getHref,
   active,
   isSubItem = false,
+  className
 }: {
   icon: React.ReactNode;
   label: string;
@@ -48,25 +59,36 @@ const NavItem = ({
   getHref: (href: string) => string;
   active?: boolean;
   isSubItem?: boolean;
+  className?: string;
 }) => {
   const isActive = active || pathname.startsWith(href);
 
   return (
-    <Link href={getHref(href)} passHref>
+    <Link href={getHref(href)} passHref className="w-full">
       <div
         className={cn(
-          "group flex cursor-pointer items-center justify-between py-2 text-[14px] transition-colors duration-150",
+          "group flex cursor-pointer items-center justify-between py-2 text-[14px] transition-colors duration-150 rounded-md mx-2",
           isActive
-            ? "font-semibold text-primary"
-            : "text-foreground/70 hover:text-primary",
-          isSubItem ? "pl-11 pr-4" : "px-4"
+            ? "font-semibold text-primary bg-primary/10"
+            : "text-foreground/70 hover:text-primary hover:bg-muted/50",
+          isSubItem ? "pl-11 pr-4" : "px-4",
+          className
         )}
       >
         <div className="flex items-center gap-3">
           {!isSubItem && (
             <span className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150",
-                isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+                "flex h-5 w-5 items-center justify-center transition-colors duration-150",
+                isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+              )}>
+              {icon}
+            </span>
+          )}
+          {/* If subitem, we might want a smaller icon or just padding, but here we follow the design */}
+          {isSubItem && icon && (
+             <span className={cn(
+                "flex h-4 w-4 items-center justify-center transition-colors duration-150",
+                isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
               )}>
               {icon}
             </span>
@@ -78,70 +100,16 @@ const NavItem = ({
   );
 };
 
-
-const AccordionNavItem = ({
-  icon,
-  label,
-  children,
-  openItem,
-  setOpenItem,
-  isActive,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-  openItem: string | null;
-  setOpenItem: (value: string | null) => void;
-  isActive: boolean;
-}) => {
-  const isOpen = openItem === label || isActive;
-  return (
-     <AccordionItem value={label} className="border-b-0">
-        <AccordionTrigger
-            onMouseEnter={() => setOpenItem(label)}
-            className={cn("flex cursor-pointer items-center justify-between px-4 py-2 text-[14px] text-foreground/70 hover:text-primary hover:no-underline transition-colors duration-150 rounded-lg",
-              isOpen && "bg-muted text-primary font-semibold"
-            )}
-        >
-            <div className="flex items-center gap-3">
-                <span className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150",
-                    isOpen ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
-                )}>
-                    {icon}
-                </span>
-                <span>{label}</span>
-            </div>
-        </AccordionTrigger>
-        <AccordionContent className="py-1">
-            {children}
-        </AccordionContent>
-    </AccordionItem>
-  )
-};
-
-
-const navGroups = {
-    'Registry': ['/dashboard/residents', '/dashboard/households', '/dashboard/pets'],
-    'Operations': ['/dashboard/documents', '/dashboard/blotter', '/dashboard/announcements', '/dashboard/scheduler'],
-    'Administration': ['/dashboard/financials', '/dashboard/projects'],
-    'Command Center': ['/dashboard/emergency', '/dashboard/insights'],
-};
+const NavGroupHeader = ({ label }: { label: string }) => (
+    <h4 className="mb-1 px-6 mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        {label}
+    </h4>
+)
 
 
 export function SidebarNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [openItem, setOpenItem] = useState<string | null>(null);
-  
-  useEffect(() => {
-    for (const [group, paths] of Object.entries(navGroups)) {
-      if (paths.some(path => pathname.startsWith(path))) {
-        setOpenItem(group);
-        return;
-      }
-    }
-  }, [pathname]);
 
   const getHref = (href: string) => {
     const params = new URLSearchParams(searchParams);
@@ -149,78 +117,49 @@ export function SidebarNav() {
     return queryString ? `${href}?${queryString}` : href;
   };
 
-  const handleMouseLeave = () => {
-    // Check if the current path is in any group, if so, keep it open
-    for (const [group, paths] of Object.entries(navGroups)) {
-      if (paths.some(path => pathname.startsWith(path))) {
-        setOpenItem(group);
-        return;
-      }
-    }
-    setOpenItem(null);
-  }
-
-  const isGroupActive = (groupName: string) => {
-    const paths = navGroups[groupName as keyof typeof navGroups];
-    return paths.some(path => pathname.startsWith(path));
-  };
-
-
   return (
-    <div className="py-4 space-y-1" onMouseLeave={handleMouseLeave}>
+    <div className="py-4 space-y-1">
       <NavItem
-        icon={<LayoutDashboard size={20} />}
-        label="Dashboard"
+        icon={<Home size={18} />}
+        label="Overview"
         href="/dashboard"
         pathname={pathname}
         getHref={getHref}
         active={pathname === '/dashboard'}
       />
       
-      <div className="px-4"><Separator /></div>
-      
-       <Accordion type="single" collapsible value={openItem || ''}>
-          {/* Registry */}
-          <AccordionNavItem icon={<Users size={20} />} label="Registry" openItem={openItem} setOpenItem={setOpenItem} isActive={isGroupActive('Registry')}>
-              <NavItem href="/dashboard/residents" label="Residents" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-              <NavItem href="/dashboard/households" label="Households" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-              <NavItem href="/dashboard/pets" label="Pets" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-          </AccordionNavItem>
-
-          {/* Operations */}
-           <AccordionNavItem icon={<Building2 size={20} />} label="Operations" openItem={openItem} setOpenItem={setOpenItem} isActive={isGroupActive('Operations')}>
-              <NavItem href="/dashboard/documents" label="Documents" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-              <NavItem href="/dashboard/blotter" label="Blotter Cases" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-              <NavItem href="/dashboard/announcements" label="Announcements" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-              <NavItem href="/dashboard/scheduler" label="Scheduler" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-          </AccordionNavItem>
-
-          {/* Administration */}
-          <AccordionNavItem icon={<Receipt size={20} />} label="Administration" openItem={openItem} setOpenItem={setOpenItem} isActive={isGroupActive('Administration')}>
-              <NavItem href="/dashboard/financials" label="Disbursements" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-              <NavItem href="/dashboard/projects" label="Projects & Infra" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-          </AccordionNavItem>
-       </Accordion>
-
-      <div className="px-4"><Separator /></div>
-
-       {/* Command Center */}
-       <Accordion type="single" collapsible value={openItem || ''}>
-          <AccordionNavItem icon={<Activity size={20} />} label="Command Center" openItem={openItem} setOpenItem={setOpenItem} isActive={isGroupActive('Command Center')}>
-            <NavItem href="/dashboard/emergency" label="Emergency SOS" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-            <NavItem href="/dashboard/insights" label="AI Insights" pathname={pathname} getHref={getHref} isSubItem icon={<></>} />
-          </AccordionNavItem>
-       </Accordion>
-
+      <NavGroupHeader label="Command Center" />
       <NavItem
-        icon={<Settings size={20} />}
-        label="Settings"
-        href="/dashboard/settings"
+        icon={<ShieldAlert size={18} />}
+        label="Emergency Response"
+        href="/dashboard/emergency"
         pathname={pathname}
         getHref={getHref}
+        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+        active={pathname === '/dashboard/emergency' && !pathname.includes('/staffing')}
       />
+      {/* Temporarily hidden as per request, though typically part of Command Center */}
+      {/* <NavItem icon={<Radio size={18} />} label="Responders" href="/dashboard/emergency/staffing" pathname={pathname} getHref={getHref} /> */}
+
+      <NavGroupHeader label="Constituents" />
+      <NavItem icon={<Users size={18} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<HomeIcon size={18} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<PawPrint size={18} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} />
+
+      <NavGroupHeader label="Peace & Order" />
+      <NavItem icon={<AlertTriangle size={18} />} label="Blotter & Incidents" href="/dashboard/blotter" pathname={pathname} getHref={getHref} />
+
+      <NavGroupHeader label="Operations" />
+      <NavItem icon={<FileText size={18} />} label="Documents" href="/dashboard/documents" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<Megaphone size={18} />} label="Announcements" href="/dashboard/announcements" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<FolderOpen size={18} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<BarChart size={18} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<CalendarDays size={18} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} />
+
+      <NavGroupHeader label="System" />
+      <NavItem icon={<Activity size={18} />} label="Activity Logs" href="/dashboard/activity" pathname={pathname} getHref={getHref} />
+      <NavItem icon={<Settings size={18} />} label="Settings" href="/dashboard/settings" pathname={pathname} getHref={getHref} />
+
     </div>
   );
 }
-
-const Separator = () => <div className="my-2 border-t" />;
