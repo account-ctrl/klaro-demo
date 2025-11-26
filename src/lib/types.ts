@@ -376,6 +376,38 @@ export type Ordinance = {
     createdAt: Timestamp;
 };
 
+// --- NEW TYPES FOR ASSETS & FLEET (Phase 3) ---
+export type FixedAsset = {
+  assetId: string;
+  name: string; // e.g., "Barangay Patrol 01"
+  type: 'Vehicle' | 'Equipment' | 'Facility' | 'Furniture';
+  status: 'Available' | 'In Use' | 'Maintenance' | 'Decommissioned';
+  purchaseDate: string; // ISO Date string
+  serialNumber?: string;
+  
+  // Fleet specific fields
+  plateNumber?: string; 
+  lastMaintenanceDate?: string; // ISO Date string
+  nextMaintenanceDue?: string; // ISO Date string
+  odometerReading?: number;
+  
+  createdAt: Timestamp;
+};
+
+export type AssetBooking = {
+  bookingId: string;
+  assetId: string;
+  assetName: string; // Denormalized for easy display
+  borrowerName: string; // Or link to residentId
+  residentId?: string; // Optional link
+  purpose: string;
+  startDateTime: string; // ISO
+  endDateTime: string; // ISO
+  status: 'Pending' | 'Approved' | 'Returned' | 'Overdue' | 'Rejected';
+  approvedBy?: string; // User ID
+  createdAt: Timestamp;
+};
+
 // Deprecated old types. To be removed after full refactoring.
 export type Blotter = BlotterCase;
 export type Document = CertificateRequest;

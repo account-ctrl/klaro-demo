@@ -25,7 +25,8 @@ import {
   Baby,
   Microscope,
   HandHeart,
-  Scale // Added for Legislative
+  Scale,
+  Truck // Added for Assets & Fleet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -142,6 +143,7 @@ export function SidebarNav() {
             <NavItem icon={<Megaphone size={18} />} label="Announcements" href="/dashboard/announcements" pathname={pathname} getHref={getHref} />
             <NavItem icon={<FolderOpen size={18} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} />
             <NavItem icon={<BarChart size={18} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Truck size={18} />} label="Assets & Fleet" href="/dashboard/assets" pathname={pathname} getHref={getHref} />
             <NavItem icon={<CalendarDays size={18} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} />
           </div>
 
