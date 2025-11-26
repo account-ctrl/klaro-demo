@@ -28,11 +28,13 @@ import Link from 'next/link';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AIChatWidget } from './ai-chat-widget';
 import GridLayout, { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import Image from 'next/image'; // Using Next.js Image for better optimization if needed, or simple img
+import Image from 'next/image'; 
+
+import { HeroBanner } from './hero-banner';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -313,12 +315,12 @@ export default function DashboardPage() {
       { i: 'kpi-documents', x: 6, y: 0, w: 2, h: 4 },
       { i: 'kpi-blotter', x: 8, y: 0, w: 2, h: 4 },
       { i: 'kpi-funds', x: 10, y: 0, w: 2, h: 4 },
-      { i: 'ai-chat', x: 0, y: 4, w: 12, h: 4 },
-      { i: 'chart-docs', x: 0, y: 8, w: 8, h: 8 },
-      { i: 'schedule', x: 8, y: 8, w: 4, h: 6 },
-      { i: 'table-projects', x: 0, y: 16, w: 8, h: 8 },
-      { i: 'alerts', x: 8, y: 14, w: 4, h: 6 },
-      { i: 'chart-blotter', x: 8, y: 20, w: 4, h: 6 },
+      // Removed 'ai-chat' key
+      { i: 'chart-docs', x: 0, y: 4, w: 8, h: 8 },
+      { i: 'schedule', x: 8, y: 4, w: 4, h: 6 },
+      { i: 'table-projects', x: 0, y: 12, w: 8, h: 8 },
+      { i: 'alerts', x: 8, y: 10, w: 4, h: 6 },
+      { i: 'chart-blotter', x: 8, y: 16, w: 4, h: 6 },
     ],
     md: [
         { i: 'card-sos', x: 0, y: 0, w: 5, h: 4 },
@@ -327,12 +329,12 @@ export default function DashboardPage() {
         { i: 'kpi-documents', x: 5, y: 4, w: 5, h: 4 },
         { i: 'kpi-blotter', x: 0, y: 8, w: 5, h: 4 },
         { i: 'kpi-funds', x: 5, y: 8, w: 5, h: 4 },
-        { i: 'ai-chat', x: 0, y: 12, w: 10, h: 4 },
-        { i: 'chart-docs', x: 0, y: 16, w: 10, h: 8 },
-        { i: 'schedule', x: 0, y: 24, w: 5, h: 6 },
-        { i: 'alerts', x: 5, y: 24, w: 5, h: 6 },
-        { i: 'table-projects', x: 0, y: 30, w: 10, h: 8 },
-        { i: 'chart-blotter', x: 0, y: 38, w: 10, h: 6 },
+        // Removed 'ai-chat'
+        { i: 'chart-docs', x: 0, y: 12, w: 10, h: 8 },
+        { i: 'schedule', x: 0, y: 20, w: 5, h: 6 },
+        { i: 'alerts', x: 5, y: 20, w: 5, h: 6 },
+        { i: 'table-projects', x: 0, y: 26, w: 10, h: 8 },
+        { i: 'chart-blotter', x: 0, y: 34, w: 10, h: 6 },
     ],
     sm: [
         { i: 'card-sos', x: 0, y: 0, w: 6, h: 4 },
@@ -341,12 +343,12 @@ export default function DashboardPage() {
         { i: 'kpi-documents', x: 0, y: 12, w: 6, h: 4 },
         { i: 'kpi-blotter', x: 0, y: 16, w: 6, h: 4 },
         { i: 'kpi-funds', x: 0, y: 20, w: 6, h: 4 },
-        { i: 'ai-chat', x: 0, y: 24, w: 6, h: 6 },
-        { i: 'chart-docs', x: 0, y: 30, w: 6, h: 8 },
-        { i: 'schedule', x: 0, y: 38, w: 6, h: 6 },
-        { i: 'alerts', x: 0, y: 44, w: 6, h: 6 },
-        { i: 'table-projects', x: 0, y: 50, w: 6, h: 8 },
-        { i: 'chart-blotter', x: 0, y: 58, w: 6, h: 6 },
+        // Removed 'ai-chat'
+        { i: 'chart-docs', x: 0, y: 24, w: 6, h: 8 },
+        { i: 'schedule', x: 0, y: 32, w: 6, h: 6 },
+        { i: 'alerts', x: 0, y: 38, w: 6, h: 6 },
+        { i: 'table-projects', x: 0, y: 44, w: 6, h: 8 },
+        { i: 'chart-blotter', x: 0, y: 52, w: 6, h: 6 },
     ]
   };
 
@@ -358,37 +360,13 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-        {/* New Hero Banner */}
-        <div className="w-full bg-[#ff7a59]/10 dark:bg-[#ff7a59]/20 rounded-2xl p-8 relative overflow-hidden shadow-sm border border-[#ff7a59]/20">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#ff7a59]/10 to-transparent pointer-events-none" />
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-                <div className="flex-1">
-                    <h1 className="text-3xl md:text-4xl font-bold text-[#33475b] mb-2 tracking-tight">
-                        Magandang Araw, Admin! 👋
-                    </h1>
-                    <p className="text-[#516f90] text-lg font-medium mb-4">
-                        Welcome to the Barangay San Isidro Dashboard.
-                    </p>
-                    <div className="flex items-center gap-4 text-sm text-[#516f90]/80">
-                        <div className="flex items-center gap-1.5 bg-white/50 px-3 py-1 rounded-full">
-                            <Calendar className="h-4 w-4" />
-                            <span>{currentDate}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-white/50 px-3 py-1 rounded-full">
-                            <LayoutGrid className="h-4 w-4" />
-                            <span>Overview</span>
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Placeholder Illustration Area */}
-                <div className="hidden md:flex items-center justify-center shrink-0">
-                    <div className="w-48 h-32 bg-gradient-to-tr from-orange-200 to-yellow-100 rounded-xl opacity-80 flex items-center justify-center shadow-inner">
-                        <Users className="h-12 w-12 text-orange-400/50" />
-                    </div>
-                </div>
-            </div>
-        </div>
+        <HeroBanner 
+            residents={residents ?? []}
+            projects={projects ?? []}
+            blotterCases={blotterCases ?? []}
+            currentDate={currentDate}
+            heroImageUrl={PlaceHolderImages[0]?.imageUrl}
+        />
 
         <ResponsiveGridLayout
             className="layout"
@@ -422,17 +400,6 @@ export default function DashboardPage() {
                 <KpiCard id="kpi-funds" title="Funds Collected (YTD)" value={`₱${totalFundsCollectedYTD.toLocaleString()}`} icon={Landmark} note={`₱${fundsCollectedLast30Days.toLocaleString()} last 30d`} isLoading={isLoadingFins} />
             </div>
             
-            <div key="ai-chat">
-                <div id="ai-chat-widget" className={cardStyle}>
-                    <AIChatWidget 
-                    residents={residents ?? []}
-                    projects={projects ?? []}
-                    blotterCases={blotterCases ?? []}
-                    isLoading={isLoading}
-                    />
-                </div>
-            </div>
-
             <div key="chart-docs">
                 <Card className={cardStyle}>
                     <CardHeader>

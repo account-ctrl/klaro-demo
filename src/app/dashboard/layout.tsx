@@ -77,34 +77,38 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex h-screen w-full bg-background text-foreground font-sans overflow-hidden">
       <Tour />
       {/* 1. GLOBAL HEADER (AppBar) */}
-      <header className="fixed top-0 z-50 flex h-14 w-full items-center justify-between bg-[#2e3f50] text-white px-4 shadow-sm border-b border-[#405163]">
-        {/* LEFT: Branding & Context */}
-        <div className="flex items-center gap-3 transition-all duration-300" style={{ width: isCollapsed ? '80px' : '256px' }}>
+      <header className="fixed top-0 z-50 flex h-14 w-full items-center justify-between bg-[#2e3f50] text-white px-0 shadow-sm border-b border-[#405163]">
+        
+        {/* LEFT: Branding (Aligned with Sidebar) */}
+        <div 
+            className="flex items-center gap-3 pl-4 h-full transition-all duration-300 border-r border-[#405163] bg-[#2e3f50] shrink-0" 
+            style={{ width: isCollapsed ? '80px' : '256px' }}
+        >
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="rounded-full p-2 hover:bg-white/10 text-white/80"
+            className="rounded-full p-1.5 hover:bg-white/10 text-white/80 transition-colors"
           >
             <Menu size={20} />
           </button>
 
-          <div className="flex items-center gap-2 font-semibold tracking-tight truncate">
+          <div className={cn("flex items-center gap-2 font-semibold tracking-tight overflow-hidden whitespace-nowrap transition-opacity duration-300", isCollapsed ? "opacity-0 w-0" : "opacity-100")}>
              <LayoutDashboard className="text-[#ff7a59] shrink-0" size={20}/>
-             {!isCollapsed && <span className="hidden md:inline truncate">KlaroGov</span>}
+             <span className="truncate">KlaroGov</span>
           </div>
-          
-           {!isCollapsed && (
-            <>
-                <div className="h-6 w-[1px] bg-white/20 mx-2 hidden md:block"></div>
-                <Button variant="ghost" className="hidden md:flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal truncate">
-                    <span className="truncate">Brgy. San Isidro</span>
+        </div>
+
+        {/* CONTEXT: Barangay Selector (Now outside the sidebar width constraint) */}
+        <div className="flex items-center px-4 border-r border-[#405163]/50 h-full shrink-0">
+             <div className="hidden md:flex items-center gap-2">
+                <Button variant="ghost" className="flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal">
+                    <span className="truncate max-w-[150px]">Brgy. San Isidro</span>
                     <ChevronDown size={14} className="opacity-70 shrink-0" />
                 </Button>
-            </>
-           )}
+             </div>
         </div>
 
         {/* CENTER: Omni-Search */}
-        <div className="flex flex-1 max-w-2xl px-4">
+        <div className="flex flex-1 max-w-xl px-6">
           <div className="relative w-full group">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
               <Search size={16} />
@@ -118,9 +122,9 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
         </div>
 
         {/* RIGHT: Utilities & Quick Actions */}
-        <div className="flex items-center gap-1 min-w-[200px] justify-end">
+        <div className="flex items-center gap-1 pr-4 justify-end ml-auto">
            {/* QUICK ACTIONS (Global) */}
-           <div className="hidden lg:flex items-center gap-2 mr-2">
+           <div className="hidden xl:flex items-center gap-2 mr-2">
               <Button asChild size="sm" className="h-8 bg-[#29ABE2] hover:bg-[#29ABE2]/90 text-white border-0">
                   <Link href="/dashboard/documents"><Plus className="mr-1 h-3 w-3" /> Request</Link>
               </Button>
@@ -132,9 +136,9 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
               </Button>
            </div>
 
-           <div className="h-6 w-[1px] bg-white/20 mx-1 hidden lg:block"></div>
+           <div className="h-6 w-[1px] bg-white/20 mx-1 hidden xl:block"></div>
 
-           <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
+           <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9 hidden sm:flex">
              <Sparkles size={18} />
            </Button>
            
