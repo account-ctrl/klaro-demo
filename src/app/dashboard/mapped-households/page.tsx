@@ -282,18 +282,29 @@ export default function MappedHouseholdsPage() {
     const handleDeleteAll = async () => {
         if (!firestore || !households) return;
         try {
-            const batch = writeBatch(firestore);
-            households.forEach(h => {
-                 if (h.householdId) {
-                    const ref = doc(firestore, `/barangays/${BARANGAY_ID}/households/${h.householdId}`);
-                    batch.delete(ref);
-                 }
-            });
-            await batch.commit();
+            const BATCH_SIZE = 400; // Keep safely under the 500 limit
+            const chunks = [];
+            
+            for (let i = 0; i < households.length; i += BATCH_SIZE) {
+                chunks.push(households.slice(i, i + BATCH_SIZE));
+            }
+
+            for (const chunk of chunks) {
+                const batch = writeBatch(firestore);
+                chunk.forEach(h => {
+                     if (h.householdId) {
+                        const ref = doc(firestore, `/barangays/${BARANGAY_ID}/households/${h.householdId}`);
+                        batch.delete(ref);
+                     }
+                });
+                await batch.commit();
+            }
+
             toast({ title: "All Cleared", description: "All households have been deleted." });
             setSelectedHouseholdId(null);
         } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to delete all." });
+            console.error("Delete all error:", e);
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete all households." });
         }
     };
 
