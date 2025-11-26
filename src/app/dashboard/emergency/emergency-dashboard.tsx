@@ -206,9 +206,12 @@ const ResponderStatusCard = ({ responders }: { responders: User[] }) => {
         const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin' || u.systemRole === 'Encoder'; // Added Encoder as some might double up
         
         // Specific check for "Barangay Tanod" because sometimes exact string matching fails due to whitespace/formatting
-        const isTanod = u.position && u.position.toLowerCase().includes('tanod');
+        const positionLower = u.position ? u.position.toLowerCase() : '';
+        const isTanod = positionLower.includes('tanod');
+        const isKagawad = positionLower.includes('kagawad');
+        const isResponder = positionLower.includes('responder');
 
-        return isResponderRole || isSystemResponder || isTanod;
+        return isResponderRole || isSystemResponder || isTanod || isKagawad || isResponder;
     });
     
     return (
