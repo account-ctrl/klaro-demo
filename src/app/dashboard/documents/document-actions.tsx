@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { PlusCircle, FilePen, Trash2, Printer } from 'lucide-react';
-import type { CertificateRequest, Resident, CertificateType } from '@/lib/types';
+import type { CertificateRequest, Resident, CertificateType, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
@@ -42,6 +42,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { doc, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { DEFAULT_BARANGAY_CLEARANCE, DEFAULT_INDIGENCY, DEFAULT_RESIDENCY } from '@/app/dashboard/settings/templates/default-templates';
+import { useOfficials } from '@/hooks/use-barangay-data';
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -65,7 +66,7 @@ const formatDate = (date: Date, formatStr: string) => {
     return date.toLocaleDateString();
 }
 
-const fillTemplate = (template: string, request: CertificateRequest, resident?: Resident) => {
+const fillTemplate = (template: string, request: CertificateRequest, resident?: Resident, officials?: User[]) => {
     let content = template;
     const now = new Date();
 
@@ -133,13 +134,14 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
     denialReason: record?.denialReason,
   });
   const [purposeDetail, setPurposeDetail] = useState('');
+  const { data: officials } = useOfficials();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
   
-  const handleSelectChange = (id: 'certTypeId' | 'residentId' | 'status' | 'purpose', value: string) => {
+  const handleSelectChange = (id: 'certTypeId' | 'residentId' | 'status' | 'purpose' | 'processedByUserId', value: string) => {
     setFormData((prev) => ({ ...prev, [id]: value }));
   }
 
@@ -166,6 +168,11 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
     value: r.residentId,
     label: `${r.firstName} ${r.lastName}`
   }));
+
+  const officialOptions = officials?.map(o => ({
+      value: o.userId,
+      label: `${o.fullName} (${o.position})`
+  })) || [];
 
   return (
     <>
@@ -237,6 +244,17 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
                 </div>
             </div>
             
+            <div className="space-y-2">
+                <Label htmlFor="processedByUserId">Issued By (Official)</Label>
+                 <Combobox
+                    options={officialOptions}
+                    value={formData.processedByUserId || ''}
+                    onChange={(value) => handleSelectChange('processedByUserId', value)}
+                    placeholder="Select issuing official..."
+                    searchPlaceholder="Search official..."
+                  />
+            </div>
+
             {formData.status === 'Denied' && (
                 <div className="space-y-2">
                     <Label htmlFor="denialReason" className="text-destructive">Reason for Denial</Label>
@@ -355,6 +373,7 @@ export function DeleteDocument({ recordId, onDelete }: { recordId: string; onDel
 export function PrintDocument({ record, onPrint, residents, certificateTypes }: { record: CertificateRequest; onPrint: (record: CertificateRequest) => void; residents: Resident[]; certificateTypes: CertificateType[] }) {
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { data: officials } = useOfficials();
 
     const handlePrintClick = async () => {
         const resident = residents.find(r => r.residentId === record.residentId);
@@ -390,7 +409,7 @@ export function PrintDocument({ record, onPrint, residents, certificateTypes }: 
              }
         }
 
-        const htmlContent = fillTemplate(templateContent, record, resident);
+        const htmlContent = fillTemplate(templateContent, record, resident, officials || []);
         const printWindow = window.open('', '_blank');
         printWindow?.document.write(htmlContent);
         printWindow?.document.close();

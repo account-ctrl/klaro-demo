@@ -11,7 +11,8 @@ import {
     Household,
     DocumentTemplate,
     EmergencyAlert,
-    ResponderLocation
+    ResponderLocation,
+    User
 } from '@/lib/types';
 
 // Exported for direct usage in doc() refs if needed, but prefer hooks.
@@ -69,4 +70,13 @@ export function useEmergencyAlerts() {
 
 export function useResponderLocations() {
     return useBarangayCollection<ResponderLocation>('responder_locations');
+}
+
+export function useOfficials() {
+    const firestore = useFirestore();
+    const officialsCollectionRef = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, '/users');
+    }, [firestore]);
+    return useCollection<User>(officialsCollectionRef);
 }
