@@ -109,15 +109,19 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
     const [vehicle, setVehicle] = useState<string>('Patrol Vehicle 1');
     
     // Fetch users to list as responders
+    // Updated to use the root /users collection instead of per-barangay
     const firestore = useFirestore();
-    const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/users`) : null, [firestore]);
+    const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
     const { data: users } = useCollection<User>(usersCollection);
 
-    // Filter for potential responders using the same logic as the status card
-    const potentialResponders = users?.filter(u => {
+    // Filter for potential responders:
+    // 1. Must be an active user
+    // 2. Must have a responder role OR system role of 'Responder'
+    const activeResponders = users?.filter(u => {
         const isResponderRole = RESPONDER_ROLES.includes(u.position);
         const isSystemResponder = u.systemRole === 'Responder';
-        return isResponderRole || isSystemResponder;
+        const isActive = u.status === 'Active';
+        return isActive && (isResponderRole || isSystemResponder);
     }) || [];
 
     const handleDispatch = () => {
@@ -147,11 +151,17 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
                                 <SelectValue placeholder="Select a responder" />
                             </SelectTrigger>
                             <SelectContent>
-                                {potentialResponders.map(user => (
-                                    <SelectItem key={user.userId} value={user.userId}>
-                                        {user.fullName} ({user.systemRole})
-                                    </SelectItem>
-                                ))}
+                                {activeResponders.length > 0 ? (
+                                    activeResponders.map(user => (
+                                        <SelectItem key={user.userId} value={user.userId}>
+                                            {user.fullName} ({user.position || user.systemRole})
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <div className="p-2 text-sm text-muted-foreground text-center">
+                                        No active responders available
+                                    </div>
+                                )}
                             </SelectContent>
                         </Select>
                     </div>
@@ -487,7 +497,8 @@ export function EmergencyDashboard() {
   const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
   
   // Use useMemoFirebase for users collection
-  const usersCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/users`) : null, [firestore]);
+  // NOTE: Users are now at the root level '/users', not per-barangay for authentication/system roles
+  const usersCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
   const { data: users } = useCollection<User>(usersCollectionRef);
   
   // Collection ref for writing
