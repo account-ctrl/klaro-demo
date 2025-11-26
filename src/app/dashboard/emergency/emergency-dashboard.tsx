@@ -9,7 +9,7 @@ import { EmergencyAlert, Resident, User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText, Trash2, MoreHorizontal, MessageSquare, Users, Truck } from "lucide-react";
+import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, AlertTriangle, ScrollText, Trash2, MoreHorizontal, MessageSquare, Users, Truck, Radio } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,6 +35,7 @@ import {
 import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID, useResponderLocations } from '@/hooks/use-barangay-data';
 import { collection } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // Dynamically import the Map component to avoid SSR issues with Leaflet
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
@@ -44,6 +45,18 @@ const EmergencyMap = dynamic(() => import('@/components/emergency-map'), {
 
 // Utility type to ensure we can access the doc ID
 type EmergencyAlertWithId = EmergencyAlert & { id?: string };
+
+// Roles that are considered "Responders" - COPIED FROM RESPONDER PAGE FOR CONSISTENCY
+const RESPONDER_ROLES = [
+    'Barangay Tanod (BPSO - Barangay Public Safety Officer)',
+    'Chief Tanod (Executive Officer)',
+    'Lupon Member (Pangkat Tagapagkasundo)',
+    'Driver / Ambulance Operator',
+    'VAWC Desk Officer',
+    'Barangay Health Worker (BHW)',
+    'Eco-Aide / Street Sweeper',
+    'Utility Worker'
+];
 
 function ResolveAlertDialog({ alertId, onResolve, children }: { alertId: string, onResolve: (id: string, notes: string) => void, children: React.ReactNode }) {
     const [open, setOpen] = useState(false);
@@ -100,8 +113,12 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
     const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/users`) : null, [firestore]);
     const { data: users } = useCollection<User>(usersCollection);
 
-    // Filter for potential responders (e.g., systemRole 'Responder' or 'Admin')
-    const potentialResponders = users?.filter(u => ['Responder', 'Admin', 'Super Admin'].includes(u.systemRole)) || [];
+    // Filter for potential responders using the same logic as the status card
+    const potentialResponders = users?.filter(u => {
+        const isResponderRole = RESPONDER_ROLES.includes(u.position);
+        const isSystemResponder = u.systemRole === 'Responder';
+        return isResponderRole || isSystemResponder;
+    }) || [];
 
     const handleDispatch = () => {
         if (selectedResponder) {
@@ -178,6 +195,64 @@ const getAge = (dateString: string) => {
         age--;
     }
     return age;
+}
+
+const ResponderStatusCard = ({ responders }: { responders: User[] }) => {
+    // Use the improved filtering logic to include all relevant roles
+    const responderList = responders.filter(u => {
+        const isResponderRole = RESPONDER_ROLES.includes(u.position);
+        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin';
+        // Note: Admin/Super Admin are included here as they might act as command center staff/responders too in small barangays
+        return isResponderRole || isSystemResponder;
+    });
+    
+    return (
+        <Card className="flex-none border-l-4 border-l-blue-500 mb-4 shadow-sm">
+            <CardHeader className="py-3 px-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Radio className="h-4 w-4 text-blue-600" />
+                        <h3 className="font-semibold text-sm">Available Responders</h3>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">{responderList.length} Total</Badge>
+                </div>
+            </CardHeader>
+            <CardContent className="py-0 px-4 pb-3">
+                <ScrollArea className="h-32 pr-2">
+                    {responderList.length === 0 ? (
+                        <div className="text-xs text-muted-foreground text-center py-4">No responders found.</div>
+                    ) : (
+                        <div className="space-y-2">
+                            {responderList.map(responder => (
+                                <div key={responder.userId} className="flex items-center justify-between text-sm p-2 bg-muted/40 rounded-md">
+                                    <div className="flex items-center gap-2">
+                                        <Avatar className="h-6 w-6">
+                                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${responder.fullName}`} />
+                                            <AvatarFallback>{responder.fullName?.substring(0,1)}</AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-xs truncate max-w-[100px]">{responder.fullName}</span>
+                                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{responder.position || responder.systemRole}</span>
+                                        </div>
+                                    </div>
+                                    <Badge 
+                                        variant="outline" 
+                                        className={`text-[10px] px-1 py-0 h-5 border-0 ${
+                                            responder.status === 'Active' ? 'bg-green-100 text-green-700' : 
+                                            responder.status === 'Busy' ? 'bg-amber-100 text-amber-700' : 
+                                            'bg-slate-100 text-slate-600'
+                                        }`}
+                                    >
+                                        {responder.status === 'Active' ? 'On Duty' : responder.status || 'Offline'}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </ScrollArea>
+            </CardContent>
+        </Card>
+    )
 }
 
 const IncidentActionPanel = ({ alert, resident, onAcknowledge, onDispatch, onResolve, onDelete }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onDispatch: (alertId: string, responderId: string, vehicle: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; }) => {
@@ -536,8 +611,9 @@ export function EmergencyDashboard() {
   return (
     <div className="flex h-[calc(100vh-10rem)] gap-6">
         {/* Main Panel */}
-        <div className="w-2/3 h-full">
-            <Card className="h-full overflow-hidden">
+        <div className="w-2/3 h-full flex flex-col">
+            {/* Map Visualization Card */}
+            <Card className="flex-grow overflow-hidden">
                 <CardHeader>
                     <CardTitle>Map Visualization</CardTitle>
                     <CardDescription>Real-time location of alerts and responders.</CardDescription>
@@ -554,23 +630,27 @@ export function EmergencyDashboard() {
         </div>
 
         {/* Side Panel */}
-        <div className="w-1/3 h-full flex flex-col gap-6">
+        <div className="w-1/3 h-full flex flex-col gap-4">
+            {/* Responder Status Card (NEW) */}
+            <ResponderStatusCard responders={users ?? []} />
+
+            {/* Active Alert Feed Card */}
             <div className="flex-none">
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="py-3 px-4">
                          <div className="flex justify-between items-center">
-                            <CardTitle>Active Alert Feed</CardTitle>
-                             <Button onClick={handleSimulateSOS} disabled={isLoading || isSimulating} size="sm">
+                            <CardTitle className="text-sm font-medium">Active Alert Feed</CardTitle>
+                             <Button onClick={handleSimulateSOS} disabled={isLoading || isSimulating} size="sm" variant="outline" className="h-7 text-xs">
                                 {isSimulating ? '...' : 'Simulate SOS'}
                             </Button>
                         </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="py-0 px-4 pb-3">
                         <ScrollArea className="h-48">
                             <div className="space-y-2">
                             {isLoading && (
                                 <div className="space-y-2">
-                                    {[...Array(3)].map((_,i) => <Skeleton key={i} className="h-16 w-full" />)}
+                                    {[...Array(3)].map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}
                                 </div>
                             )}
                             {!isLoading && sortedAlerts.length === 0 && (
@@ -589,6 +669,8 @@ export function EmergencyDashboard() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Incident Detail Panel */}
             <div className="flex-grow min-h-0">
                 {isLoading && <Skeleton className="h-full w-full" />}
                 {!isLoading && selectedAlert && (
@@ -602,10 +684,10 @@ export function EmergencyDashboard() {
                     />
                 )}
                  {!isLoading && sortedAlerts.length === 0 && (
-                    <Card className="h-full flex items-center justify-center">
+                    <Card className="h-full flex items-center justify-center border-dashed">
                          <div className="text-center">
-                            <ShieldCheck className="mx-auto h-12 w-12 text-green-500" />
-                            <h3 className="mt-4 text-lg font-medium">All Clear!</h3>
+                            <ShieldCheck className="mx-auto h-12 w-12 text-green-500 opacity-50" />
+                            <h3 className="mt-4 text-lg font-medium text-muted-foreground">All Clear!</h3>
                             <p className="mt-1 text-sm text-muted-foreground">There are no active emergency alerts.</p>
                          </div>
                     </Card>

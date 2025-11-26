@@ -50,7 +50,7 @@ const ProjectCard = ({ project, onEdit, onDelete }: { project: Project, onEdit: 
             <CardTitle className="text-lg">{project.projectName}</CardTitle>
             <ProjectStatusBadge status={project.status} />
         </div>
-        <CardDescription>ID: ...{project.projectId.slice(-6)}</CardDescription>
+        <CardDescription>ID: ...{project.projectId ? project.projectId.slice(-6) : '???'}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 flex-grow">
         <div>

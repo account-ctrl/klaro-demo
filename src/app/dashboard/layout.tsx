@@ -14,6 +14,7 @@ import {
   Bell,
   Settings,
   HelpCircle,
+  LayoutDashboard
 } from 'lucide-react';
 import { SidebarNav } from './sidebar-nav';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,7 @@ import { Tour } from './tour';
 const InnerLayout = ({ children }: { children: React.ReactNode }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const { user, isUserLoading } = useUser();
-  const auth = useAuth();
+  const { auth } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -57,16 +58,16 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
   if (isUserLoading) {
       return (
         <div className="flex h-screen w-full flex-col">
-            <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b bg-background px-4">
+            <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b bg-[#2e3f50] px-4">
                 <div className="flex items-center gap-4">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-8 w-8 bg-white/10" />
+                    <Skeleton className="h-6 w-32 bg-white/10" />
                 </div>
                 <div className="flex-1 max-w-lg px-4">
-                     <Skeleton className="h-10 w-full" />
+                     <Skeleton className="h-10 w-full bg-white/10" />
                 </div>
                  <div className="flex items-center gap-2">
-                     <Skeleton className="h-8 w-8 rounded-full" />
+                     <Skeleton className="h-8 w-8 rounded-full bg-white/10" />
                 </div>
             </header>
             <main className="mt-16 h-full w-full bg-muted/40 p-6">
@@ -80,78 +81,84 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex h-screen w-full bg-background text-foreground font-sans">
       <Tour />
       {/* 1. GLOBAL HEADER (AppBar) */}
-      <header className="fixed top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-background px-4 shadow-sm">
+      <header className="fixed top-0 z-30 flex h-14 w-full items-center justify-between bg-[#2e3f50] text-white px-4 shadow-sm border-b border-[#405163]">
         {/* LEFT: Branding & Context */}
-        <div className="flex items-center gap-4 min-w-[250px]">
+        <div className="flex items-center gap-3 min-w-[250px]">
           <button
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="rounded-full p-2 hover:bg-muted text-muted-foreground"
+            className="rounded-full p-2 hover:bg-white/10 text-white/80"
           >
-            <Menu size={24} />
+            <Menu size={20} />
           </button>
 
-          <Logo />
+          <div className="flex items-center gap-2 font-semibold tracking-tight">
+             <LayoutDashboard className="text-[#ff7a59]" size={20}/>
+             <span>KlaroGov</span>
+          </div>
 
-          <Button variant="outline" className="hidden md:flex items-center gap-2">
+          <div className="h-6 w-[1px] bg-white/20 mx-2 hidden md:block"></div>
+
+          <Button variant="ghost" className="hidden md:flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal">
             <span>Brgy. San Isidro</span>
-            <ChevronDown size={14} />
+            <ChevronDown size={14} className="opacity-70" />
           </Button>
         </div>
 
         {/* CENTER: Omni-Search */}
-        <div className="flex flex-1 max-w-3xl px-4">
+        <div className="flex flex-1 max-w-2xl px-4">
           <div className="relative w-full group">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-              <Search size={18} />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+              <Search size={16} />
             </div>
             <input
               type="text"
-              placeholder="Search for residents, cases, resources, and docs (Press /)"
-              className="h-10 w-full rounded-md bg-muted/60 pl-10 pr-4 text-sm outline-none transition-all focus:bg-background focus:ring-2 focus:ring-primary focus:shadow-md"
+              placeholder="Search..."
+              className="h-9 w-full rounded-[3px] bg-[#1c2b39] pl-9 pr-4 text-sm text-white placeholder:text-white/40 outline-none border border-transparent focus:border-[#ff7a59] transition-all"
             />
           </div>
         </div>
 
         {/* RIGHT: Utilities */}
         <div className="flex items-center gap-1 min-w-[200px] justify-end">
-           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="icon" className="text-muted-foreground">
-                <Bell size={20} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-96" align="end">
-              <DropdownMenuLabel>Recent Activity</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="p-2 max-h-96 overflow-y-auto">
-                <ActivityFeed />
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/activity">View all activity</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+           <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
+             <Sparkles size={18} />
+           </Button>
+           
            <Link href="/dashboard/settings" passHref>
-              <Button variant="ghost" size="icon" className="text-muted-foreground">
-                <Settings size={20} />
+              <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
+                <Settings size={18} />
               </Button>
            </Link>
+
+           <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9 relative">
+                <Bell size={18} />
+                <span className="absolute top-2 right-2 h-2 w-2 bg-[#ff7a59] rounded-full border border-[#2e3f50]"></span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-80 mt-2" align="end">
+              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="p-2 max-h-80 overflow-y-auto text-sm text-muted-foreground text-center py-8">
+                No new notifications
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-9 w-9 rounded-full"
+                className="relative h-8 w-8 rounded-full ml-2 bg-[#ff7a59] hover:bg-[#ff7a59]/90 text-white p-0 border-2 border-[#2e3f50]"
                 id="user-profile-menu"
               >
-                <Avatar className="h-9 w-9">
-                  <AvatarFallback>
+                 <span className="text-xs font-bold">
                     {user?.email?.charAt(0).toUpperCase() ?? 'A'}
-                  </AvatarFallback>
-                </Avatar>
+                 </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuContent className="w-56 mt-2" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">
@@ -166,13 +173,13 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/profile">
                     <User className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
+                    <span>Profile & Preferences</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
+              <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
+                <span>Sign out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -182,40 +189,28 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
       {/* 2. SIDEBAR (Navigation Drawer) */}
       <aside
         id="sidebar-nav"
-        className={`fixed left-0 top-16 h-[calc(100vh-64px)] flex flex-col justify-between border-r bg-background transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? 'w-[280px]' : 'w-0 opacity-0'
+        className={`fixed left-0 top-14 h-[calc(100vh-56px)] flex flex-col justify-between border-r border-[#dfe3eb] bg-[#f5f8fa] transition-all duration-300 ease-in-out ${
+          isSidebarOpen ? 'w-[240px]' : 'w-0 opacity-0 overflow-hidden'
         }`}
       >
-        <div className="overflow-y-auto">
+        <div className="overflow-y-auto h-full">
           <SidebarNav />
         </div>
-        <div className="p-4 border-t">
-          <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground">
-            <HelpCircle className="mr-3 h-5 w-5" />
-            <span className="font-medium text-sm">Help & Support</span>
-          </Button>
-        </div>
+        {/* Optional Sidebar Footer */}
+        {/* <div className="p-4 border-t border-[#dfe3eb] bg-white">
+           <div className="text-xs text-muted-foreground">v1.0.2</div>
+        </div> */}
       </aside>
 
       {/* 3. MAIN CONTENT AREA */}
       <div
-        className={`mt-16 flex flex-col h-[calc(100vh-64px)] w-full bg-muted/40 transition-all duration-300 ${
-          isSidebarOpen ? 'ml-[280px]' : 'ml-0'
+        className={`mt-14 flex flex-col h-[calc(100vh-56px)] w-full bg-white transition-all duration-300 ${
+          isSidebarOpen ? 'ml-[240px]' : 'ml-0'
         }`}
       >
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-8 bg-white">
           {children}
         </main>
-        
-        {/* 4. FOOTER */}
-        <footer className="shrink-0 border-t bg-background px-6 py-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <Link href="#" className="hover:text-primary">Privacy Policy</Link>
-            </div>
-            <span>Version 1.0.0</span>
-          </div>
-        </footer>
       </div>
     </div>
   );

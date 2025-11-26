@@ -48,7 +48,7 @@ export function OfficialCard({
         </Avatar>
         <div>
           <CardTitle className="text-lg">{official.fullName}</CardTitle>
-          <CardDescription>@{official.email.split('@')[0]}</CardDescription>
+          <CardDescription>@{official.email?.split('@')[0] || 'user'}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 flex-grow">
@@ -71,7 +71,7 @@ export function OfficialCard({
          <div className="flex items-start gap-2">
             <Calendar className="h-4 w-4 mt-1 text-muted-foreground" />
             <div>
-                <p className="text-sm font-semibold">{official.termStart} to {official.termEnd}</p>
+                <p className="text-sm font-semibold">{official.termStart || 'N/A'} to {official.termEnd || 'N/A'}</p>
                 <p className="text-xs text-muted-foreground">Term of Service</p>
             </div>
         </div>
@@ -82,7 +82,7 @@ export function OfficialCard({
                  <CheckSquare className="h-4 w-4 text-muted-foreground" />
                  <Badge variant={getSystemRoleBadgeVariant(official.systemRole)}>{official.systemRole}</Badge>
             </div>
-             <p className="text-xs text-muted-foreground">ID: ...{official.userId.slice(-6)}</p>
+             <p className="text-xs text-muted-foreground">ID: ...{official.userId ? official.userId.slice(-6) : '???'}</p>
         </div>
         <div className="flex justify-end gap-2 w-full">
             <EditOfficial 

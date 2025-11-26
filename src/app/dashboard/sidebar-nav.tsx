@@ -4,43 +4,23 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
-  LayoutDashboard,
   Users,
   FileText,
   ShieldAlert,
-  HardHat,
   Settings,
-  Sparkles,
-  ChevronRight,
-  Receipt,
   Home,
   PawPrint,
-  Gavel,
   Megaphone,
-  Calendar,
   Building2,
   Activity,
-  BrainCircuit,
   AlertTriangle,
-  Radio,
-  FileClock,
-  FolderKanban,
-  LineChart,
   BarChart,
   CalendarDays,
-  FileBox,
-  MegaphoneIcon,
   FolderOpen,
   HomeIcon,
-  UserIcon
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
 const NavItem = ({
   icon,
@@ -49,7 +29,6 @@ const NavItem = ({
   pathname,
   getHref,
   active,
-  isSubItem = false,
   className
 }: {
   icon: React.ReactNode;
@@ -58,41 +37,31 @@ const NavItem = ({
   pathname: string;
   getHref: (href: string) => string;
   active?: boolean;
-  isSubItem?: boolean;
   className?: string;
 }) => {
   const isActive = active || pathname.startsWith(href);
 
   return (
-    <Link href={getHref(href)} passHref className="w-full">
+    <Link href={getHref(href)} passHref className="w-full block group relative">
+      {isActive && (
+          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#ff7a59] rounded-r-sm z-10"></div>
+      )}
       <div
         className={cn(
-          "group flex cursor-pointer items-center justify-between py-2 text-[14px] transition-colors duration-150 rounded-md mx-2",
+          "flex cursor-pointer items-center px-5 py-[10px] text-[14px] transition-colors duration-150 ease-in-out border-l-[3px] border-transparent",
           isActive
-            ? "font-semibold text-primary bg-primary/10"
-            : "text-foreground/70 hover:text-primary hover:bg-muted/50",
-          isSubItem ? "pl-11 pr-4" : "px-4",
+            ? "bg-white font-medium text-[#33475b]" // Active state: White background, dark text
+            : "text-[#516f90] hover:bg-[#dce1e5] hover:text-[#2e3f50]", // Inactive: Slate text, light gray hover
           className
         )}
       >
-        <div className="flex items-center gap-3">
-          {!isSubItem && (
-            <span className={cn(
-                "flex h-5 w-5 items-center justify-center transition-colors duration-150",
-                isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
-              )}>
-              {icon}
-            </span>
-          )}
-          {/* If subitem, we might want a smaller icon or just padding, but here we follow the design */}
-          {isSubItem && icon && (
-             <span className={cn(
-                "flex h-4 w-4 items-center justify-center transition-colors duration-150",
-                isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
-              )}>
-              {icon}
-            </span>
-          )}
+        <div className="flex items-center gap-3 w-full">
+          <span className={cn(
+              "flex items-center justify-center transition-colors",
+              isActive ? "text-[#ff7a59]" : "text-[#7c98b6] group-hover:text-[#516f90]"
+            )}>
+            {icon}
+          </span>
           <span>{label}</span>
         </div>
       </div>
@@ -101,9 +70,11 @@ const NavItem = ({
 };
 
 const NavGroupHeader = ({ label }: { label: string }) => (
-    <h4 className="mb-1 px-6 mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        {label}
-    </h4>
+    <div className="px-6 mt-6 mb-2 flex items-center justify-between group cursor-default">
+        <h4 className="text-[11px] font-bold text-[#516f90] uppercase tracking-wider group-hover:text-[#33475b] transition-colors">
+            {label}
+        </h4>
+    </div>
 )
 
 
@@ -118,48 +89,59 @@ export function SidebarNav() {
   };
 
   return (
-    <div className="py-4 space-y-1">
-      <NavItem
-        icon={<Home size={18} />}
-        label="Overview"
-        href="/dashboard"
-        pathname={pathname}
-        getHref={getHref}
-        active={pathname === '/dashboard'}
-      />
+    <div className="py-2 flex flex-col h-full">
+      <div className="space-y-0">
+        <NavItem
+            icon={<Home size={18} />}
+            label="Overview"
+            href="/dashboard"
+            pathname={pathname}
+            getHref={getHref}
+            active={pathname === '/dashboard'}
+        />
+      </div>
       
-      <NavGroupHeader label="Command Center" />
-      <NavItem
-        icon={<ShieldAlert size={18} />}
-        label="Emergency Response"
-        href="/dashboard/emergency"
-        pathname={pathname}
-        getHref={getHref}
-        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-        active={pathname === '/dashboard/emergency' && !pathname.includes('/staffing')}
-      />
-      {/* Temporarily hidden as per request, though typically part of Command Center */}
-      {/* <NavItem icon={<Radio size={18} />} label="Responders" href="/dashboard/emergency/staffing" pathname={pathname} getHref={getHref} /> */}
+      <div className="flex-1 overflow-y-auto">
+          <NavGroupHeader label="Command Center" />
+          <div className="space-y-0">
+            <NavItem
+                icon={<ShieldAlert size={18} />}
+                label="Emergency Response"
+                href="/dashboard/emergency"
+                pathname={pathname}
+                getHref={getHref}
+                className={pathname === '/dashboard/emergency' ? "!text-[#f2545b] !bg-[#fff5f5]" : ""} // Special subtle red for emergency
+                active={pathname === '/dashboard/emergency' && !pathname.includes('/staffing')}
+            />
+          </div>
 
-      <NavGroupHeader label="Constituents" />
-      <NavItem icon={<Users size={18} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<HomeIcon size={18} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<PawPrint size={18} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} />
+          <NavGroupHeader label="Constituents" />
+          <div className="space-y-0">
+            <NavItem icon={<Users size={18} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<HomeIcon size={18} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<PawPrint size={18} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} />
+          </div>
 
-      <NavGroupHeader label="Peace & Order" />
-      <NavItem icon={<AlertTriangle size={18} />} label="Blotter & Incidents" href="/dashboard/blotter" pathname={pathname} getHref={getHref} />
+          <NavGroupHeader label="Peace & Order" />
+          <div className="space-y-0">
+            <NavItem icon={<AlertTriangle size={18} />} label="Blotter & Incidents" href="/dashboard/blotter" pathname={pathname} getHref={getHref} />
+          </div>
 
-      <NavGroupHeader label="Operations" />
-      <NavItem icon={<FileText size={18} />} label="Documents" href="/dashboard/documents" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<Megaphone size={18} />} label="Announcements" href="/dashboard/announcements" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<FolderOpen size={18} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<BarChart size={18} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<CalendarDays size={18} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} />
+          <NavGroupHeader label="Operations" />
+          <div className="space-y-0">
+            <NavItem icon={<FileText size={18} />} label="Documents" href="/dashboard/documents" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Megaphone size={18} />} label="Announcements" href="/dashboard/announcements" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<FolderOpen size={18} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<BarChart size={18} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<CalendarDays size={18} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} />
+          </div>
 
-      <NavGroupHeader label="System" />
-      <NavItem icon={<Activity size={18} />} label="Activity Logs" href="/dashboard/activity" pathname={pathname} getHref={getHref} />
-      <NavItem icon={<Settings size={18} />} label="Settings" href="/dashboard/settings" pathname={pathname} getHref={getHref} />
-
+          <NavGroupHeader label="System" />
+          <div className="space-y-0 mb-6">
+            <NavItem icon={<Activity size={18} />} label="Activity Logs" href="/dashboard/activity" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Settings size={18} />} label="Settings" href="/dashboard/settings" pathname={pathname} getHref={getHref} />
+          </div>
+      </div>
     </div>
   );
 }
