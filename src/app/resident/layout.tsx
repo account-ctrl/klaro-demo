@@ -23,7 +23,7 @@ import { SidebarNav } from "./sidebar-nav";
 
 function InnerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const auth = useAuth();
+  const { auth } = useAuth();
   const { user: firebaseUser, isUserLoading } = useUser();
   const [isSidebarOpen, setSidebarOpen] = useState(true);
 
