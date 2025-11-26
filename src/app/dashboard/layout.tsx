@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   Menu,
   Search,
@@ -13,7 +13,6 @@ import {
   User,
   Bell,
   Settings,
-  HelpCircle,
   LayoutDashboard,
   Plus,
   Gavel,
@@ -33,23 +32,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ActivityFeed } from './activity/activity-feed';
-import { Logo } from '@/components/logo';
 import { Tour } from './tour';
+import { cn } from '@/lib/utils';
 
 const InnerLayout = ({ children }: { children: React.ReactNode }) => {
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  // Default to false (expanded)
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, isUserLoading } = useUser();
   const { auth } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  const getHref = (href: string) => {
-    const params = new URLSearchParams(searchParams);
-    const queryString = params.toString();
-    return queryString ? `${href}?${queryString}` : href;
-  };
 
   const handleLogout = async () => {
     if(auth) {
@@ -81,30 +74,33 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <div className="flex h-screen w-full bg-background text-foreground font-sans">
+    <div className="flex h-screen w-full bg-background text-foreground font-sans overflow-hidden">
       <Tour />
       {/* 1. GLOBAL HEADER (AppBar) */}
-      <header className="fixed top-0 z-30 flex h-14 w-full items-center justify-between bg-[#2e3f50] text-white px-4 shadow-sm border-b border-[#405163]">
+      <header className="fixed top-0 z-50 flex h-14 w-full items-center justify-between bg-[#2e3f50] text-white px-4 shadow-sm border-b border-[#405163]">
         {/* LEFT: Branding & Context */}
-        <div className="flex items-center gap-3 min-w-[250px]">
+        <div className="flex items-center gap-3 transition-all duration-300" style={{ width: isCollapsed ? '80px' : '256px' }}>
           <button
-            onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="rounded-full p-2 hover:bg-white/10 text-white/80"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="rounded-full p-2 hover:bg-white/10 text-white/80 md:hidden"
           >
             <Menu size={20} />
           </button>
 
-          <div className="flex items-center gap-2 font-semibold tracking-tight">
-             <LayoutDashboard className="text-[#ff7a59]" size={20}/>
-             <span>KlaroGov</span>
+          <div className="flex items-center gap-2 font-semibold tracking-tight truncate">
+             <LayoutDashboard className="text-[#ff7a59] shrink-0" size={20}/>
+             {!isCollapsed && <span className="hidden md:inline truncate">KlaroGov</span>}
           </div>
-
-          <div className="h-6 w-[1px] bg-white/20 mx-2 hidden md:block"></div>
-
-          <Button variant="ghost" className="hidden md:flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal">
-            <span>Brgy. San Isidro</span>
-            <ChevronDown size={14} className="opacity-70" />
-          </Button>
+          
+           {!isCollapsed && (
+            <>
+                <div className="h-6 w-[1px] bg-white/20 mx-2 hidden md:block"></div>
+                <Button variant="ghost" className="hidden md:flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal truncate">
+                    <span className="truncate">Brgy. San Isidro</span>
+                    <ChevronDown size={14} className="opacity-70 shrink-0" />
+                </Button>
+            </>
+           )}
         </div>
 
         {/* CENTER: Omni-Search */}
@@ -207,26 +203,22 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
       {/* 2. SIDEBAR (Navigation Drawer) */}
       <aside
         id="sidebar-nav"
-        className={`fixed left-0 top-14 h-[calc(100vh-56px)] flex flex-col justify-between border-r border-[#dfe3eb] bg-[#f5f8fa] transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? 'w-[240px]' : 'w-0 opacity-0 overflow-hidden'
-        }`}
+        className={cn(
+          "fixed left-0 top-14 h-[calc(100vh-56px)] flex flex-col justify-between border-r border-[#dfe3eb] bg-[#f5f8fa] transition-all duration-300 ease-in-out z-40",
+          isCollapsed ? "w-20" : "w-64"
+        )}
       >
-        <div className="overflow-y-auto h-full">
-          <SidebarNav />
-        </div>
-        {/* Optional Sidebar Footer */}
-        {/* <div className="p-4 border-t border-[#dfe3eb] bg-white">
-           <div className="text-xs text-muted-foreground">v1.0.2</div>
-        </div> */}
+        <SidebarNav isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} />
       </aside>
 
       {/* 3. MAIN CONTENT AREA */}
       <div
-        className={`mt-14 flex flex-col h-[calc(100vh-56px)] w-full bg-white transition-all duration-300 ${
-          isSidebarOpen ? 'ml-[240px]' : 'ml-0'
-        }`}
+        className={cn(
+          "mt-14 flex flex-col h-[calc(100vh-56px)] w-full bg-white transition-all duration-300 overflow-hidden",
+          isCollapsed ? "ml-20" : "ml-64"
+        )}
       >
-        <main className="flex-1 overflow-y-auto p-8 bg-white">
+        <main className="flex-1 overflow-y-auto p-8 bg-[#f5f8fa]/50">
           {children}
         </main>
       </div>
