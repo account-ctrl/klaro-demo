@@ -51,6 +51,11 @@ service cloud.firestore {
       }
     }
 
+    // LEGISLATIVE (Ordinances) - Added Rule
+    match /barangays/{barangayId}/ordinances/{ordinanceId} {
+        allow read, write: if isBarangayOfficial();
+    }
+
     // CERTIFICATE TYPES & TEMPLATES can be read by ANY signed in user (for dropdowns).
     // Officials can manage them.
     match /barangays/{barangayId}/certificate_types/{certTypeId} {
@@ -91,12 +96,19 @@ service cloud.firestore {
     }
     
     // SOCIAL WELFARE (Aid Programs & Claims)
-    // Explicitly listing permissions for clarity and debugging
+    // Standardizing to read, write for consistency
     match /barangays/{barangayId}/aid_programs/{programId} {
-        allow create: if isBarangayOfficial();
-        allow read, update, delete: if isBarangayOfficial();
+        allow read, write: if isBarangayOfficial();
     }
     match /barangays/{barangayId}/aid_claims/{claimId} {
+        allow read, write: if isBarangayOfficial();
+    }
+
+    // ASSETS & FLEET - Added Rules
+    match /barangays/{barangayId}/fixed_assets/{assetId} {
+        allow read, write: if isBarangayOfficial();
+    }
+    match /barangays/{barangayId}/asset_bookings/{bookingId} {
         allow read, write: if isBarangayOfficial();
     }
 
