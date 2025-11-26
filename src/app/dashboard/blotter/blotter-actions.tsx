@@ -192,6 +192,9 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
         const selectedCase = [...caseTypes.criminal, ...caseTypes.civil, ...caseTypes.admin, ...caseTypes.referral].find(c => c.value === value);
         setFormData(prev => ({ ...prev, caseType: value, severity: selectedCase?.severity ?? 'Low' }));
         setCaseDescription(selectedCase?.description ?? '');
+    } else if (id === 'relatedOrdinanceId') {
+        // Handle "none" value mapping to empty string
+        setFormData((prev) => ({ ...prev, [id]: value === 'none' ? '' : value }));
     } else {
         setFormData((prev) => ({ ...prev, [id]: value }));
     }
@@ -288,10 +291,10 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
                     {/* NEW: Ordinance Linking */}
                     <div className="space-y-2">
                         <Label htmlFor="relatedOrdinanceId">Related Ordinance Violation (Optional)</Label>
-                         <Select onValueChange={(value) => handleSelectChange('relatedOrdinanceId', value)} value={formData.relatedOrdinanceId}>
+                         <Select onValueChange={(value) => handleSelectChange('relatedOrdinanceId', value)} value={formData.relatedOrdinanceId || 'none'}>
                             <SelectTrigger id="relatedOrdinanceId"><SelectValue placeholder="Select violated ordinance..." /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">-- None --</SelectItem>
+                                <SelectItem value="none">-- None --</SelectItem>
                                 {ordinances?.map(ord => (
                                     <SelectItem key={ord.ordinanceId} value={ord.ordinanceId}>
                                         {ord.ordinanceNumber} - {ord.title}
