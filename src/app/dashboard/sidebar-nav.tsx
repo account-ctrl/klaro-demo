@@ -19,11 +19,13 @@ import {
   FolderOpen,
   HomeIcon,
   ChevronRight,
-  Stethoscope, // Added for eHealth
-  Pill, // Added for Inventory
-  HeartPulse, // Added for Patient Records
-  Baby, // For MCH
-  Microscope // For Epidemiology
+  Stethoscope,
+  Pill,
+  HeartPulse,
+  Baby,
+  Microscope,
+  HandHeart,
+  Scale // Added for Legislative
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -125,11 +127,13 @@ export function SidebarNav() {
             <NavItem icon={<Users size={18} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} />
             <NavItem icon={<HomeIcon size={18} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} />
             <NavItem icon={<PawPrint size={18} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<HandHeart size={18} />} label="Social Welfare" href="/dashboard/social-welfare" pathname={pathname} getHref={getHref} />
           </div>
 
           <NavGroupHeader label="Peace & Order" />
           <div className="space-y-0">
             <NavItem icon={<AlertTriangle size={18} />} label="Blotter & Incidents" href="/dashboard/blotter" pathname={pathname} getHref={getHref} />
+            <NavItem icon={<Scale size={18} />} label="Legislative" href="/dashboard/legislative" pathname={pathname} getHref={getHref} />
           </div>
 
           <NavGroupHeader label="Operations" />
@@ -146,8 +150,6 @@ export function SidebarNav() {
             <NavItem icon={<Pill size={18} />} label="Inventory" href="/dashboard/ehealth/inventory" pathname={pathname} getHref={getHref} />
             <NavItem icon={<Stethoscope size={18} />} label="Dispensing" href="/dashboard/ehealth/dispensing" pathname={pathname} getHref={getHref} />
             <NavItem icon={<HeartPulse size={18} />} label="Patient Records" href="/dashboard/ehealth/patients" pathname={pathname} getHref={getHref} />
-            
-            {/* NEW ADVANCED MODULES */}
             <NavItem icon={<Baby size={18} />} label="Maternal & Child" href="/dashboard/ehealth/mch" pathname={pathname} getHref={getHref} />
             <NavItem icon={<Microscope size={18} />} label="Disease Surveillance" href="/dashboard/ehealth/epidemiology" pathname={pathname} getHref={getHref} />
           </div>

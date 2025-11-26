@@ -58,6 +58,9 @@ export type Resident = {
     occupation?: string;
     contactNumber?: string;
     email?: string;
+    // Additive extension for Social Welfare
+    vulnerability_tags?: ('PWD' | 'Solo Parent' | 'Senior' | 'Indigent')[]; 
+    is_head_of_family?: boolean;
 };
 
 export type User = {
@@ -87,6 +90,7 @@ export type BlotterCase = {
     referralDate?: string; // ISO Date string for date of referral.
     complainantIds: string[];
     respondentIds: string[];
+    relatedOrdinanceId?: string; // Additive extension
 };
 
 export type BlotterParticipant = {
@@ -326,6 +330,51 @@ export type EventAttendee = {
     attendanceStatus?: 'Pending' | 'Present' | 'Absent' | 'Excused';
 };
 
+export type Barangay = {
+  barangayId: string;
+  name: string;
+  city: string;
+  province: string;
+};
+
+// --- NEW TYPES FOR SOCIAL WELFARE ---
+export type AidProgram = {
+  programId: string;
+  title: string;
+  type: 'Cash' | 'Goods';
+  budgetAllocated: number;
+  status: 'Active' | 'Completed' | 'Archived';
+  eligibilityCriteria: string[]; // e.g., ["PWD", "Senior"]
+  startDate: Timestamp;
+  endDate: Timestamp;
+  createdAt: Timestamp;
+};
+
+export type AidClaim = {
+  claimId: string;
+  programId: string;
+  residentId: string;
+  householdId: string;
+  status: 'Pending' | 'Approved' | 'Released' | 'Rejected';
+  amountOrValue: number;
+  dateClaimed: Timestamp;
+  releasedBy?: string;
+  notes?: string;
+};
+
+// --- NEW TYPES FOR LEGISLATIVE (Phase 2) ---
+export type Ordinance = {
+    ordinanceId: string;
+    ordinanceNumber: string; // e.g., "Ord-2024-001"
+    title: string;
+    description: string;
+    category: 'Curfew' | 'Noise' | 'Sanitation' | 'Traffic' | 'General';
+    penaltyAmount: number;
+    pdfUrl?: string; // Link to storage
+    dateEnacted: string; // ISO Date string
+    status: 'Active' | 'Repealed' | 'Pending';
+    createdAt: Timestamp;
+};
 
 // Deprecated old types. To be removed after full refactoring.
 export type Blotter = BlotterCase;

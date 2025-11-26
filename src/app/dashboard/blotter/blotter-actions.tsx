@@ -48,6 +48,7 @@ import { useUser } from '@/firebase';
 import { Switch } from '@/components/ui/switch';
 import { facilities as defaultFacilities } from '@/lib/facilities';
 import { format } from 'date-fns';
+import { useOrdinances } from '@/hooks/use-legislative'; // Import Ordinance Hook
 
 export const generateSummonsHtml = (blotter: BlotterCase, event: ScheduleEvent, complainants: Resident[], respondents: Resident[], venue?: FacilityResource) => {
     const css = `
@@ -136,6 +137,7 @@ type BlotterFormValues = Partial<BlotterCase> & {
     venueResourceId?: string;
     generateSummons?: boolean;
     notifyParticipants?: boolean;
+    relatedOrdinanceId?: string; // ADDED
 };
 
 type BlotterFormProps = {
@@ -150,7 +152,8 @@ type BlotterFormProps = {
 function BlotterForm({ record, onSave, onClose, residents, facilities }: BlotterFormProps) {
     const { toast } = useToast();
     const { user } = useUser();
-    
+    const { data: ordinances } = useOrdinances(); // Fetch Ordinances
+
     const [formData, setFormData] = useState<BlotterFormValues>({
         caseType: record?.caseType ?? '',
         narrative: record?.narrative ?? '',
@@ -165,6 +168,7 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
         venueResourceId: '',
         generateSummons: true,
         notifyParticipants: true,
+        relatedOrdinanceId: record?.relatedOrdinanceId ?? '', // ADDED
     });
     
     const [caseDescription, setCaseDescription] = useState('');
@@ -280,6 +284,23 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
                         </Select>
                         {caseDescription && <p className="text-xs text-muted-foreground mt-1">{caseDescription}</p>}
                     </div>
+
+                    {/* NEW: Ordinance Linking */}
+                    <div className="space-y-2">
+                        <Label htmlFor="relatedOrdinanceId">Related Ordinance Violation (Optional)</Label>
+                         <Select onValueChange={(value) => handleSelectChange('relatedOrdinanceId', value)} value={formData.relatedOrdinanceId}>
+                            <SelectTrigger id="relatedOrdinanceId"><SelectValue placeholder="Select violated ordinance..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">-- None --</SelectItem>
+                                {ordinances?.map(ord => (
+                                    <SelectItem key={ord.ordinanceId} value={ord.ordinanceId}>
+                                        {ord.ordinanceNumber} - {ord.title}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="caseType">Case Specifics / Custom Type</Label>
                         <Input id="caseType" value={formData.caseType} onChange={handleChange} placeholder="Or enter a custom case type" required />
