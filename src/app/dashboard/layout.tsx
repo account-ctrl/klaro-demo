@@ -104,8 +104,8 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
             </div>
 
             {/* CONTEXT: Barangay Selector (Now outside the sidebar width constraint) */}
-            <div className="flex items-center px-4 border-r border-[#405163]/50 h-full shrink-0">
-                <div className="hidden md:flex items-center gap-2">
+            <div className="flex items-center h-full shrink-0 border-r border-[#405163]/50">
+                <div className="hidden md:flex items-center h-full px-4">
                     <Button variant="ghost" className="flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal">
                         <span className="truncate max-w-[150px]">Brgy. San Isidro</span>
                         <ChevronDown size={14} className="opacity-70 shrink-0" />
