@@ -10,35 +10,31 @@ import { Button } from '@/components/ui/button';
 import { Scan, Eye, Loader2, Save, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { addDocumentNonBlocking } from '@/firebase'; // Import for saving
-import { useFirestore, useMemoFirebase } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase'; 
+import { useFirestore } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
-import { BARANGAY_ID } from '@/hooks/use-barangay-data'; // Ensure correct import path or hardcode if needed for this component context
 
-// Fallback if hook not available
 const CURRENT_BARANGAY_ID = 'barangay_san_isidro';
+
+export type ResponderWithRole = ResponderLocation & { role?: string; name?: string };
 
 type EmergencyMapProps = {
     alerts: EmergencyAlert[];
-    responders?: ResponderLocation[];
+    responders?: ResponderWithRole[];
     selectedAlertId: string | null;
     onSelectAlert: (id: string) => void;
 };
 
-// Component to update map view when selected alert changes
 function MapUpdater({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
         if (center) {
-            map.flyTo(center, 16, {
-                duration: 2
-            });
+            map.flyTo(center, 16, { duration: 2 });
         }
     }, [center, map]);
     return null;
 }
 
-// Custom Box Drawer Component
 function BoxDrawer({ active, onBoxDrawn }: { active: boolean, onBoxDrawn: (bounds: L.LatLngBounds) => void }) {
     const map = useMap();
     const startPoint = useRef<L.LatLng | null>(null);
@@ -77,7 +73,7 @@ function BoxDrawer({ active, onBoxDrawn }: { active: boolean, onBoxDrawn: (bound
                 const finalBounds = rectangleRef.current.getBounds();
                 onBoxDrawn(finalBounds);
                 startPoint.current = null;
-                rectangleRef.current.remove(); // Remove visual rect, handled by parent state if needed
+                rectangleRef.current.remove();
                 rectangleRef.current = null;
             }
         };
@@ -97,13 +93,17 @@ function BoxDrawer({ active, onBoxDrawn }: { active: boolean, onBoxDrawn: (bound
     return null;
 }
 
-// Icons
-const createPulseIcon = (isSelected: boolean) => {
+const createPulseIcon = (isSelected: boolean, type: string = 'General') => {
+    let colorClass = 'bg-red-600';
+    if (type === 'Fire') colorClass = 'bg-orange-600';
+    if (type === 'Medical') colorClass = 'bg-rose-600';
+    if (type === 'Crime' || type === 'Security') colorClass = 'bg-blue-800';
+
     return L.divIcon({
         className: '!bg-transparent border-none',
         html: `<div class="relative flex h-6 w-6 items-center justify-center">
-                  ${isSelected ? '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>' : ''}
-                  <span class="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white shadow-md"></span>
+                  ${isSelected ? `<span class="animate-ping absolute inline-flex h-full w-full rounded-full ${colorClass.replace('600','400').replace('800','500')} opacity-75"></span>` : ''}
+                  <span class="relative inline-flex rounded-full h-4 w-4 ${colorClass} border-2 border-white shadow-md"></span>
                 </div>`,
         iconSize: [24, 24],
         iconAnchor: [12, 12],
@@ -111,15 +111,35 @@ const createPulseIcon = (isSelected: boolean) => {
     });
 };
 
-const createResponderIcon = () => {
+const createResponderIcon = (role: string = '') => {
+    let iconHtml = '';
+    let bgColor = 'bg-blue-600';
+    
+    const r = role.toLowerCase();
+    if (r.includes('medic') || r.includes('health') || r.includes('bhw') || r.includes('ambulance')) {
+        bgColor = 'bg-rose-500'; // Medical
+        iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-2.5 h-2.5"><path d="M11 12h4"/><path d="M13 10v4"/></svg>`; // Plus-ish
+    } else if (r.includes('fire')) {
+        bgColor = 'bg-orange-500'; // Fire
+        iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-2.5 h-2.5"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.1.6-3z"/></svg>`; // Flame
+    } else if (r.includes('tanod') || r.includes('police') || r.includes('security') || r.includes('officer')) {
+        bgColor = 'bg-blue-800'; // Police/Tanod
+        iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-2.5 h-2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`; // Shield
+    } else {
+        // Default
+        iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-2.5 h-2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    }
+
     return L.divIcon({
         className: '!bg-transparent border-none',
-        html: `<div class="relative flex h-6 w-6 items-center justify-center">
-                  <span class="relative inline-flex rounded-full h-4 w-4 bg-blue-600 border-2 border-white shadow-md"></span>
+        html: `<div class="relative flex h-7 w-7 items-center justify-center">
+                  <span class="relative inline-flex items-center justify-center rounded-full h-6 w-6 ${bgColor} border-2 border-white shadow-md text-white">
+                    ${iconHtml}
+                  </span>
                 </div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -12]
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14]
     });
 };
 
@@ -135,7 +155,6 @@ const createScannedIcon = () => {
     });
 };
 
-// Types for Scanned Data
 type ScannedPoint = {
     lat: number;
     lng: number;
@@ -153,7 +172,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
     const firestore = useFirestore();
     const { toast } = useToast();
 
-    // State
     const [mapMode, setMapMode] = useState<'monitor' | 'planning'>('monitor');
     const [showScanModal, setShowScanModal] = useState(false);
     const [scanBounds, setScanBounds] = useState<L.LatLngBounds | null>(null);
@@ -180,7 +198,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
         if (!scanBounds) return;
         setIsScanning(true);
 
-        // Construct Overpass QL Query
         const south = scanBounds.getSouth();
         const west = scanBounds.getWest();
         const north = scanBounds.getNorth();
@@ -237,11 +254,8 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
         setIsSaving(true);
 
         try {
-            const batchSize = 50; // Safety limit for non-blocking loop
+            const batchSize = 50; 
             let count = 0;
-            
-            // Use existing non-blocking add function for each
-            // In production, use a batched write logic, but for this UI demo we iterate
             const householdsRef = collection(firestore, `/barangays/${CURRENT_BARANGAY_ID}/households`);
 
             for (const point of scannedPoints.slice(0, batchSize)) {
@@ -258,7 +272,7 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                  count++;
             }
 
-            setScannedPoints([]); // Clear after save
+            setScannedPoints([]);
             toast({ title: "Imported", description: `${count} households added to registry.` });
 
         } catch (e) {
@@ -274,7 +288,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
 
     return (
         <div className="relative h-full w-full">
-            {/* Map Controls */}
             <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-end">
                 <div className="bg-white/90 backdrop-blur p-1 rounded-md shadow-md border flex gap-1">
                     <Button 
@@ -295,7 +308,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                     </Button>
                 </div>
                 
-                {/* Scanned Data Actions */}
                 {scannedPoints.length > 0 && (
                     <div className="bg-white/90 backdrop-blur p-2 rounded-md shadow-md border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 w-48">
                         <div className="text-xs font-semibold text-muted-foreground text-center">
@@ -330,20 +342,22 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 />
                 <MapUpdater center={selectedAlert ? [selectedAlert.latitude, selectedAlert.longitude] : null} />
                 
-                {/* Monitor Mode: Alerts & Responders */}
                 {mapMode === 'monitor' && (
                     <>
                         {alerts.map((alert, index) => (
                             <Marker 
                                 key={alert.alertId || `alert-${index}`} 
                                 position={[alert.latitude, alert.longitude]}
-                                icon={createPulseIcon(alert.alertId === selectedAlertId)}
+                                icon={createPulseIcon(alert.alertId === selectedAlertId, alert.category)}
                                 eventHandlers={{ click: () => onSelectAlert(alert.alertId) }}
                             >
                                 <Popup>
                                     <div className="font-sans text-sm">
                                         <h3 className="font-bold">{alert.residentName}</h3>
-                                        <p className="text-xs text-gray-600 m-0">{alert.status}</p>
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <span className="text-xs font-semibold px-1.5 py-0.5 bg-gray-100 rounded border">{alert.category || 'Unspecified'}</span>
+                                            <span className="text-xs text-gray-600">{alert.status}</span>
+                                        </div>
                                     </div>
                                 </Popup>
                             </Marker>
@@ -353,12 +367,13 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                             <Marker
                                 key={responder.userId || `responder-${index}`}
                                 position={[responder.latitude, responder.longitude]}
-                                icon={createResponderIcon()}
+                                icon={createResponderIcon(responder.role)}
                             >
                                 <Popup>
                                     <div className="font-sans text-sm">
-                                        <h3 className="font-bold">Responder</h3>
-                                        <p className="text-xs text-gray-600 m-0">{responder.status}</p>
+                                        <h3 className="font-bold">{responder.name || 'Responder'}</h3>
+                                        <p className="text-xs text-gray-500">{responder.role}</p>
+                                        <p className="text-xs text-gray-600 mt-1 status-badge">{responder.status}</p>
                                     </div>
                                 </Popup>
                             </Marker>
@@ -366,7 +381,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                     </>
                 )}
 
-                {/* Scanned Points (Gray Markers) */}
                 {scannedPoints.map((point, index) => (
                     <Marker 
                         key={`scan-${index}`} 
@@ -382,7 +396,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                     </Marker>
                 ))}
 
-                {/* Scan Zone Visualization */}
                 {scanBounds && !isScanning && (
                    <Rectangle bounds={scanBounds} pathOptions={{ color: 'gray', weight: 1, fillOpacity: 0.1, dashArray: '5, 5' }} />
                 )}
@@ -390,7 +403,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 <BoxDrawer active={mapMode === 'planning'} onBoxDrawn={handleBoxDrawn} />
             </MapContainer>
 
-            {/* Scan Confirmation Modal */}
             <Dialog open={showScanModal} onOpenChange={setShowScanModal}>
                 <DialogContent>
                     <DialogHeader>
@@ -400,7 +412,6 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4 text-sm text-muted-foreground bg-muted p-3 rounded">
-                         {/* Safe area calculation or fallback */}
                         <p>Selected Area: <strong>Custom Zone</strong></p>
                         <p className="mt-1">Coordinates: {scanBounds?.getNorthWest().lat.toFixed(4)}, {scanBounds?.getNorthWest().lng.toFixed(4)}</p>
                     </div>
