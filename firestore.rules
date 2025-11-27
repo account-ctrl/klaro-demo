@@ -4,13 +4,6 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ------------------------------------------------------------------------
-    // DEBUG: GLOBAL ALLOW ALL (TEMPORARY DIAGNOSTIC)
-    // ------------------------------------------------------------------------
-    match /{document=**} {
-      allow read, write: if true;
-    }
-
-    // ------------------------------------------------------------------------
     // Helper Functions
     // ------------------------------------------------------------------------
     function isSignedIn() {
@@ -33,6 +26,11 @@ service cloud.firestore {
       allow list, create, delete: if isBarangayOfficial();
       // Allow update if the user is an official OR if they are the resident and not changing their ID
       allow update: if isBarangayOfficial() || (request.auth.uid == residentId && request.resource.data.residentId == resource.data.residentId);
+    }
+
+    // DEBUG: Explicitly placing this here to verify rule ordering/syntax
+    match /barangays/{barangayId}/aid_programs/{docId} {
+        allow read, write: if true;
     }
 
     // HOUSEHOLDS & PUROKS can be managed by officials.
@@ -102,11 +100,7 @@ service cloud.firestore {
         allow read, write: if isBarangayOfficial();
     }
     
-    // SOCIAL WELFARE (Aid Programs & Claims)
-    // NOTE: Global allow-all rule above should cover this now.
-    match /barangays/{barangayId}/aid_programs/{programId} {
-        allow read, write: if true;
-    }
+    // SOCIAL WELFARE (Aid Claims)
     match /barangays/{barangayId}/aid_claims/{claimId} {
         allow read, write: if isBarangayOfficial();
     }
