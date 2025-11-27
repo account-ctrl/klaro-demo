@@ -96,7 +96,7 @@ service cloud.firestore {
     }
     
     // SOCIAL WELFARE (Aid Programs & Claims)
-    // USING RECURSIVE WILDCARD again because simple matching might be failing on 'add' path logic
+    // ADMIN ACCESS: Fully open for now as requested
     match /barangays/{barangayId}/aid_programs/{document=**} {
         allow read, write: if true;
     }
