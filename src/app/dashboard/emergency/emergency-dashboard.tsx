@@ -39,6 +39,7 @@ import { useRouter } from "next/navigation";
 import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
 import { WeatherHeader } from "./components/weather-header";
 import { MapControls } from "./components/map-controls";
+import { HouseholdSearch } from "./components/household-search";
 
 // Dynamically import the Map component to avoid SSR issues with Leaflet
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
@@ -416,6 +417,9 @@ export function EmergencyDashboard() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // State for manual search selection
+  const [searchedLocation, setSearchedLocation] = useState<{lat: number, lng: number} | null>(null);
 
   // Use hooks
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
@@ -448,6 +452,17 @@ export function EmergencyDashboard() {
   const handleAlertSelect = (id: string) => {
       setSelectedAlertId(id);
       setIsModalOpen(true);
+      // Reset search if an alert is selected so map focuses on alert
+      setSearchedLocation(null);
+  };
+
+  const handleSearchSelect = (location: { lat: number; lng: number; label: string; type: 'resident' | 'household' }) => {
+      setSearchedLocation({ lat: location.lat, lng: location.lng });
+      // Optionally show a toast or some feedback
+      toast({
+          title: "Location Found",
+          description: `Focusing map on ${location.label}`,
+      });
   };
 
   const handleCloseModal = () => {
@@ -569,6 +584,7 @@ export function EmergencyDashboard() {
                 responders={responders ?? []}
                 selectedAlertId={selectedAlertId}
                 onSelectAlert={handleAlertSelect}
+                searchedLocation={searchedLocation} // Pass the searched location
             />
              {/* Gradient Overlay for better text readability at edges */}
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
@@ -594,6 +610,11 @@ export function EmergencyDashboard() {
             <div className="pointer-events-auto">
                  <AssetList />
             </div>
+        </div>
+
+        {/* Center Bottom: Household Search (Z-Index 50) */}
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-auto">
+            <HouseholdSearch onSelectLocation={handleSearchSelect} />
         </div>
 
         {/* Bottom Left: Controls (Z-Index 10) */}

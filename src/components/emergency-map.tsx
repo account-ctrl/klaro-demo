@@ -23,15 +23,16 @@ type EmergencyMapProps = {
     responders?: ResponderWithRole[];
     selectedAlertId: string | null;
     onSelectAlert: (id: string) => void;
+    searchedLocation?: { lat: number; lng: number } | null;
 };
 
-function MapUpdater({ center }: { center: [number, number] | null }) {
+function MapUpdater({ center, zoom = 16 }: { center: [number, number] | null; zoom?: number }) {
     const map = useMap();
     useEffect(() => {
         if (center) {
-            map.flyTo(center, 16, { duration: 2 });
+            map.flyTo(center, zoom, { duration: 2 });
         }
-    }, [center, map]);
+    }, [center, map, zoom]);
     return null;
 }
 
@@ -155,6 +156,19 @@ const createScannedIcon = () => {
     });
 };
 
+const createSearchMarkerIcon = () => {
+    return L.divIcon({
+        className: '!bg-transparent border-none',
+        html: `<div class="relative flex h-8 w-8 items-center justify-center">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white shadow-md"></span>
+                </div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16]
+    });
+};
+
 type ScannedPoint = {
     lat: number;
     lng: number;
@@ -165,12 +179,20 @@ type ScannedPoint = {
 // For simplicity, we'll stick to OSM but apply a dark mode CSS filter to the tile layer.
 const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)';
 
-export default function EmergencyMap({ alerts, responders = [], selectedAlertId, onSelectAlert }: EmergencyMapProps) {
+export default function EmergencyMap({ alerts, responders = [], selectedAlertId, onSelectAlert, searchedLocation }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = alerts.find(a => a.alertId === selectedAlertId);
-    const initialCenter = selectedAlert 
-        ? [selectedAlert.latitude, selectedAlert.longitude] as [number, number] 
-        : (alerts.length > 0 ? [alerts[0].latitude, alerts[0].longitude] as [number, number] : defaultCenter);
+    
+    // Determine the initial center
+    // Priority: Searched Location > Selected Alert > First Alert > Default
+    let centerToUse: [number, number] = defaultCenter;
+    if (searchedLocation) {
+        centerToUse = [searchedLocation.lat, searchedLocation.lng];
+    } else if (selectedAlert) {
+        centerToUse = [selectedAlert.latitude, selectedAlert.longitude];
+    } else if (alerts.length > 0) {
+        centerToUse = [alerts[0].latitude, alerts[0].longitude];
+    }
 
     const mapRef = useRef<L.Map | null>(null);
     const firestore = useFirestore();
@@ -336,7 +358,7 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
 
             <MapContainer 
                 ref={mapRef}
-                center={initialCenter} 
+                center={centerToUse} 
                 zoom={16} 
                 zoomControl={false} // Disable default zoom controls
                 style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0, background: '#09090b' }}
@@ -361,7 +383,11 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                     }
                 `}</style>
 
-                <MapUpdater center={selectedAlert ? [selectedAlert.latitude, selectedAlert.longitude] : null} />
+                {/* Updater for map movement */}
+                <MapUpdater 
+                    center={searchedLocation ? [searchedLocation.lat, searchedLocation.lng] : (selectedAlert ? [selectedAlert.latitude, selectedAlert.longitude] : null)} 
+                    zoom={searchedLocation ? 18 : 16}
+                />
                 
                 {mapMode === 'monitor' && (
                     <>
@@ -399,6 +425,20 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                                 </Popup>
                             </Marker>
                         ))}
+
+                        {searchedLocation && (
+                             <Marker 
+                                key="searched-location"
+                                position={[searchedLocation.lat, searchedLocation.lng]}
+                                icon={createSearchMarkerIcon()}
+                            >
+                                <Popup>
+                                    <div className="font-sans text-sm">
+                                        <strong className="text-emerald-400">Selected Location</strong>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        )}
                     </>
                 )}
 
