@@ -3,8 +3,8 @@
 
 import { useState } from 'react';
 import { useAidPrograms, useSocialWelfareRef } from '@/hooks/use-social-welfare';
-import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { serverTimestamp, Timestamp } from 'firebase/firestore';
+import { setDocumentNonBlocking } from '@/firebase';
+import { serverTimestamp, Timestamp, doc } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,8 +36,6 @@ export default function SocialWelfarePage() {
             return;
         }
 
-        console.log("Attempting to write to:", programsRef.path);
-
         // Validation
         if (!newProgram.title || !newProgram.budgetAllocated || !newProgram.startDate || !newProgram.endDate) {
             toast({ variant: "destructive", title: "Missing Fields", description: "Please fill in all required fields." });
@@ -59,7 +57,15 @@ export default function SocialWelfarePage() {
         }
         
         try {
-            const docRef = await addDocumentNonBlocking(programsRef, {
+            // Generate ID manually to match Residents module pattern
+            const programId = `AID-${Date.now()}`;
+            // Construct the document reference using the collection ref
+            const docRef = doc(programsRef, programId);
+
+            console.log("Creating program at path:", docRef.path);
+
+            const programData = {
+                programId: programId, // Include ID in the document
                 title: newProgram.title,
                 type: newProgram.type,
                 budgetAllocated: budget,
@@ -68,14 +74,15 @@ export default function SocialWelfarePage() {
                 eligibilityCriteria: newProgram.eligibilityCriteria.split(',').map(s => s.trim()).filter(s => s !== ''),
                 status: 'Active',
                 createdAt: serverTimestamp()
-            });
+            };
+
+            // Use setDocumentNonBlocking instead of addDocumentNonBlocking
+            setDocumentNonBlocking(docRef, programData, { merge: true });
             
-            if (docRef) {
-                updateDocumentNonBlocking(docRef, { programId: docRef.id });
-                toast({ title: "Program Created", description: "New aid program has been added." });
-                setIsAddOpen(false);
-                setNewProgram({ title: '', type: 'Cash', budgetAllocated: '', startDate: '', endDate: '', eligibilityCriteria: '' });
-            }
+            toast({ title: "Program Created", description: "New aid program has been added." });
+            setIsAddOpen(false);
+            setNewProgram({ title: '', type: 'Cash', budgetAllocated: '', startDate: '', endDate: '', eligibilityCriteria: '' });
+            
         } catch (error) {
              console.error("Failed to create program:", error);
              toast({ variant: "destructive", title: "Error", description: "Failed to create program. Please try again." });
