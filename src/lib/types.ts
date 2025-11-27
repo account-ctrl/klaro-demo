@@ -63,7 +63,7 @@ export type Resident = {
     contactNumber?: string;
     email?: string;
     // Additive extension for Social Welfare
-    vulnerability_tags?: ('PWD' | 'Solo Parent' | 'Senior' | 'Indigent')[]; 
+    vulnerability_tags?: ('PWD' | 'Solo Parent' | 'Senior' | 'Indigent' | 'Pregnant')[]; 
     is_head_of_family?: boolean;
 };
 
