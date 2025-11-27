@@ -53,24 +53,28 @@ export default function SocialWelfarePage() {
              return;
         }
         
-        const docRef = await addDocumentNonBlocking(programsRef, {
-            title: newProgram.title,
-            type: newProgram.type,
-            budgetAllocated: budget,
-            startDate: Timestamp.fromDate(start),
-            endDate: Timestamp.fromDate(end),
-            eligibilityCriteria: newProgram.eligibilityCriteria.split(',').map(s => s.trim()).filter(s => s !== ''),
-            status: 'Active',
-            createdAt: serverTimestamp()
-        });
-        
-        if (docRef) {
-            updateDocumentNonBlocking(docRef, { programId: docRef.id });
+        try {
+            const docRef = await addDocumentNonBlocking(programsRef, {
+                title: newProgram.title,
+                type: newProgram.type,
+                budgetAllocated: budget,
+                startDate: Timestamp.fromDate(start),
+                endDate: Timestamp.fromDate(end),
+                eligibilityCriteria: newProgram.eligibilityCriteria.split(',').map(s => s.trim()).filter(s => s !== ''),
+                status: 'Active',
+                createdAt: serverTimestamp()
+            });
+            
+            if (docRef) {
+                updateDocumentNonBlocking(docRef, { programId: docRef.id });
+                toast({ title: "Program Created", description: "New aid program has been added." });
+                setIsAddOpen(false);
+                setNewProgram({ title: '', type: 'Cash', budgetAllocated: '', startDate: '', endDate: '', eligibilityCriteria: '' });
+            }
+        } catch (error) {
+             console.error("Failed to create program:", error);
+             toast({ variant: "destructive", title: "Error", description: "Failed to create program. Please try again." });
         }
-        
-        toast({ title: "Program Created", description: "New aid program has been added." });
-        setIsAddOpen(false);
-        setNewProgram({ title: '', type: 'Cash', budgetAllocated: '', startDate: '', endDate: '', eligibilityCriteria: '' });
     };
 
     return (
