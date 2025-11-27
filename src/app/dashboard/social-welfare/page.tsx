@@ -31,7 +31,12 @@ export default function SocialWelfarePage() {
     });
 
     const handleCreateProgram = async () => {
-        if (!programsRef) return;
+        if (!programsRef) {
+            console.error("Programs reference is null!");
+            return;
+        }
+
+        console.log("Attempting to write to:", programsRef.path);
 
         // Validation
         if (!newProgram.title || !newProgram.budgetAllocated || !newProgram.startDate || !newProgram.endDate) {
