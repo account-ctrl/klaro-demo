@@ -28,8 +28,8 @@ service cloud.firestore {
       allow update: if isBarangayOfficial() || (request.auth.uid == residentId && request.resource.data.residentId == resource.data.residentId);
     }
 
-    // DEBUG: Explicitly placing this here to verify rule ordering/syntax
-    match /barangays/{barangayId}/aid_programs/{docId} {
+    // DEBUG: HARDCODED PATH to rule out wildcard issues
+    match /barangays/barangay_san_isidro/aid_programs/{docId} {
         allow read, write: if true;
     }
 
