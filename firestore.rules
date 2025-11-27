@@ -96,8 +96,8 @@ service cloud.firestore {
     }
     
     // SOCIAL WELFARE (Aid Programs & Claims)
-    // USING RECURSIVE WILDCARD to ensure no path matching issues
-    match /barangays/{barangayId}/aid_programs/{document=**} {
+    // Reverted to standard wildcard to match other working collections
+    match /barangays/{barangayId}/aid_programs/{programId} {
         allow read, write: if true;
     }
     match /barangays/{barangayId}/aid_claims/{claimId} {
