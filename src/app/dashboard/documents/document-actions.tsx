@@ -179,8 +179,9 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
       <form id="doc-request-form" onSubmit={handleSubmit} className="space-y-4">
         <ScrollArea className="h-[60vh] p-4">
           <div className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
                 <Label htmlFor="residentId">Resident Name</Label>
+                <div className="relative z-50">
                 <Combobox
                     options={residentOptions}
                     value={formData.residentId}
@@ -188,6 +189,7 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
                     placeholder="Select a resident..."
                     searchPlaceholder="Search resident..."
                   />
+                  </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -244,8 +246,9 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
                 </div>
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
                 <Label htmlFor="processedByUserId">Issued By (Official)</Label>
+                <div className="relative z-40">
                  <Combobox
                     options={officialOptions}
                     value={formData.processedByUserId || ''}
@@ -253,6 +256,7 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
                     placeholder="Select issuing official..."
                     searchPlaceholder="Search official..."
                   />
+                  </div>
             </div>
 
             {formData.status === 'Denied' && (
