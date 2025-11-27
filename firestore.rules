@@ -4,6 +4,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ------------------------------------------------------------------------
+    // DEBUG: GLOBAL ALLOW ALL (TEMPORARY DIAGNOSTIC)
+    // ------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // ------------------------------------------------------------------------
     // Helper Functions
     // ------------------------------------------------------------------------
     function isSignedIn() {
@@ -96,7 +103,7 @@ service cloud.firestore {
     }
     
     // SOCIAL WELFARE (Aid Programs & Claims)
-    // Reverted to simple wildcard for maximum compatibility with client logic
+    // NOTE: Global allow-all rule above should cover this now.
     match /barangays/{barangayId}/aid_programs/{programId} {
         allow read, write: if true;
     }
