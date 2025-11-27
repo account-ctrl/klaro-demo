@@ -3,8 +3,8 @@
 
 import { useState } from 'react';
 import { useAidPrograms, useSocialWelfareRef } from '@/hooks/use-social-welfare';
-import { addDocumentNonBlocking } from '@/firebase';
-import { serverTimestamp } from 'firebase/firestore';
+import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ export default function SocialWelfarePage() {
         eligibilityCriteria: ''
     });
 
-    const handleCreateProgram = () => {
+    const handleCreateProgram = async () => {
         if (!programsRef) return;
 
         // Validation
@@ -53,16 +53,20 @@ export default function SocialWelfarePage() {
              return;
         }
         
-        addDocumentNonBlocking(programsRef, {
+        const docRef = await addDocumentNonBlocking(programsRef, {
             title: newProgram.title,
             type: newProgram.type,
             budgetAllocated: budget,
-            startDate: start,
-            endDate: end,
+            startDate: Timestamp.fromDate(start),
+            endDate: Timestamp.fromDate(end),
             eligibilityCriteria: newProgram.eligibilityCriteria.split(',').map(s => s.trim()).filter(s => s !== ''),
             status: 'Active',
             createdAt: serverTimestamp()
         });
+        
+        if (docRef) {
+            updateDocumentNonBlocking(docRef, { programId: docRef.id });
+        }
         
         toast({ title: "Program Created", description: "New aid program has been added." });
         setIsAddOpen(false);

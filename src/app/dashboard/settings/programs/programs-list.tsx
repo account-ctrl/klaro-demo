@@ -53,11 +53,24 @@ export default function ProgramsList() {
     const handleAdd = (newProgram: ProgramFormValues) => {
         if (!programsCollectionRef || !user) return;
         
-        addDocumentNonBlocking(programsCollectionRef, newProgram)
+        // Ensure newProgram data is clean and matches Types
+        const payload = {
+            name: newProgram.name,
+            category: newProgram.category,
+            description: newProgram.description || '',
+            // Optional: You might want to add createdAt here if not handled by server rules or if you want consistent client sorting immediately
+            // createdAt: serverTimestamp() 
+        };
+        
+        addDocumentNonBlocking(programsCollectionRef, payload)
             .then(docRef => {
                 if (docRef) {
                     updateDocumentNonBlocking(docRef, { programId: docRef.id });
                 }
+            })
+            .catch(error => {
+                console.error("Error adding program:", error);
+                toast({ variant: "destructive", title: "Error", description: "Failed to create program." });
             });
 
         toast({ title: "Program Added", description: `${newProgram.name} has been created.`});
@@ -67,14 +80,22 @@ export default function ProgramsList() {
         if (!firestore || !updatedProgram.programId) return;
         const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/programs/${updatedProgram.programId}`);
         const { programId, ...dataToUpdate } = updatedProgram;
-        updateDocumentNonBlocking(docRef, { ...dataToUpdate });
+        updateDocumentNonBlocking(docRef, { ...dataToUpdate })
+            .catch(error => {
+                console.error("Error updating program:", error);
+                toast({ variant: "destructive", title: "Error", description: "Failed to update program." });
+            });
         toast({ title: "Program Updated", description: `The record for ${updatedProgram.name} has been updated.`});
     };
 
     const handleDelete = (id: string) => {
         if (!firestore) return;
         const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/programs/${id}`);
-        deleteDocumentNonBlocking(docRef);
+        deleteDocumentNonBlocking(docRef)
+            .catch(error => {
+                console.error("Error deleting program:", error);
+                toast({ variant: "destructive", title: "Error", description: "Failed to delete program." });
+            });
         toast({ variant: "destructive", title: "Program Deleted", description: "The program has been permanently deleted." });
     };
     
@@ -128,23 +149,27 @@ export default function ProgramsList() {
             viewMode === 'card' ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {programs.map((program) => (
-                        <Card key={program.programId}>
+                        <Card key={program.programId} className="flex flex-col">
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <CardTitle className="flex items-center gap-2">
                                         <FolderKanban className="h-5 w-5 text-primary"/>
                                         {program.name}
                                     </CardTitle>
-                                    <Badge variant="secondary">{program.category}</Badge>
+                                    <Badge variant="secondary" className="mt-1">{program.category}</Badge>
                                 </div>
-                                <CardDescription>{program.description || 'No description provided.'}</CardDescription>
+                                <CardDescription className="line-clamp-3">{program.description || 'No description provided.'}</CardDescription>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="flex-grow">
                                 <p className="text-sm text-muted-foreground">ID: <span className="font-mono text-xs">{program.programId}</span></p>
                             </CardContent>
-                            <CardFooter className="flex flex-col gap-2 items-stretch">
-                                <EditProgram record={program} onEdit={handleEdit} />
-                                <DeleteProgram recordId={program.programId} onDelete={handleDelete} />
+                            <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-auto">
+                                <div className="flex w-full gap-2">
+                                    <div className="flex-1">
+                                        <EditProgram record={program} onEdit={handleEdit} />
+                                    </div>
+                                    <DeleteProgram recordId={program.programId} onDelete={handleDelete} />
+                                </div>
                             </CardFooter>
                         </Card>
                     ))}
@@ -173,14 +198,14 @@ export default function ProgramsList() {
                                     <TableCell className="max-w-xs truncate">{program.description}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-2">
+                                            {/* Note: EditProgram now renders a trigger button internally */}
                                             <EditProgram 
                                                 record={program} 
                                                 onEdit={handleEdit} 
-                                                trigger={<Button variant="ghost" size="icon"><FilePen className="h-4 w-4"/></Button>}
                                             />
                                             <AlertDialog>
                                               <AlertDialogTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="text-destructive">
+                                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10">
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                               </AlertDialogTrigger>
@@ -193,7 +218,7 @@ export default function ProgramsList() {
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
                                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                  <AlertDialogAction onClick={() => handleDelete(program.programId)} className="bg-destructive">
+                                                  <AlertDialogAction onClick={() => handleDelete(program.programId)} className="bg-destructive hover:bg-destructive/90">
                                                     Delete
                                                   </AlertDialogAction>
                                                 </AlertDialogFooter>

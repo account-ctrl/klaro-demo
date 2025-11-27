@@ -96,7 +96,7 @@ service cloud.firestore {
     }
     
     // SOCIAL WELFARE (Aid Programs & Claims)
-    // Standardizing to read, write for consistency
+    // The collection path was likely the issue in the permission error, ensuring it matches exactly
     match /barangays/{barangayId}/aid_programs/{programId} {
         allow read, write: if isBarangayOfficial();
     }
@@ -139,7 +139,7 @@ service cloud.firestore {
     match /barangays/{barangayId}/emergency_alerts/{alertId} {
       allow read, write: if isSignedIn();
     }
-     match /users/{userId}/responder_locations/{locationId} {
+     match /barangays/{barangayId}/responder_locations/{locationId} {
         allow read, write: if isBarangayOfficial();
      }
 
