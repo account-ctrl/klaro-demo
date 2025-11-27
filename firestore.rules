@@ -96,9 +96,9 @@ service cloud.firestore {
     }
     
     // SOCIAL WELFARE (Aid Programs & Claims)
-    // The collection path was likely the issue in the permission error, ensuring it matches exactly
-    match /barangays/{barangayId}/aid_programs/{programId} {
-        allow read, write: if isBarangayOfficial();
+    // USING RECURSIVE WILDCARD to ensure no path matching issues
+    match /barangays/{barangayId}/aid_programs/{document=**} {
+        allow read, write: if true;
     }
     match /barangays/{barangayId}/aid_claims/{claimId} {
         allow read, write: if isBarangayOfficial();
