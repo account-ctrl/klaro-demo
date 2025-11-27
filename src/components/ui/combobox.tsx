@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -27,20 +27,18 @@ type ComboboxProps = {
     placeholder?: string;
     searchPlaceholder?: string;
     noResultsMessage?: string;
+    className?: string;
 }
 
-export function Combobox({ options, value, onChange, placeholder = "Select option...", searchPlaceholder = "Search...", noResultsMessage = "No results found." }: ComboboxProps) {
+export function Combobox({ options, value, onChange, placeholder = "Select option...", searchPlaceholder = "Search...", noResultsMessage = "No results found.", className }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
-  // Memoize filtered options to avoid performance issues on large lists, although Command handles this internally, 
-  // sometimes passing `value` to CommandItem that doesn't match the label can be tricky if not handled right.
-  // The Shadcn implementation usually relies on the `value` prop of CommandItem being the search key.
-  // BUT: CommandItem value usually defaults to the text content if not provided, or it lowercases it.
-  // The issue here is likely that `option.value` (the ID) is being passed as the `value` prop to `CommandItem`, 
-  // but the USER searches for the `label` (the Name). 
-  // cmdk filters based on the `value` prop by default.
-  // So if value="res_123" and label="John Doe", searching "John" fails because "res_123" doesn't contain "John".
-  
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange("");
+    setOpen(false);
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
@@ -48,17 +46,35 @@ export function Combobox({ options, value, onChange, placeholder = "Select optio
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className={cn("w-full justify-between", className)}
         >
-          {value
-            ? options.find((option) => option.value === value)?.label
-            : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <span className="truncate flex-1 text-left">
+            {value
+                ? options.find((option) => option.value === value)?.label
+                : placeholder}
+          </span>
+          
+          {value ? (
+             <div 
+                role="button"
+                tabIndex={0}
+                className="ml-2 h-4 w-4 shrink-0 opacity-50 hover:opacity-100 z-10 cursor-pointer flex items-center justify-center rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                onClick={handleClear}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        handleClear(e as any);
+                    }
+                }}
+             >
+                <X className="h-3 w-3" />
+             </div>
+          ) : (
+             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 pointer-events-auto" align="start">
+      <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[300px] p-0 pointer-events-auto" align="start">
         <Command filter={(value, search) => {
-             // Custom filter to allow searching by label even if value is an ID
              const option = options.find(o => o.value === value);
              if (option?.label.toLowerCase().includes(search.toLowerCase())) return 1;
              return 0;
@@ -70,14 +86,12 @@ export function Combobox({ options, value, onChange, placeholder = "Select optio
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.value} // This is the ID
+                  value={option.value}
                   onSelect={(currentValue) => {
-                    // currentValue here comes from the CommandItem value prop (or text content if not set)
-                    // Since we set value={option.value}, currentValue will be the ID.
-                    onChange(currentValue)
+                    onChange(currentValue === value ? "" : currentValue)
                     setOpen(false)
                   }}
-                  keywords={[option.label]} // Add keywords to help with search if default filter is used (though we use custom filter above)
+                  keywords={[option.label]} 
                 >
                   <Check
                     className={cn(
