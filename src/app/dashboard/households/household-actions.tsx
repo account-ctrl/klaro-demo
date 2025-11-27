@@ -336,7 +336,7 @@ export function EditHousehold({ record, onEdit, residents, onMemberChange }: { r
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full">
+        <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full" onClick={(e) => e.stopPropagation()}>
             <Eye className="mr-2 h-4 w-4" />
             <span>View / Edit</span>
         </div>
@@ -373,7 +373,7 @@ export function DeleteHousehold({ recordId, onDelete }: { recordId: string; onDe
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-         <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-destructive/10 focus:text-destructive w-full">
+         <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-destructive/10 focus:text-destructive w-full" onClick={(e) => e.stopPropagation()}>
           <Trash2 className="mr-2 h-4 w-4" />
            <span>Delete</span>
         </div>
@@ -386,8 +386,8 @@ export function DeleteHousehold({ recordId, onDelete }: { recordId: string; onDe
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={(e) => { e.stopPropagation(); handleDelete(); }} className="bg-destructive hover:bg-destructive/90">
             Delete
           </AlertDialogAction>
         </AlertDialogFooter>

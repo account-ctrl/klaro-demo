@@ -30,6 +30,7 @@ import {
 import { MapPin, Search, Scan, Loader2, UserPlus, Save, X, Trash2, UserMinus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import pLimit from 'p-limit';
+import { HouseholdMembersSheet } from '../households/household-members-sheet';
 
 // --- Custom Map Components ---
 // ... (BoxDrawer, MapUpdater, and Icons remain the same) ...
@@ -145,6 +146,7 @@ export default function MappedHouseholdsPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState<'All' | 'Verified' | 'Unverified'>('All');
     const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
     
     // Map State
     const [mapMode, setMapMode] = useState<'view' | 'scan'>('view');
@@ -349,6 +351,11 @@ export default function MappedHouseholdsPage() {
             setIsDeleting(false);
         }
     };
+    
+    const openSheet = (id: string) => {
+        setSelectedHouseholdId(id);
+        setIsSheetOpen(true);
+    }
 
     return (
         <div className="flex h-[calc(100vh-6rem)] gap-0 border-t">
@@ -414,7 +421,7 @@ export default function MappedHouseholdsPage() {
                             <div 
                                 key={h.id}
                                 className={`p-4 cursor-pointer hover:bg-muted transition-colors group ${selectedHouseholdId === h.householdId ? 'bg-muted' : ''}`}
-                                onClick={() => setSelectedHouseholdId(h.householdId)}
+                                onClick={() => openSheet(h.householdId)}
                             >
                                 <div className="flex justify-between items-start mb-1">
                                     <p className="font-semibold text-sm">{h.name || h.householdId}</p>
@@ -438,7 +445,7 @@ export default function MappedHouseholdsPage() {
                                 </div>
                                 <p className="text-xs text-muted-foreground truncate">{h.address}</p>
                                 {selectedHouseholdId === h.householdId && (
-                                    <div className="mt-3 pt-3 border-t flex gap-2">
+                                    <div className="mt-3 pt-3 border-t flex gap-2" onClick={e => e.stopPropagation()}>
                                         <Button size="sm" variant="outline" className="w-full h-7 text-xs flex-1" onClick={() => setIsAssignOpen(true)}>
                                             <UserPlus className="w-3 h-3 mr-1"/> {h.household_head_id ? 'Change Resident' : 'Assign Resident'}
                                         </Button>
@@ -467,7 +474,7 @@ export default function MappedHouseholdsPage() {
             {/* RIGHT PANEL: MAP (Same as before) */}
             <div className="w-[70%] relative bg-muted/20">
                 {/* Map Controls */}
-                <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 items-end pointer-events-auto">
+                <div className={`absolute top-4 right-4 z-[400] flex flex-col gap-2 items-end pointer-events-auto transition-opacity duration-200 ${isSheetOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className="bg-white p-1 rounded-md shadow-md border flex gap-1">
                         <Button 
                             size="sm" 
@@ -532,7 +539,7 @@ export default function MappedHouseholdsPage() {
                                         weight: isSelected ? 3 : 1,
                                         fillOpacity: isSelected ? 0.6 : 0.4
                                     }}
-                                    eventHandlers={{ click: () => setSelectedHouseholdId(h.householdId) }}
+                                    eventHandlers={{ click: () => openSheet(h.householdId) }}
                                 >
                                      <Popup>
                                         <div className="font-sans text-xs">
@@ -550,7 +557,7 @@ export default function MappedHouseholdsPage() {
                                 key={h.id} 
                                 position={[h.latitude, h.longitude]}
                                 icon={h.status === 'Unverified' ? createUnverifiedIcon(isSelected) : createVerifiedIcon(isSelected)}
-                                eventHandlers={{ click: () => setSelectedHouseholdId(h.householdId) }}
+                                eventHandlers={{ click: () => openSheet(h.householdId) }}
                             >
                                 <Popup>
                                     <div className="font-sans text-xs">
@@ -607,6 +614,12 @@ export default function MappedHouseholdsPage() {
                     <DialogFooter><Button onClick={handleAssignResident} disabled={!residentToAssign}>Confirm Assignment</Button></DialogFooter>
                 </DialogContent>
             </Dialog>
+            
+            <HouseholdMembersSheet 
+                householdId={selectedHouseholdId}
+                open={isSheetOpen}
+                onOpenChange={setIsSheetOpen}
+            />
         </div>
     );
 }

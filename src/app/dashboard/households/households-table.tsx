@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { HouseholdMembersSheet } from './household-members-sheet';
 
 type HouseholdWithId = Household & { id?: string };
 
@@ -39,6 +40,9 @@ export function HouseholdsTable() {
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
   
   const householdsCollectionRef = useBarangayRef('households');
+  
+  const [selectedHouseholdId, setSelectedHouseholdId] = React.useState<string | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = React.useState(false);
 
   const handleAdd = (newRecord: HouseholdFormValues) => {
     if (!householdsCollectionRef || !user || !residents) return;
@@ -122,6 +126,11 @@ export function HouseholdsTable() {
       description: `The resident has been ${householdId ? 'added to' : 'removed from'} the household.`
     });
   };
+  
+  const handleRowClick = (household: Household) => {
+      setSelectedHouseholdId(household.householdId);
+      setIsSheetOpen(true);
+  }
 
   const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, residents ?? [], handleMemberChange), [residents]);
 
@@ -158,6 +167,13 @@ export function HouseholdsTable() {
             isLoading={isLoadingHouseholds || isLoadingResidents}
             onAdd={handleAdd}
             residents={residents ?? []}
+            onRowClick={handleRowClick}
+        />
+        
+        <HouseholdMembersSheet 
+            householdId={selectedHouseholdId}
+            open={isSheetOpen}
+            onOpenChange={setIsSheetOpen}
         />
     </div>
   );

@@ -41,6 +41,7 @@ interface DataTableProps<TData, TValue> {
   isLoading: boolean;
   onAdd: (data: HouseholdFormValues) => void;
   residents: Resident[];
+  onRowClick?: (data: TData) => void;
 }
 
 export function DataTable<TData extends HouseholdType, TValue>({
@@ -49,6 +50,7 @@ export function DataTable<TData extends HouseholdType, TValue>({
   isLoading,
   onAdd,
   residents,
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -148,6 +150,8 @@ export function DataTable<TData extends HouseholdType, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  onClick={() => onRowClick && onRowClick(row.original)}
+                  className={onRowClick ? "cursor-pointer" : ""}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
