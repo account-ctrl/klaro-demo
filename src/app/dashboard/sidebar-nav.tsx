@@ -161,7 +161,7 @@ export function SidebarNav({ isCollapsed, toggleSidebar }: { isCollapsed: boolea
               <NavItem icon={<HomeIcon size={20} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
               <NavItem icon={<Map size={20} />} label="Mapped Households" href="/dashboard/mapped-households" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
               <NavItem icon={<PawPrint size={20} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<HandHeart size={20} />} label="Social Welfare" href="/dashboard/social-welfare" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+              {/* <NavItem icon={<HandHeart size={20} />} label="Social Welfare" href="/dashboard/social-welfare" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} /> */}
             </div>
 
             <NavGroupHeader label="Peace & Order" isCollapsed={isCollapsed} />
