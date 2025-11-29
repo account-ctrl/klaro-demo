@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -13,6 +12,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  FilterFn,
 } from "@tanstack/react-table";
 
 import {
@@ -41,7 +41,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddResident, ResidentFormValues } from "./resident-actions";
 import { Resident, Household } from "@/lib/types";
-import { Filter, Search, Columns, SlidersHorizontal, Check } from "lucide-react";
+import { Filter, Search, Columns, SlidersHorizontal, Check, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -52,6 +52,19 @@ interface DataTableProps<TData, TValue> {
   isLoading: boolean;
   onAdd: (data: ResidentFormValues) => void;
   households: Household[];
+}
+
+// Define custom filter functions
+const globalFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
+    const value = row.getValue(columnId);
+    return String(value).toLowerCase().includes(String(filterValue).toLowerCase());
+};
+
+const arrayFilterFn: FilterFn<any> = (row, columnId, filterValue) => {
+    const value = row.getValue(columnId) as string[] | undefined;
+    if (!filterValue || !value) return false;
+    // Check if the array includes the filter value
+    return value.includes(filterValue);
 }
 
 export function DataTable<TData extends Resident, TValue>({
@@ -65,6 +78,7 @@ export function DataTable<TData extends Resident, TValue>({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+  const [globalFilter, setGlobalFilter] = React.useState("");
 
   const table = useReactTable({
     data,
@@ -77,16 +91,23 @@ export function DataTable<TData extends Resident, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: globalFilterFn,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
+      globalFilter,
+    },
+     filterFns: {
+        arrayFilter: arrayFilterFn,
     },
   });
-
-  const filterValue = (table.getColumn("lastName")?.getFilterValue() as string) ?? "";
-
+  
+  // Custom filter logic for "vulnerability_tags" (Pregnant is inside this array)
+  // We need to extend the filter capability for the vulnerability_tags column if not explicitly defined in columns def
+  
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -94,11 +115,9 @@ export function DataTable<TData extends Resident, TValue>({
             <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                placeholder="Search residents..."
-                value={filterValue}
-                onChange={(event) =>
-                    table.getColumn("lastName")?.setFilterValue(event.target.value)
-                }
+                placeholder="Search by name..."
+                value={globalFilter ?? ""}
+                onChange={(event) => setGlobalFilter(event.target.value)}
                 className="pl-9"
                 />
             </div>
@@ -108,9 +127,14 @@ export function DataTable<TData extends Resident, TValue>({
                     <Button variant="outline" className="border-dashed">
                         <SlidersHorizontal className="mr-2 h-4 w-4" />
                         Filters
+                        {columnFilters.length > 0 && (
+                             <span className="ml-2 rounded-full bg-primary text-[10px] text-primary-foreground px-1.5 py-0.5">
+                                {columnFilters.length}
+                            </span>
+                        )}
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[400px]" align="start">
+                <PopoverContent className="w-[450px]" align="start">
                     <div className="grid gap-4">
                         <div className="space-y-2">
                             <h4 className="font-medium leading-none">Filter Residents</h4>
@@ -119,6 +143,40 @@ export function DataTable<TData extends Resident, TValue>({
                             </p>
                         </div>
                         <div className="grid gap-4">
+                            {/* Primary Demographics */}
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="residentId">Resident ID</Label>
+                                    <Input 
+                                        id="residentId" 
+                                        placeholder="RES-..." 
+                                        className="h-8"
+                                        value={(table.getColumn("residentId")?.getFilterValue() as string) ?? ""}
+                                        onChange={(event) =>
+                                            table.getColumn("residentId")?.setFilterValue(event.target.value)
+                                        }
+                                    />
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label htmlFor="birthYear">Birth Year</Label>
+                                    <Input 
+                                        id="birthYear" 
+                                        type="number" 
+                                        placeholder="YYYY" 
+                                        className="h-8"
+                                        onChange={(event) => {
+                                            // Custom logic needed for dateOfBirth column to filter by year
+                                            // We'll use a custom filter function on the column definition or here if possible
+                                            // For simplicity, let's assume direct string match on dateOfBirth for now, 
+                                            // but better to implement custom filterFn on the column definition in columns.tsx
+                                            // Here we pass the year string to the column filter
+                                            table.getColumn("dateOfBirth")?.setFilterValue(event.target.value)
+                                        }}
+                                         value={(table.getColumn("dateOfBirth")?.getFilterValue() as string) ?? ""}
+                                    />
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="purok">Purok / Address</Label>
@@ -162,29 +220,10 @@ export function DataTable<TData extends Resident, TValue>({
                                     </Select>
                                 </div>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="residencyStatus">Residency Status</Label>
-                                <Select
-                                    value={(table.getColumn("status")?.getFilterValue() as string) ?? "all"}
-                                    onValueChange={(value) => 
-                                        table.getColumn("status")?.setFilterValue(value === "all" ? "" : value)
-                                    }
-                                >
-                                    <SelectTrigger id="residencyStatus" className="h-8 w-full">
-                                        <SelectValue placeholder="All Statuses" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Statuses</SelectItem>
-                                        <SelectItem value="Active">Active</SelectItem>
-                                        <SelectItem value="Moved Out">Moved Out</SelectItem>
-                                        <SelectItem value="Deceased">Deceased</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
+                            
+                            {/* Sectors & Tags */}
                             <div className="space-y-3">
-                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sectors & Tags</Label>
+                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sectors & Vulnerability</Label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex items-center space-x-2">
                                         <Checkbox 
@@ -219,12 +258,36 @@ export function DataTable<TData extends Resident, TValue>({
                                      <div className="flex items-center space-x-2">
                                         <Checkbox 
                                             id="isSenior" 
-                                            disabled // Placeholder for computed senior logic
+                                             // Requires computed column or backend support usually, placeholder logic
+                                            disabled 
                                         />
                                         <Label htmlFor="isSenior" className="font-normal text-muted-foreground">Senior Citizen</Label>
                                     </div>
+                                    
+                                     {/* New Filter: Pregnant (checking vulnerability_tags array) */}
+                                     <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="isPregnant"
+                                            checked={(table.getColumn("vulnerability_tags")?.getFilterValue() as string) === 'Pregnant'}
+                                            onCheckedChange={(checked) => {
+                                                 // We are filtering an array column 'vulnerability_tags'
+                                                table.getColumn("vulnerability_tags")?.setFilterValue(checked ? 'Pregnant' : undefined)
+                                            }}
+                                        />
+                                        <Label htmlFor="isPregnant" className="font-normal cursor-pointer">Pregnant</Label>
+                                    </div>
                                 </div>
                             </div>
+                            
+                            {columnFilters.length > 0 && (
+                                <Button 
+                                    variant="ghost" 
+                                    className="w-full justify-center text-destructive hover:text-destructive" 
+                                    onClick={() => table.resetColumnFilters()}
+                                >
+                                    <X className="mr-2 h-4 w-4" /> Clear All Filters
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </PopoverContent>
@@ -234,7 +297,6 @@ export function DataTable<TData extends Resident, TValue>({
         <div className="flex items-center gap-2">
             <AddResident onAdd={onAdd} households={households} />
             
-            {/* Column Management: Moved to far right as requested */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="ml-auto">

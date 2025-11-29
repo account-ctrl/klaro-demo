@@ -1,4 +1,3 @@
-
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
@@ -100,6 +99,11 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     enableHiding: false,
   },
   {
+      accessorKey: "residentId",
+      header: "Resident ID",
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.residentId}</span>,
+  },
+  {
     accessorKey: "lastName",
     header: ({ column }) => {
       return (
@@ -128,8 +132,17 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
   },
    {
     accessorKey: "dateOfBirth",
-    header: "Age",
-    cell: ({ row }) => getAge(row.original.dateOfBirth)
+    header: "Birth Date / Age",
+    cell: ({ row }) => {
+        const dob = row.original.dateOfBirth;
+        if (!dob) return 'N/A';
+        return (
+            <div className="flex flex-col">
+                <span>{dob}</span>
+                <span className="text-xs text-muted-foreground">{getAge(dob)} years old</span>
+            </div>
+        );
+    }
   },
   {
     accessorKey: "gender",
@@ -151,6 +164,20 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     cell: ({ row }) => row.original.isPwd ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">PWD</Badge> : null,
   },
   {
+    accessorKey: "vulnerability_tags", // Ensure this exists in your type or custom filter accessor
+    header: "Tags",
+    cell: ({ row }) => {
+       const tags = row.original.vulnerability_tags;
+       if (!tags || tags.length === 0) return null;
+       return (
+           <div className="flex gap-1 flex-wrap">
+               {tags.map(t => <Badge key={t} variant="outline" className="text-[10px] h-5 px-1">{t}</Badge>)}
+           </div>
+       )
+    },
+    filterFn: 'arrayFilter' as any, // Tell react-table to use custom array filter
+  },
+  {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
@@ -162,8 +189,7 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     // Hidden columns for filtering
     accessorKey: "civilStatus",
     header: "Civil Status",
-    enableHiding: true, // Allow it to be toggled
-    // Set default visibility to false in the table usage, but defining it here is step 1
+    enableHiding: true, 
   },
   {
     // Hidden columns for filtering
