@@ -41,9 +41,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddResident, ResidentFormValues } from "./resident-actions";
 import { Resident, Household } from "@/lib/types";
-import { Filter, Search, Columns, SlidersHorizontal } from "lucide-react";
+import { Filter, Search, Columns, SlidersHorizontal, Check } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -109,7 +110,7 @@ export function DataTable<TData extends Resident, TValue>({
                         Filters
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80" align="start">
+                <PopoverContent className="w-[400px]" align="start">
                     <div className="grid gap-4">
                         <div className="space-y-2">
                             <h4 className="font-medium leading-none">Filter Residents</h4>
@@ -117,26 +118,113 @@ export function DataTable<TData extends Resident, TValue>({
                                 Refine the list by specific criteria.
                             </p>
                         </div>
-                        <div className="grid gap-2">
-                            <div className="grid grid-cols-3 items-center gap-4">
-                                <Label htmlFor="gender">Gender</Label>
+                        <div className="grid gap-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="purok">Purok / Address</Label>
+                                    <Select
+                                        value={(table.getColumn("address")?.getFilterValue() as string) ?? "all"}
+                                        onValueChange={(value) => 
+                                            table.getColumn("address")?.setFilterValue(value === "all" ? "" : value)
+                                        }
+                                    >
+                                        <SelectTrigger id="purok" className="h-8">
+                                            <SelectValue placeholder="All Puroks" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Puroks</SelectItem>
+                                            <SelectItem value="Purok 1">Purok 1</SelectItem>
+                                            <SelectItem value="Purok 2">Purok 2</SelectItem>
+                                            <SelectItem value="Purok 3">Purok 3</SelectItem>
+                                            <SelectItem value="Purok 4">Purok 4</SelectItem>
+                                            <SelectItem value="Purok 5">Purok 5</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="civilStatus">Civil Status</Label>
+                                    <Select
+                                        value={(table.getColumn("civilStatus")?.getFilterValue() as string) ?? "all"}
+                                        onValueChange={(value) => 
+                                            table.getColumn("civilStatus")?.setFilterValue(value === "all" ? "" : value)
+                                        }
+                                    >
+                                        <SelectTrigger id="civilStatus" className="h-8">
+                                            <SelectValue placeholder="Any" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Any Status</SelectItem>
+                                            <SelectItem value="Single">Single</SelectItem>
+                                            <SelectItem value="Married">Married</SelectItem>
+                                            <SelectItem value="Widowed">Widowed</SelectItem>
+                                            <SelectItem value="Separated">Separated</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="residencyStatus">Residency Status</Label>
                                 <Select
-                                    value={(table.getColumn("gender")?.getFilterValue() as string) ?? "all"}
+                                    value={(table.getColumn("status")?.getFilterValue() as string) ?? "all"}
                                     onValueChange={(value) => 
-                                        table.getColumn("gender")?.setFilterValue(value === "all" ? "" : value)
+                                        table.getColumn("status")?.setFilterValue(value === "all" ? "" : value)
                                     }
                                 >
-                                    <SelectTrigger id="gender" className="col-span-2 h-8">
-                                        <SelectValue placeholder="All" />
+                                    <SelectTrigger id="residencyStatus" className="h-8 w-full">
+                                        <SelectValue placeholder="All Statuses" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All</SelectItem>
-                                        <SelectItem value="Male">Male</SelectItem>
-                                        <SelectItem value="Female">Female</SelectItem>
+                                        <SelectItem value="all">All Statuses</SelectItem>
+                                        <SelectItem value="Active">Active</SelectItem>
+                                        <SelectItem value="Moved Out">Moved Out</SelectItem>
+                                        <SelectItem value="Deceased">Deceased</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                             {/* Add more filters here as needed, logic connects to column filters */}
+
+                            <div className="space-y-3">
+                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sectors & Tags</Label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="isVoter" 
+                                            checked={(table.getColumn("isVoter")?.getFilterValue() as boolean) ?? false}
+                                            onCheckedChange={(checked) => 
+                                                table.getColumn("isVoter")?.setFilterValue(checked === true ? true : undefined)
+                                            }
+                                        />
+                                        <Label htmlFor="isVoter" className="font-normal cursor-pointer">Registered Voter</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="isPwd" 
+                                            checked={(table.getColumn("isPwd")?.getFilterValue() as boolean) ?? false}
+                                            onCheckedChange={(checked) => 
+                                                table.getColumn("isPwd")?.setFilterValue(checked === true ? true : undefined)
+                                            }
+                                        />
+                                        <Label htmlFor="isPwd" className="font-normal cursor-pointer">PWD</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="is4ps" 
+                                            checked={(table.getColumn("is4ps")?.getFilterValue() as boolean) ?? false}
+                                            onCheckedChange={(checked) => 
+                                                table.getColumn("is4ps")?.setFilterValue(checked === true ? true : undefined)
+                                            }
+                                        />
+                                        <Label htmlFor="is4ps" className="font-normal cursor-pointer">4Ps Beneficiary</Label>
+                                    </div>
+                                     <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="isSenior" 
+                                            disabled // Placeholder for computed senior logic
+                                        />
+                                        <Label htmlFor="isSenior" className="font-normal text-muted-foreground">Senior Citizen</Label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </PopoverContent>

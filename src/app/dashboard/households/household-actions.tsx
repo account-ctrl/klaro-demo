@@ -14,6 +14,16 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from '@/components/ui/sheet';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -113,8 +123,8 @@ function HouseholdForm({ record, onSave, onClose, residents }: HouseholdFormProp
   }));
 
   return (
-    <form id="household-form" onSubmit={handleSubmit} className="space-y-6">
-      <ScrollArea className="h-[60vh] p-4">
+    <form id="household-form" onSubmit={handleSubmit} className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto px-1 py-4">
         <div className="space-y-6">
             {/* Core Details */}
             <div className="space-y-4">
@@ -220,13 +230,15 @@ function HouseholdForm({ record, onSave, onClose, residents }: HouseholdFormProp
                 </div>
             </div>
         </div>
-      </ScrollArea>
-      <DialogFooter className="pt-4 border-t">
-        <DialogClose asChild>
-            <Button type="button" variant="outline">Cancel</Button>
-        </DialogClose>
-        <Button type="submit" form="household-form">Save Household</Button>
-      </DialogFooter>
+      </div>
+      <div className="pt-4 border-t mt-auto">
+        <div className="flex justify-end gap-2">
+            <SheetClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+            </SheetClose>
+            <Button type="submit" form="household-form">Save Household</Button>
+        </div>
+      </div>
     </form>
   );
 }
@@ -258,7 +270,7 @@ function HouseholdMembers({ household, residents, onMemberChange }: { household:
     }
 
     return (
-        <ScrollArea className="h-[60vh] p-4">
+        <ScrollArea className="h-full p-4">
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label>Add Member</Label>
@@ -305,23 +317,25 @@ export function AddHousehold({ onAdd, residents }: { onAdd: (data: HouseholdForm
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
           New Household
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Create New Household</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full">
+        <SheetHeader>
+          <SheetTitle>Create New Household</SheetTitle>
+          <SheetDescription>
             Enter the details for the new household. The household name will be based on the selected head.
-          </DialogDescription>
-        </DialogHeader>
-        <HouseholdForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-4">
+            <HouseholdForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -334,34 +348,36 @@ export function EditHousehold({ record, onEdit, residents, onMemberChange }: { r
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full" onClick={(e) => e.stopPropagation()}>
             <Eye className="mr-2 h-4 w-4" />
             <span>View / Edit</span>
         </div>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Household: {record.name}</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full">
+        <SheetHeader>
+          <SheetTitle>Household: {record.name}</SheetTitle>
+          <SheetDescription>
             View and manage household details and members.
-          </DialogDescription>
-        </DialogHeader>
-        <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="details">Household Details</TabsTrigger>
-                <TabsTrigger value="members">Household Members</TabsTrigger>
-            </TabsList>
-            <TabsContent value="details">
-                 <HouseholdForm record={record} onSave={handleSave} onClose={() => setOpen(false)} residents={residents} />
-            </TabsContent>
-            <TabsContent value="members">
-                <HouseholdMembers household={record} residents={residents} onMemberChange={onMemberChange} />
-            </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-4">
+            <Tabs defaultValue="details" className="h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="details">Household Details</TabsTrigger>
+                    <TabsTrigger value="members">Household Members</TabsTrigger>
+                </TabsList>
+                <TabsContent value="details" className="flex-1 overflow-hidden">
+                    <HouseholdForm record={record} onSave={handleSave} onClose={() => setOpen(false)} residents={residents} />
+                </TabsContent>
+                <TabsContent value="members" className="flex-1 overflow-hidden">
+                    <HouseholdMembers household={record} residents={residents} onMemberChange={onMemberChange} />
+                </TabsContent>
+            </Tabs>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

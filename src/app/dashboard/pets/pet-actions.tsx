@@ -14,6 +14,16 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from '@/components/ui/sheet';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -227,12 +237,12 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
   const householdName = households.find(h => h.householdId === formData.householdId)?.name;
 
   return (
-    <>
-    <ScrollArea className="h-[70vh] p-1">
-    <form id="pet-form" onSubmit={handleSubmit} className="space-y-6 p-4">
+    <form id="pet-form" onSubmit={handleSubmit} className="flex flex-col h-full">
         
             
             {/* Owner Info */}
+            <ScrollArea className="flex-1 p-1">
+            <div className="space-y-6 p-4">
             <div className="space-y-4 p-4 border rounded-md">
                 <h4 className="font-semibold text-primary">Owner Information</h4>
                 <div className="space-y-2">
@@ -334,23 +344,25 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
                     </Select>
                 </div>
              </div>
-      </form>
-      </ScrollArea>
-      <DialogFooter className="border-t pt-4">
+             </div>
+             </ScrollArea>
+      <div className="border-t pt-4 mt-auto p-4">
+        <div className="flex justify-end gap-2 items-center">
         {record && (
             <Button type="button" variant="secondary" onClick={handlePrint} className="mr-auto">
                 <Printer className="mr-2 h-4 w-4" />
                 Print ID Card
             </Button>
         )}
-        <DialogClose asChild>
+        <SheetClose asChild>
           <Button type="button" variant="outline">
             Cancel
           </Button>
-        </DialogClose>
+        </SheetClose>
         <Button type="submit" form="pet-form">Save Pet</Button>
-      </DialogFooter>
-    </>
+        </div>
+      </div>
+    </form>
   );
 }
 
@@ -364,23 +376,25 @@ export function AddPet({ onAdd, residents, households }: { onAdd: (data: PetForm
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
           Register Pet
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Register New Pet</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Register New Pet</SheetTitle>
+          <SheetDescription>
             Fill in the details for the new pet. Click save when you're done.
-          </DialogDescription>
-        </DialogHeader>
-        <PetForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} households={households}/>
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <PetForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} households={households}/>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -403,29 +417,31 @@ export function EditPet({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
          <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full">
             <FilePen className="mr-2 h-4 w-4" />
             <span>Edit</span>
         </div>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Edit Pet Profile</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Edit Pet Profile</SheetTitle>
+          <SheetDescription>
             Update the details for {record.name}.
-          </DialogDescription>
-        </DialogHeader>
-        <PetForm
-          record={record}
-          onSave={handleSave}
-          onClose={() => setOpen(false)}
-          residents={residents}
-          households={households}
-        />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <PetForm
+            record={record}
+            onSave={handleSave}
+            onClose={() => setOpen(false)}
+            residents={residents}
+            households={households}
+            />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

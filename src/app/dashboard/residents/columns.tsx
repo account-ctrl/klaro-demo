@@ -159,6 +159,19 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     }
   },
   {
+    // Hidden columns for filtering
+    accessorKey: "civilStatus",
+    header: "Civil Status",
+    enableHiding: true, // Allow it to be toggled
+    // Set default visibility to false in the table usage, but defining it here is step 1
+  },
+  {
+    // Hidden columns for filtering
+    accessorKey: "is4ps",
+    header: "4Ps",
+    enableHiding: true,
+  },
+  {
     id: "actions",
     cell: ({ row }) => {
       const resident = row.original as ResidentWithId;

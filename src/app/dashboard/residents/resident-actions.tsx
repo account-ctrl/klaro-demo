@@ -282,23 +282,25 @@ export function AddResident({ onAdd, households }: { onAdd: (data: ResidentFormV
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button className="bg-[#409656] text-white hover:bg-[#409656]/90">
           <PlusCircle className="mr-2 h-4 w-4" />
           New Resident
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Add New Resident</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full">
+        <SheetHeader>
+          <SheetTitle>Add New Resident</SheetTitle>
+          <SheetDescription>
             Fill in the details of the new resident. Click save when you're done.
-          </DialogDescription>
-        </DialogHeader>
-        <ResidentForm onSave={handleSave} onClose={() => setOpen(false)} households={households} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-10rem)] mt-4">
+            <ResidentForm onSave={handleSave} onClose={() => setOpen(false)} households={households} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

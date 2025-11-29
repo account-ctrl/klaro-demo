@@ -14,6 +14,16 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from '@/components/ui/sheet';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -175,10 +185,9 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
   })) || [];
 
   return (
-    <>
-      <form id="doc-request-form" onSubmit={handleSubmit} className="space-y-4">
-        <ScrollArea className="h-[60vh] p-4">
-          <div className="space-y-4">
+    <form id="doc-request-form" onSubmit={handleSubmit} className="flex flex-col h-full">
+        <ScrollArea className="flex-1 p-1">
+          <div className="space-y-6 p-4">
             <div className="space-y-2 relative">
                 <Label htmlFor="residentId">Resident Name</Label>
                 <div className="relative z-50">
@@ -267,14 +276,15 @@ function DocumentForm({ record, onSave, onClose, residents, certificateTypes }: 
             )}
           </div>
         </ScrollArea>
-      </form>
-       <DialogFooter className="border-t pt-4">
-        <DialogClose asChild>
-            <Button type="button" variant="outline">Cancel</Button>
-        </DialogClose>
-        <Button type="submit" form="doc-request-form">Save Document</Button>
-      </DialogFooter>
-    </>
+       <div className="border-t pt-4 p-4 mt-auto">
+        <div className="flex justify-end gap-2">
+            <SheetClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+            </SheetClose>
+            <Button type="submit" form="doc-request-form">Save Document</Button>
+        </div>
+      </div>
+    </form>
   );
 }
 
@@ -288,23 +298,25 @@ export function AddDocument({ onAdd, residents, certificateTypes }: { onAdd: (da
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
           New Request
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Create New Document Request</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Create New Document Request</SheetTitle>
+          <SheetDescription>
             Select a resident and fill in the document details. Click save when you're done.
-          </DialogDescription>
-        </DialogHeader>
-        <DocumentForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} certificateTypes={certificateTypes} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <DocumentForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} certificateTypes={certificateTypes} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -318,23 +330,25 @@ export function EditDocument({ record, onEdit, residents, certificateTypes }: { 
 
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
          <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full">
             <FilePen className="mr-2 h-4 w-4" />
             <span>Edit</span>
         </div>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Edit Document Request</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Edit Document Request</SheetTitle>
+          <SheetDescription>
             Update the details for request #{record.requestNumber}.
-          </DialogDescription>
-        </DialogHeader>
-        <DocumentForm record={record} onSave={handleSave} onClose={() => setOpen(false)} residents={residents} certificateTypes={certificateTypes} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <DocumentForm record={record} onSave={handleSave} onClose={() => setOpen(false)} residents={residents} certificateTypes={certificateTypes} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
