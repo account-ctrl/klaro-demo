@@ -2,27 +2,26 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
-import { ArrowRight, Check, Quote, Users, FolderKanban, ShieldAlert, FileText, Landmark, Siren, MapPin, ShieldCheck, Vote, Building2, Gavel, Receipt, HardHat, Activity, BrainCircuit, AlertTriangle } from "lucide-react";
+import { ArrowRight, Users, Building2, Receipt, Activity } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 
 function Header() {
-  const heroImage = PlaceHolderImages.find(p => p.id === 'onboarding-hero');
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
       <div className="flex h-14 max-w-screen-2xl mx-auto items-center justify-between">
         <Logo />
         <div className="flex items-center space-x-2">
            <nav className="flex items-center gap-4">
-            <Link href="#features">
-                <Button variant="ghost">Features</Button>
-            </Link>
+            <Button variant="ghost" asChild>
+                <Link href="#features">Features</Link>
+            </Button>
              <Button variant="ghost">Pricing</Button>
-            <Link href="/login">
-              <Button>Login</Button>
-            </Link>
+             <Button asChild>
+                <Link href="/login">Login</Link>
+            </Button>
           </nav>
         </div>
       </div>
@@ -71,11 +70,11 @@ const LandingPage = () => {
             <Button size="lg">
               Book a Demo
             </Button>
-            <Link href="/login?tour=true" passHref>
-                <Button variant="outline" size="lg">
-                View Interactive Tour
-                </Button>
-            </Link>
+            <Button variant="outline" size="lg" asChild>
+                <Link href="/login?tour=true">
+                    View Interactive Tour
+                </Link>
+            </Button>
           </div>
 
           {/* DYNAMIC HERO IMAGE */}
@@ -87,7 +86,6 @@ const LandingPage = () => {
                 alt={heroImage?.description || "KlaroGov Dashboard Interface"}
                 fill
                 className="object-cover"
-                data-ai-hint={heroImage?.imageHint}
               />
               <div className="absolute top-10 right-10 bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-blue-100 animate-bounce">
                 <div className="flex items-center gap-3">
@@ -131,7 +129,7 @@ const LandingPage = () => {
                     { icon: <Receipt/>, title: 'Administration', description: 'Track financials, disbursements, and projects.', href: '/dashboard/financials' },
                     { icon: <Activity/>, title: 'Command Center', description: 'Monitor emergencies and gain AI-powered insights.', href: '/dashboard/emergency' },
                 ].map((item) => (
-                    <Link href={item.href} key={item.title}>
+                    <Link href={item.href} key={item.title} className="block h-full">
                         <div className="group rounded-2xl border border-slate-200 bg-white p-6 h-full flex flex-col hover:shadow-xl hover:-translate-y-2 transition-all duration-300">
                            <div className="mb-4 h-12 w-12 rounded-lg bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-slate-500 group-hover:text-blue-600 transition-colors">
                                 {item.icon}
@@ -181,9 +179,9 @@ const LandingPage = () => {
               </p>
             </div>
             <div className="mx-auto w-full max-w-sm space-y-2">
-               <Link href="/login">
-                 <Button size="lg">Request a Demo</Button>
-                </Link>
+               <Button size="lg" asChild>
+                    <Link href="/login">Request a Demo</Link>
+               </Button>
             </div>
           </div>
         </section>
