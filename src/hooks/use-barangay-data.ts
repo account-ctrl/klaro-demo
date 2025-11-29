@@ -12,7 +12,8 @@ import {
     DocumentTemplate,
     EmergencyAlert,
     ResponderLocation,
-    User
+    User,
+    Purok
 } from '@/lib/types';
 
 // Exported for direct usage in doc() refs if needed, but prefer hooks.
@@ -58,6 +59,10 @@ export function useFinancials() {
 
 export function useHouseholds() {
     return useBarangayCollection<Household>('households');
+}
+
+export function usePuroks() {
+    return useBarangayCollection<Purok>('puroks');
 }
 
 export function useDocumentTemplates() {

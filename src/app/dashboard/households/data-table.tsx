@@ -24,23 +24,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AddHousehold, HouseholdFormValues } from "./household-actions";
 import { Household as HouseholdType, Resident } from "@/lib/types";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading: boolean;
-  onAdd: (data: HouseholdFormValues) => void;
-  residents: Resident[];
   onRowClick?: (data: TData) => void;
 }
 
@@ -48,13 +38,10 @@ export function DataTable<TData extends HouseholdType, TValue>({
   columns,
   data,
   isLoading,
-  onAdd,
-  residents,
   onRowClick,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
   const table = useReactTable({
     data,
@@ -65,57 +52,14 @@ export function DataTable<TData extends HouseholdType, TValue>({
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
     state: {
       sorting,
       columnFilters,
-      columnVisibility,
     },
   });
 
-  const filterValue = (table.getColumn("name")?.getFilterValue() as string) ?? "";
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Input
-          placeholder="Filter by household name..."
-          value={filterValue}
-          onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <div className="flex items-center gap-2">
-            <AddHousehold onAdd={onAdd} residents={residents} />
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="ml-auto">
-                    Columns
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {table
-                    .getAllColumns()
-                    .filter((column) => column.getCanHide())
-                    .map((column) => {
-                        return (
-                        <DropdownMenuCheckboxItem
-                            key={column.id}
-                            className="capitalize"
-                            checked={column.getIsVisible()}
-                            onCheckedChange={(value) =>
-                            column.toggleVisibility(!!value)
-                            }
-                        >
-                            {column.id.replace(/_/g, " ")}
-                        </DropdownMenuCheckboxItem>
-                        );
-                    })}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
-      </div>
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>

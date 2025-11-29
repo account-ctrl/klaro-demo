@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   collection,
   doc,
@@ -12,12 +12,34 @@ import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlo
 import { Pet, Resident, Household } from '@/lib/types';
 import { getColumns } from './columns';
 import { DataTable } from './data-table';
-import { PetFormValues } from './pet-actions';
+import { AddPet, PetFormValues } from './pet-actions';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Trash2, SlidersHorizontal, Search, Columns } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-// In a real multi-tenant app, this would come from the user's session/claims or route.
 const BARANGAY_ID = 'barangay_san_isidro';
-
 
 export function PetsTable() {
   const firestore = useFirestore();
@@ -43,6 +65,20 @@ export function PetsTable() {
   const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
   const { data: households, isLoading: isLoadingHouseholds } = useCollection<Household>(householdsCollectionRef);
 
+  // Filter States
+  const [filterQuery, setFilterQuery] = useState('');
+  const [speciesFilter, setSpeciesFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
+      tagNumber: true,
+      name: true,
+      species: true,
+      breed: true,
+      actions: true
+  });
+
+
   const handleAdd = (newRecord: PetFormValues) => {
     if (!petsCollectionRef || !user) return;
     
@@ -52,7 +88,6 @@ export function PetsTable() {
       createdAt: serverTimestamp() as any,
     };
 
-    // Remove undefined fields to prevent Firestore errors
     Object.keys(docToAdd).forEach(key => {
         const docKey = key as keyof typeof docToAdd;
         if (docToAdd[docKey] === undefined) {
@@ -77,7 +112,6 @@ export function PetsTable() {
     
     const { petId, createdAt, ...dataToUpdate } = updatedRecord;
 
-     // Remove undefined fields to prevent Firestore errors
     Object.keys(dataToUpdate).forEach(key => {
         const docKey = key as keyof typeof dataToUpdate;
         if (dataToUpdate[docKey] === undefined) {
@@ -100,14 +134,153 @@ export function PetsTable() {
 
   const isLoading = isLoadingPets || isLoadingResidents || isLoadingHouseholds;
 
+  // Filter Logic
+  const filteredData = pets?.filter(item => {
+      const matchesSearch = filterQuery === '' || 
+        item.name.toLowerCase().includes(filterQuery.toLowerCase()) || 
+        item.tagNumber?.toLowerCase().includes(filterQuery.toLowerCase()) ||
+        item.breed?.toLowerCase().includes(filterQuery.toLowerCase());
+      
+      const matchesSpecies = speciesFilter === 'all' || item.species === speciesFilter;
+      const matchesGender = genderFilter === 'all' || item.gender === genderFilter;
+      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+
+      return matchesSearch && matchesSpecies && matchesGender && matchesStatus;
+  }) ?? [];
+
+  const toggleColumnVisibility = (colId: string) => {
+    setColumnVisibility(prev => ({...prev, [colId]: !prev[colId]}));
+  }
+
   return (
-    <DataTable
-        columns={columns}
-        data={pets ?? []}
-        isLoading={isLoading}
-        onAdd={handleAdd}
-        residents={residents ?? []}
-        households={households ?? []}
-      />
+    <div className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+             <div className="flex items-center gap-2 flex-1 max-w-lg">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search pets..." 
+                        value={filterQuery}
+                        onChange={(e) => setFilterQuery(e.target.value)}
+                        className="pl-9"
+                    />
+                </div>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline" className="border-dashed">
+                            <SlidersHorizontal className="mr-2 h-4 w-4" />
+                            Filters
+                            {(speciesFilter !== 'all' || genderFilter !== 'all' || statusFilter !== 'all') && (
+                                <span className="ml-2 rounded-sm bg-secondary px-1 font-normal text-xs">
+                                    Active
+                                </span>
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-4" align="start">
+                         <div className="grid gap-4">
+                            <div className="space-y-2">
+                                <h4 className="font-medium leading-none">Filter Pets</h4>
+                                <p className="text-sm text-muted-foreground">Find specific animals.</p>
+                            </div>
+                            <div className="grid gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="speciesFilter">Species</Label>
+                                    <Select value={speciesFilter} onValueChange={setSpeciesFilter}>
+                                        <SelectTrigger id="speciesFilter">
+                                            <SelectValue placeholder="All Species" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Species</SelectItem>
+                                            <SelectItem value="Dog">Dog</SelectItem>
+                                            <SelectItem value="Cat">Cat</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="genderFilter">Gender</Label>
+                                    <Select value={genderFilter} onValueChange={setGenderFilter}>
+                                        <SelectTrigger id="genderFilter">
+                                            <SelectValue placeholder="Any" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Any Gender</SelectItem>
+                                            <SelectItem value="Male">Male</SelectItem>
+                                            <SelectItem value="Female">Female</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="statusFilter">Status</Label>
+                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                        <SelectTrigger id="statusFilter">
+                                            <SelectValue placeholder="Any Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Any Status</SelectItem>
+                                            <SelectItem value="Active">Active</SelectItem>
+                                            <SelectItem value="Deceased">Deceased</SelectItem>
+                                            <SelectItem value="Lost">Lost</SelectItem>
+                                            <SelectItem value="Transferred">Transferred</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={() => {
+                                        setSpeciesFilter('all');
+                                        setGenderFilter('all');
+                                        setStatusFilter('all');
+                                    }}
+                                    className="justify-center text-center"
+                                >
+                                    Reset Filters
+                                </Button>
+                            </div>
+                         </div>
+                    </PopoverContent>
+                </Popover>
+             </div>
+             
+             <div className="flex gap-2">
+                <AddPet onAdd={handleAdd} residents={residents || []} households={households || []} />
+                 <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="ml-auto">
+                      <Columns className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[150px]">
+                    <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {Object.keys(columnVisibility).map((key) => {
+                         return (
+                          <DropdownMenuCheckboxItem
+                            key={key}
+                            className="capitalize"
+                            checked={columnVisibility[key]}
+                            onCheckedChange={() => toggleColumnVisibility(key)}
+                          >
+                            {key === 'tagNumber' ? 'Tag' : key}
+                          </DropdownMenuCheckboxItem>
+                        );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        </div>
+
+        <DataTable
+            columns={columns.filter(col => {
+                const colId = (col as any).accessorKey || (col as any).id;
+                const keyToCheck = colId === 'actions' ? 'actions' : colId;
+                return columnVisibility[keyToCheck] !== false;
+            })}
+            data={filteredData}
+            isLoading={isLoading}
+        />
+    </div>
   );
 }

@@ -24,27 +24,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AddPet, PetFormValues } from "./pet-actions";
 import { Pet, Resident, Household } from "@/lib/types";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading: boolean;
-  onAdd: (data: PetFormValues) => void;
-  residents: Resident[];
-  households: Household[];
 }
 
 export function DataTable<TData extends Pet, TValue>({
   columns,
   data,
   isLoading,
-  onAdd,
-  residents,
-  households,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -64,21 +56,8 @@ export function DataTable<TData extends Pet, TValue>({
     },
   });
 
-  const filterValue = (table.getColumn("name")?.getFilterValue() as string) ?? "";
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Input
-          placeholder="Filter by pet name..."
-          value={filterValue}
-          onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <AddPet onAdd={onAdd} residents={residents} households={households} />
-      </div>
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
