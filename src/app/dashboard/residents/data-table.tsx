@@ -30,10 +30,20 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddResident, ResidentFormValues } from "./resident-actions";
 import { Resident, Household } from "@/lib/types";
+import { Filter, Search, Columns, SlidersHorizontal } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -78,24 +88,74 @@ export function DataTable<TData extends Resident, TValue>({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Input
-          placeholder="Filter residents by last name..."
-          value={filterValue}
-          onChange={(event) =>
-            table.getColumn("lastName")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center flex-1 gap-2">
+            <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                placeholder="Search residents..."
+                value={filterValue}
+                onChange={(event) =>
+                    table.getColumn("lastName")?.setFilterValue(event.target.value)
+                }
+                className="pl-9"
+                />
+            </div>
+            
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" className="border-dashed">
+                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                        Filters
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="start">
+                    <div className="grid gap-4">
+                        <div className="space-y-2">
+                            <h4 className="font-medium leading-none">Filter Residents</h4>
+                            <p className="text-sm text-muted-foreground">
+                                Refine the list by specific criteria.
+                            </p>
+                        </div>
+                        <div className="grid gap-2">
+                            <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor="gender">Gender</Label>
+                                <Select
+                                    value={(table.getColumn("gender")?.getFilterValue() as string) ?? "all"}
+                                    onValueChange={(value) => 
+                                        table.getColumn("gender")?.setFilterValue(value === "all" ? "" : value)
+                                    }
+                                >
+                                    <SelectTrigger id="gender" className="col-span-2 h-8">
+                                        <SelectValue placeholder="All" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
+                                        <SelectItem value="Male">Male</SelectItem>
+                                        <SelectItem value="Female">Female</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                             {/* Add more filters here as needed, logic connects to column filters */}
+                        </div>
+                    </div>
+                </PopoverContent>
+            </Popover>
+        </div>
+
         <div className="flex items-center gap-2">
             <AddResident onAdd={onAdd} households={households} />
+            
+            {/* Column Management: Moved to far right as requested */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="ml-auto">
-                  Columns
+                <Button variant="outline" size="icon" className="ml-auto">
+                  <Columns className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-[150px]">
+                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 {table
                   .getAllColumns()
                   .filter((column) => column.getCanHide())

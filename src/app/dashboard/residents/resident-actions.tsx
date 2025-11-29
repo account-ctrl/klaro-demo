@@ -14,6 +14,16 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from '@/components/ui/sheet';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -105,8 +115,8 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <ScrollArea className="h-[60vh] p-4">
+    <form onSubmit={handleSubmit} className="flex flex-col h-full" id="resident-form">
+      <div className="flex-1 overflow-y-auto px-1 py-4">
         <div className="space-y-6">
           {/* Personal Identity */}
           <div className="space-y-4">
@@ -249,13 +259,15 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
               </div>
           </div>
         </div>
-      </ScrollArea>
-      <DialogFooter>
-        <DialogClose asChild>
-            <Button type="button" variant="outline">Cancel</Button>
-        </DialogClose>
-        <Button type="submit">Save Resident</Button>
-      </DialogFooter>
+      </div>
+      <div className="border-t pt-4 mt-auto">
+        <div className="flex justify-end gap-2">
+            <SheetClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+            </SheetClose>
+            <Button type="submit">Save Resident</Button>
+        </div>
+      </div>
     </form>
   );
 }
@@ -309,34 +321,36 @@ export function EditResident({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Edit Resident Details</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>{children}</SheetTrigger>
+      <SheetContent className="sm:max-w-md w-full">
+        <SheetHeader>
+          <SheetTitle>Edit Resident Details</SheetTitle>
+          <SheetDescription>
             Update the details for {record.firstName} {record.lastName}.
-          </DialogDescription>
-        </DialogHeader>
-        <Tabs defaultValue="profile">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="profile">Profile Details</TabsTrigger>
-            <TabsTrigger value="activity">Activity Log</TabsTrigger>
-          </TabsList>
-          <TabsContent value="profile">
-            <ResidentForm
-              record={record}
-              onSave={handleSave}
-              onClose={() => setOpen(false)}
-              households={households}
-            />
-          </TabsContent>
-          <TabsContent value="activity">
-            <ResidentActivity residentId={record.residentId} />
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-10rem)] mt-4">
+            <Tabs defaultValue="profile" className="h-full flex flex-col">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="profile">Profile Details</TabsTrigger>
+                <TabsTrigger value="activity">Activity Log</TabsTrigger>
+            </TabsList>
+            <TabsContent value="profile" className="flex-1 overflow-hidden">
+                <ResidentForm
+                record={record}
+                onSave={handleSave}
+                onClose={() => setOpen(false)}
+                households={households}
+                />
+            </TabsContent>
+            <TabsContent value="activity" className="flex-1 overflow-y-auto">
+                <ResidentActivity residentId={record.residentId} />
+            </TabsContent>
+            </Tabs>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

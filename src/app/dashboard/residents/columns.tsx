@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EditResident, DeleteResident } from "./resident-actions";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type ResidentWithId = Resident & { id?: string };
 
@@ -114,7 +115,15 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     cell: ({ row }) => {
         const resident = row.original;
         const fullName = `${resident.firstName} ${resident.lastName} ${resident.suffix || ''}`;
-        return <div className="font-medium">{fullName}</div>;
+        return (
+            <div className="flex items-center gap-2">
+                <Avatar className="h-8 w-8">
+                    <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${fullName}`} alt={fullName} />
+                    <AvatarFallback>{resident.firstName[0]}{resident.lastName[0]}</AvatarFallback>
+                </Avatar>
+                <div className="font-medium">{fullName}</div>
+            </div>
+        );
     }
   },
    {
@@ -129,16 +138,17 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
   {
     accessorKey: "address",
     header: "Address",
+    cell: ({ row }) => <div className="truncate max-w-[200px]" title={row.original.address}>{row.original.address}</div>
   },
   {
     accessorKey: "isVoter",
     header: "Voter",
-    cell: ({ row }) => row.original.isVoter ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-muted-foreground" />,
+    cell: ({ row }) => row.original.isVoter ? <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">VOTER</Badge> : null,
   },
    {
     accessorKey: "isPwd",
     header: "PWD",
-    cell: ({ row }) => row.original.isPwd ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-muted-foreground" />,
+    cell: ({ row }) => row.original.isPwd ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">PWD</Badge> : null,
   },
   {
     accessorKey: "status",
