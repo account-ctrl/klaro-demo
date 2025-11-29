@@ -1,4 +1,3 @@
-
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
@@ -38,7 +37,7 @@ function DocumentsTableActions({ doc, onEdit, onDelete, onPrint, residents, cert
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={doc.status !== 'Approved'}>
+        <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={doc.status !== 'Approved' && doc.status !== 'Claimed'}>
             <PrintDocument record={doc} onPrint={onPrint} residents={residents} certificateTypes={certificateTypes} />
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
@@ -76,6 +75,7 @@ export const getColumns = (
   {
     accessorKey: "requestNumber",
     header: "Request No.",
+    cell: ({ row }) => <span className="font-mono text-xs">{row.original.requestNumber}</span>
   },
   {
     accessorKey: "residentName",
@@ -88,15 +88,17 @@ export const getColumns = (
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div className="pl-4">{row.original.residentName}</div>
+      cell: ({ row }) => <div className="pl-4 font-medium">{row.original.residentName}</div>
   },
   {
     accessorKey: "certificateName",
     header: "Document Type",
+    cell: ({ row }) => <div className="font-medium">{row.original.certificateName}</div>
   },
   {
     accessorKey: "purpose",
     header: "Purpose",
+    cell: ({ row }) => <div className="max-w-[200px] truncate" title={row.original.purpose}>{row.original.purpose}</div>
   },
   {
     accessorKey: "status",
@@ -108,7 +110,7 @@ export const getColumns = (
     header: "Date Requested",
      cell: ({ row }) => {
       const date = row.original.dateRequested?.toDate();
-      return date ? date.toLocaleDateString() : 'N/A';
+      return <div className="text-muted-foreground">{date ? date.toLocaleDateString() : 'N/A'}</div>;
     },
   },
   {

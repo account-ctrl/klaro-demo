@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -8,6 +7,7 @@ import {
   writeBatch,
   query,
   where,
+  or,
 } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import {
@@ -26,6 +26,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { caseTypes } from './case-types';
 import { facilities as defaultFacilities } from '@/lib/facilities';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { SlidersHorizontal, Search, Columns } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useState } from 'react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -55,10 +63,24 @@ export function BlotterTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  
+  const [filterQuery, setFilterQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [caseTypeFilter, setCaseTypeFilter] = useState('all');
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
+      caseId: true,
+      caseType: true,
+      complainants: true,
+      respondents: true,
+      status: true,
+      actions: true
+  });
+
 
   const blottersCollectionRef = useMemoFirebase(() => {
     if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`);
+    let baseQuery = query(collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`));
+    return baseQuery;
   }, [firestore]);
 
   const residentsCollectionRef = useMemoFirebase(() => {
@@ -95,7 +117,7 @@ export function BlotterTable() {
 
     const batch = writeBatch(firestore);
     const caseId = `CASE-${Date.now()}`;
-    const blotterDocRef = doc(blottersCollectionRef, caseId);
+    const blotterDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`), caseId);
     
     const docToAdd: Partial<BlotterCase> = {
       ...newRecord,
@@ -117,7 +139,6 @@ export function BlotterTable() {
     let toastDescription = `Case ${caseId} has been created.`;
     let newEvent: ScheduleEvent | null = null;
 
-    // If scheduling is requested, create a schedule_event as well
     if (newRecord.scheduleHearing && newRecord.hearingStart && newRecord.hearingEnd && newRecord.venueResourceId) {
         const scheduleCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/schedule_events`);
         const eventId = `EVT-${Date.now()}`;
@@ -172,7 +193,6 @@ export function BlotterTable() {
 
   const handleDelete = (id: string) => {
     if (!firestore) return;
-    console.log("Deleting blotter case with ID:", id); // Added logging
     const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/blotter_cases/${id}`);
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Blotter Record Deleted', description: 'The record has been permanently deleted.' });
@@ -180,6 +200,25 @@ export function BlotterTable() {
 
   const isLoading = isLoadingBlotter || isLoadingResidents || isLoadingFacilities || isLoadingSchedule;
   const currentFacilities = (facilities && facilities.length > 0) ? facilities : defaultFacilities;
+
+  // Filter Logic
+  const filteredRecords = records?.filter(record => {
+      const matchesSearch = filterQuery === '' || 
+        record.caseId.toLowerCase().includes(filterQuery.toLowerCase()) ||
+        record.caseType.toLowerCase().includes(filterQuery.toLowerCase()) ||
+        getParticipantNames(record.complainantIds).toLowerCase().includes(filterQuery.toLowerCase()) ||
+        getParticipantNames(record.respondentIds).toLowerCase().includes(filterQuery.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
+      const matchesType = caseTypeFilter === 'all' || record.caseType === caseTypeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
+  }) ?? [];
+
+  const toggleColumnVisibility = (colId: string) => {
+      setColumnVisibility(prev => ({...prev, [colId]: !prev[colId]}));
+  }
+
 
   if (isLoading) {
       return (
@@ -218,57 +257,152 @@ export function BlotterTable() {
   }
 
   return (
-    <>
-      <div className="flex justify-end mb-4">
-        <AddBlotterRecord onAdd={handleAdd} residents={residents ?? []} facilities={currentFacilities} />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 flex-1 max-w-lg">
+             <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search cases, names, or IDs..." 
+                    value={filterQuery}
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                    className="pl-9"
+                />
+             </div>
+             <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" className="border-dashed">
+                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                        Filters
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px]" align="start">
+                    <div className="grid gap-4">
+                         <div className="space-y-2">
+                            <h4 className="font-medium leading-none">Filter Cases</h4>
+                            <p className="text-sm text-muted-foreground">Find specific records.</p>
+                        </div>
+                        <div className="grid gap-4">
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="statusFilter">Status</Label>
+                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                        <SelectTrigger id="statusFilter" className="h-8">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Statuses</SelectItem>
+                                            <SelectItem value="Open">Open</SelectItem>
+                                            <SelectItem value="Under Mediation">Under Mediation</SelectItem>
+                                            <SelectItem value="Settled">Settled</SelectItem>
+                                            <SelectItem value="Dismissed">Dismissed</SelectItem>
+                                            <SelectItem value="Issued CFA">Issued CFA</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="typeFilter">Case Type</Label>
+                                    <Select value={caseTypeFilter} onValueChange={setCaseTypeFilter}>
+                                        <SelectTrigger id="typeFilter" className="h-8">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Types</SelectItem>
+                                            {allCaseTypes.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </PopoverContent>
+             </Popover>
+          </div>
+          
+        <div className="flex items-center gap-2">
+            <AddBlotterRecord onAdd={handleAdd} residents={residents ?? []} facilities={currentFacilities} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="ml-auto">
+                  <Columns className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[150px]">
+                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {Object.keys(columnVisibility).map((key) => {
+                     return (
+                      <DropdownMenuCheckboxItem
+                        key={key}
+                        className="capitalize"
+                        checked={columnVisibility[key]}
+                        onCheckedChange={() => toggleColumnVisibility(key)}
+                      >
+                        {key === 'caseId' ? 'Case ID' : key.replace(/([A-Z])/g, ' $1').trim()}
+                      </DropdownMenuCheckboxItem>
+                    );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
       </div>
+
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Case ID</TableHead>
-              <TableHead>Case Type</TableHead>
-              <TableHead>Complainant(s)</TableHead>
-              <TableHead>Respondent(s)</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              {columnVisibility.caseId && <TableHead>Case ID</TableHead>}
+              {columnVisibility.caseType && <TableHead>Case Type</TableHead>}
+              {columnVisibility.complainants && <TableHead>Complainant(s)</TableHead>}
+              {columnVisibility.respondents && <TableHead>Respondent(s)</TableHead>}
+              {columnVisibility.status && <TableHead>Status</TableHead>}
+              {columnVisibility.actions && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {records && records.length > 0 ? records.map((record) => (
+            {filteredRecords.length > 0 ? filteredRecords.map((record) => (
               <TableRow key={record.id}>
-                <TableCell className="font-mono text-xs">{record.caseId}</TableCell>
-                <TableCell>{allCaseTypes.find(c => c.value === record.caseType)?.label ?? record.caseType}</TableCell>
-                <TableCell>{getParticipantNames(record.complainantIds)}</TableCell>
-                <TableCell>{getParticipantNames(record.respondentIds)}</TableCell>
-                <TableCell>
-                  <Badge variant={getStatusBadgeVariant(record.status)} className="capitalize">
-                    {record.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <PrintSummonsButton 
-                      blotter={record}
-                      residents={residents ?? []}
-                      scheduleEvents={scheduleEvents ?? []}
-                      facilities={currentFacilities}
-                    />
-                    <EditBlotterRecord record={record} onEdit={handleEdit} residents={residents ?? []} facilities={currentFacilities}/>
-                    <DeleteBlotterRecord recordId={record.id} onDelete={handleDelete} />
-                  </div>
-                </TableCell>
+                {columnVisibility.caseId && <TableCell className="font-mono text-xs">{record.caseId}</TableCell>}
+                {columnVisibility.caseType && <TableCell>{allCaseTypes.find(c => c.value === record.caseType)?.label ?? record.caseType}</TableCell>}
+                {columnVisibility.complainants && <TableCell>{getParticipantNames(record.complainantIds)}</TableCell>}
+                {columnVisibility.respondents && <TableCell>{getParticipantNames(record.respondentIds)}</TableCell>}
+                {columnVisibility.status && (
+                    <TableCell>
+                    <Badge variant={getStatusBadgeVariant(record.status)} className="capitalize">
+                        {record.status}
+                    </Badge>
+                    </TableCell>
+                )}
+                {columnVisibility.actions && (
+                    <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                        <PrintSummonsButton 
+                        blotter={record}
+                        residents={residents ?? []}
+                        scheduleEvents={scheduleEvents ?? []}
+                        facilities={currentFacilities}
+                        />
+                        <EditBlotterRecord record={record} onEdit={handleEdit} residents={residents ?? []} facilities={currentFacilities}/>
+                        <DeleteBlotterRecord recordId={record.caseId} onDelete={handleDelete} />
+                    </div>
+                    </TableCell>
+                )}
               </TableRow>
             )) : (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  No blotter records found.
+                <TableCell colSpan={Object.values(columnVisibility).filter(Boolean).length} className="h-24 text-center">
+                  No blotter records found matching your filters.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
-    </>
+       <div className="flex items-center justify-between space-x-2 py-4">
+        <div className="flex-1 text-sm text-muted-foreground">
+          {filteredRecords.length} record(s) found.
+        </div>
+      </div>
+    </div>
   );
 }

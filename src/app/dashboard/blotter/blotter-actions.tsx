@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +12,16 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from '@/components/ui/sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +57,7 @@ import { useUser } from '@/firebase';
 import { Switch } from '@/components/ui/switch';
 import { facilities as defaultFacilities } from '@/lib/facilities';
 import { format } from 'date-fns';
-import { useOrdinances } from '@/hooks/use-legislative'; // Import Ordinance Hook
+import { useOrdinances } from '@/hooks/use-legislative';
 
 export const generateSummonsHtml = (blotter: BlotterCase, event: ScheduleEvent, complainants: Resident[], respondents: Resident[], venue?: FacilityResource) => {
     const css = `
@@ -137,7 +146,7 @@ type BlotterFormValues = Partial<BlotterCase> & {
     venueResourceId?: string;
     generateSummons?: boolean;
     notifyParticipants?: boolean;
-    relatedOrdinanceId?: string; // ADDED
+    relatedOrdinanceId?: string;
 };
 
 type BlotterFormProps = {
@@ -152,7 +161,7 @@ type BlotterFormProps = {
 function BlotterForm({ record, onSave, onClose, residents, facilities }: BlotterFormProps) {
     const { toast } = useToast();
     const { user } = useUser();
-    const { data: ordinances } = useOrdinances(); // Fetch Ordinances
+    const { data: ordinances } = useOrdinances();
 
     const [formData, setFormData] = useState<BlotterFormValues>({
         caseType: record?.caseType ?? '',
@@ -168,7 +177,7 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
         venueResourceId: '',
         generateSummons: true,
         notifyParticipants: true,
-        relatedOrdinanceId: record?.relatedOrdinanceId ?? '', // ADDED
+        relatedOrdinanceId: record?.relatedOrdinanceId ?? '',
     });
     
     const [caseDescription, setCaseDescription] = useState('');
@@ -193,7 +202,6 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
         setFormData(prev => ({ ...prev, caseType: value, severity: selectedCase?.severity ?? 'Low' }));
         setCaseDescription(selectedCase?.description ?? '');
     } else if (id === 'relatedOrdinanceId') {
-        // Handle "none" value mapping to empty string
         setFormData((prev) => ({ ...prev, [id]: value === 'none' ? '' : value }));
     } else {
         setFormData((prev) => ({ ...prev, [id]: value }));
@@ -260,9 +268,9 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
 
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-        <ScrollArea className="h-[70vh] p-4">
-            <div className="space-y-8">
+    <form id="blotter-form" onSubmit={handleSubmit} className="flex flex-col h-full">
+        <ScrollArea className="flex-1 p-1">
+            <div className="space-y-8 p-4">
                 {/* Incident Details */}
                 <fieldset className="space-y-4 p-4 border rounded-md">
                     <legend className="-ml-1 px-1 text-sm font-medium text-primary">Incident Details</legend>
@@ -288,7 +296,6 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
                         {caseDescription && <p className="text-xs text-muted-foreground mt-1">{caseDescription}</p>}
                     </div>
 
-                    {/* NEW: Ordinance Linking */}
                     <div className="space-y-2">
                         <Label htmlFor="relatedOrdinanceId">Related Ordinance Violation (Optional)</Label>
                          <Select onValueChange={(value) => handleSelectChange('relatedOrdinanceId', value)} value={formData.relatedOrdinanceId || 'none'}>
@@ -317,9 +324,11 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
                 {/* Participants */}
                 <fieldset className="space-y-4 p-4 border rounded-md">
                      <legend className="-ml-1 px-1 text-sm font-medium text-primary">Participants</legend>
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                         <Label>Complainant(s)</Label>
-                        <Combobox options={residentOptions.filter(o => !formData.complainantIds?.includes(o.value))} value={''} onChange={(val) => handleMultiSelect('complainantIds', val)} placeholder="Search and add complainant..."/>
+                        <div className="relative z-50">
+                             <Combobox options={residentOptions.filter(o => !formData.complainantIds?.includes(o.value))} value={''} onChange={(val) => handleMultiSelect('complainantIds', val)} placeholder="Search and add complainant..."/>
+                        </div>
                         <div className="flex flex-wrap gap-2 pt-2">
                             {formData.complainantIds?.map(id => {
                                  const resident = residents.find(r => r.residentId === id);
@@ -327,9 +336,11 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
                             })}
                         </div>
                     </div>
-                     <div className="space-y-2">
+                     <div className="space-y-2 relative">
                         <Label>Respondent(s) / Person(s) Complained Of</Label>
-                        <Combobox options={residentOptions.filter(o => !formData.respondentIds?.includes(o.value))} value={''} onChange={(val) => handleMultiSelect('respondentIds', val)} placeholder="Search and add respondent..."/>
+                         <div className="relative z-40">
+                             <Combobox options={residentOptions.filter(o => !formData.respondentIds?.includes(o.value))} value={''} onChange={(val) => handleMultiSelect('respondentIds', val)} placeholder="Search and add respondent..."/>
+                        </div>
                         <div className="flex flex-wrap gap-2 pt-2">
                             {formData.respondentIds?.map(id => {
                                  const resident = residents.find(r => r.residentId === id);
@@ -396,14 +407,16 @@ function BlotterForm({ record, onSave, onClose, residents, facilities }: Blotter
                 </fieldset>
             </div>
         </ScrollArea>
-        <DialogFooter>
-            <DialogClose asChild>
-            <Button type="button" variant="outline">
-                Cancel
-            </Button>
-            </DialogClose>
-            <Button type="submit">Save Record</Button>
-        </DialogFooter>
+        <div className="border-t pt-4 p-4 mt-auto">
+            <div className="flex justify-end gap-2">
+                <SheetClose asChild>
+                    <Button type="button" variant="outline">
+                        Cancel
+                    </Button>
+                </SheetClose>
+                <Button type="submit" form="blotter-form">Save Record</Button>
+            </div>
+        </div>
     </form>
   );
 }
@@ -417,24 +430,26 @@ export function AddBlotterRecord({ onAdd, residents, facilities }: { onAdd: (rec
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
           New Record
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Create New Blotter Record</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-2xl w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Create New Blotter Record</SheetTitle>
+          <SheetDescription>
             Fill in the details of the new incident report. Click save when
             you're done.
-          </DialogDescription>
-        </DialogHeader>
-        <BlotterForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} facilities={facilities} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <BlotterForm onSave={handleSave} onClose={() => setOpen(false)} residents={residents} facilities={facilities} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -457,29 +472,31 @@ export function EditBlotterRecord({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button variant="ghost" size="icon">
           <FilePen className="h-4 w-4" />
           <span className="sr-only">Edit</span>
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Edit Blotter Record</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-2xl w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Edit Blotter Record</SheetTitle>
+          <SheetDescription>
             Update the details of case #{record.caseId}.
-          </DialogDescription>
-        </DialogHeader>
-        <BlotterForm
-          record={record}
-          onSave={handleSave}
-          onClose={() => setOpen(false)}
-          residents={residents}
-          facilities={facilities}
-        />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+             <BlotterForm
+            record={record}
+            onSave={handleSave}
+            onClose={() => setOpen(false)}
+            residents={residents}
+            facilities={facilities}
+            />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -491,9 +508,7 @@ export function DeleteBlotterRecord({
   onDelete: (id: string) => void;
 }) {
   const handleClick = (e: React.MouseEvent) => {
-      // Prevent default to avoid any unexpected form submission behavior if contained within one
       e.preventDefault(); 
-      console.log("Delete confirmed for:", recordId);
       onDelete(recordId);
   }
 

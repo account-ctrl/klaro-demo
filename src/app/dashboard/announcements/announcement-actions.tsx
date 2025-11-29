@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -13,6 +12,16 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from '@/components/ui/sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +45,7 @@ import {
 import { PlusCircle, FilePen, Trash2, Wand2 } from 'lucide-react';
 import { Announcement } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export type AnnouncementFormValues = Omit<Announcement, 'announcementId' | 'datePosted' | 'postedByUserId'>;
 
@@ -103,55 +113,61 @@ function AnnouncementForm({ record, onSave, onClose }: AnnouncementFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {!record && (
-          <div className="space-y-2 bg-muted/50 p-3 rounded-md border border-dashed">
-            <Label className="flex items-center gap-2 text-primary"><Wand2 className="h-4 w-4"/> Use a Template</Label>
-            <Select onValueChange={handleTemplateSelect}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a template to auto-fill..." />
-              </SelectTrigger>
-              <SelectContent>
-                {ANNOUNCEMENT_TEMPLATES.map(t => (
-                  <SelectItem key={t.label} value={t.label}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-      )}
+    <form id="announcement-form" onSubmit={handleSubmit} className="flex flex-col h-full">
+      <ScrollArea className="flex-1 p-1">
+        <div className="space-y-4 p-4">
+            {!record && (
+                <div className="space-y-2 bg-muted/50 p-3 rounded-md border border-dashed">
+                    <Label className="flex items-center gap-2 text-primary"><Wand2 className="h-4 w-4"/> Use a Template</Label>
+                    <Select onValueChange={handleTemplateSelect}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select a template to auto-fill..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {ANNOUNCEMENT_TEMPLATES.map(t => (
+                        <SelectItem key={t.label} value={t.label}>{t.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                    </Select>
+                </div>
+            )}
 
-      <div className="space-y-2">
-        <Label htmlFor="title">Title</Label>
-        <Input id="title" value={formData.title} onChange={handleChange} required />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="category">Category</Label>
-        <Select onValueChange={handleSelectChange} value={formData.category}>
-          <SelectTrigger id="category">
-            <SelectValue placeholder="Select a category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map(cat => (
-              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="content">Content</Label>
-        <Textarea id="content" value={formData.content} onChange={handleChange} rows={5} placeholder="Write the announcement details here..." />
-      </div>
-       <div className="space-y-2">
-        <Label htmlFor="imageUrl">Image URL (Optional)</Label>
-        <Input id="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="https://example.com/image.png" />
-      </div>
+            <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" value={formData.title} onChange={handleChange} required />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Select onValueChange={handleSelectChange} value={formData.category}>
+                <SelectTrigger id="category">
+                    <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                    {categories.map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                </SelectContent>
+                </Select>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="content">Content</Label>
+                <Textarea id="content" value={formData.content} onChange={handleChange} rows={10} placeholder="Write the announcement details here..." />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="imageUrl">Image URL (Optional)</Label>
+                <Input id="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="https://example.com/image.png" />
+            </div>
+        </div>
+      </ScrollArea>
       
-      <DialogFooter>
-        <DialogClose asChild>
-          <Button type="button" variant="outline">Cancel</Button>
-        </DialogClose>
-        <Button type="submit">Save Announcement</Button>
-      </DialogFooter>
+       <div className="border-t pt-4 p-4 mt-auto">
+        <div className="flex justify-end gap-2">
+            <SheetClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+            </SheetClose>
+            <Button type="submit" form="announcement-form">Save Announcement</Button>
+        </div>
+      </div>
     </form>
   );
 }
@@ -166,23 +182,25 @@ export function AddAnnouncement({ onAdd }: { onAdd: (data: AnnouncementFormValue
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
           New Announcement
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create New Announcement</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-lg w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Create New Announcement</SheetTitle>
+          <SheetDescription>
             Compose a new announcement to be published.
-          </DialogDescription>
-        </DialogHeader>
-        <AnnouncementForm onSave={handleSave} onClose={() => setOpen(false)} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <AnnouncementForm onSave={handleSave} onClose={() => setOpen(false)} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -195,23 +213,25 @@ export function EditAnnouncement({ record, onEdit }: { record: Announcement; onE
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
          <div className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full">
             <FilePen className="mr-2 h-4 w-4" />
             <span>Edit</span>
         </div>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Edit Announcement</DialogTitle>
-          <DialogDescription>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-lg w-full p-0">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>Edit Announcement</SheetTitle>
+          <SheetDescription>
             Update the details for "{record.title}".
-          </DialogDescription>
-        </DialogHeader>
-        <AnnouncementForm record={record} onSave={handleSave} onClose={() => setOpen(false)} />
-      </DialogContent>
-    </Dialog>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="h-[calc(100vh-8rem)] mt-0">
+            <AnnouncementForm record={record} onSave={handleSave} onClose={() => setOpen(false)} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
