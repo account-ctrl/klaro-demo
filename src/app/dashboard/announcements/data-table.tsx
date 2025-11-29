@@ -24,23 +24,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AddAnnouncement, AnnouncementFormValues } from "./announcement-actions";
 import { Announcement } from "@/lib/types";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading: boolean;
-  onAdd: (data: AnnouncementFormValues) => void;
 }
 
 export function DataTable<TData extends Announcement, TValue>({
   columns,
   data,
   isLoading,
-  onAdd,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -60,21 +56,8 @@ export function DataTable<TData extends Announcement, TValue>({
     },
   });
 
-  const filterValue = (table.getColumn("title")?.getFilterValue() as string) ?? "";
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Input
-          placeholder="Filter by title..."
-          value={filterValue}
-          onChange={(event) =>
-            table.getColumn("title")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <AddAnnouncement onAdd={onAdd} />
-      </div>
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>

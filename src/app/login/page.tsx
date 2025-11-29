@@ -74,6 +74,7 @@ function LoginCard() {
                             required 
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
+                            suppressHydrationWarning
                         />
                     </div>
                     <div className="space-y-2">
@@ -84,9 +85,10 @@ function LoginCard() {
                             required 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            suppressHydrationWarning
                         />
                     </div>
-                    <Button type="submit" size="lg" className="w-full" disabled={isPending}>
+                    <Button type="submit" size="lg" className="w-full" disabled={isPending} suppressHydrationWarning>
                         {isPending ? <Loader2 className="mr-2 animate-spin" /> : <Shield className="mr-2" />}
                         {isPending ? 'Signing in...' : 'Login as Barangay Admin'}
                     </Button>
@@ -104,7 +106,7 @@ function LoginCard() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
-                    <Button onClick={() => handleRoleSimulation('user', false)} variant="outline" className="w-full" disabled={isPending}>
+                    <Button onClick={() => handleRoleSimulation('user', false)} variant="outline" className="w-full" disabled={isPending} suppressHydrationWarning>
                         {isPending ? <Loader2 className="mr-2 animate-spin" /> : <User className="mr-2" />}
                         Resident Login
                     </Button>

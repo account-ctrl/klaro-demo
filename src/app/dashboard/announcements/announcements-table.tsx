@@ -249,7 +249,6 @@ export function AnnouncementsTable() {
             })}
             data={filteredData}
             isLoading={isLoadingAnnouncements}
-            onAdd={handleAdd}
         />
     </div>
   );
