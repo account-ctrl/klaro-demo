@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -12,14 +13,23 @@ import { AlertTriangle } from 'lucide-react';
 
 export function DemoRestrictionModal() {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     // Open on mount
     setOpen(true);
   }, []);
 
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      // Redirect to the previous page when the modal is closed
+      router.back();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-600">
