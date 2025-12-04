@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Truck, Wrench, Calendar, Plus, Search, AlertTriangle } from 'lucide-react';
 import { format, isBefore, parseISO } from 'date-fns';
+import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function AssetsPage() {
     const { data: assets } = useFixedAssets();
@@ -87,6 +88,7 @@ export default function AssetsPage() {
 
     return (
         <div className="space-y-6">
+            <DemoRestrictionModal />
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Assets & Fleet Management</h1>
                 <p className="text-muted-foreground">Track fixed assets, manage vehicle fleet, and schedule equipment usage.</p>

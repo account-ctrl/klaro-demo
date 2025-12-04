@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Search, Pill, User as UserIcon, CheckCircle, AlertCircle } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function DispensingPage() {
     const { data: residents } = useResidents();
@@ -102,6 +103,7 @@ export default function DispensingPage() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
+            <DemoRestrictionModal />
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Medicine Dispensing</h1>
                 <p className="text-muted-foreground">Issue medicine to residents using FEFO logic.</p>

@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Package, AlertTriangle, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { serverTimestamp } from 'firebase/firestore';
+import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function InventoryPage() {
     const { data: items } = useInventoryItems();
@@ -82,6 +83,7 @@ export default function InventoryPage() {
 
     return (
         <div className="space-y-6">
+            <DemoRestrictionModal />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Medicine Inventory</h1>

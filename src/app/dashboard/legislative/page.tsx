@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Scale, Plus, FileText, Download, Gavel } from 'lucide-react';
 import { format } from 'date-fns';
+import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function LegislativePage() {
     const { data: ordinances, isLoading } = useOrdinances();
@@ -59,6 +60,7 @@ export default function LegislativePage() {
 
     return (
         <div className="space-y-6">
+            <DemoRestrictionModal />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Legislative & Ordinances</h1>
