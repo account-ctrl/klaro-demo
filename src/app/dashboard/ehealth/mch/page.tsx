@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Baby, Ruler, Syringe, Calendar, Plus, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function MchPage() {
     const { data: mchRecords } = useMchRecords();
@@ -57,6 +58,7 @@ export default function MchPage() {
 
     return (
         <div className="space-y-6 h-[calc(100vh-10rem)] flex flex-col">
+            <DemoRestrictionModal />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Maternal & Child Health</h1>
