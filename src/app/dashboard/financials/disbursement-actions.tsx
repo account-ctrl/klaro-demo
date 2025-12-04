@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, FilePen, Trash2, Sprout } from 'lucide-react';
+import { PlusCircle, FilePen, Trash2, Sprout, UserSearch } from 'lucide-react';
 import type { DisbursementVoucher, Obligation, Resident } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -105,17 +105,36 @@ function DisbursementForm({ record, onSave, onClose, residents }: DisbursementFo
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <ScrollArea className="h-[70vh] p-4">
+      <ScrollArea className="h-[65vh] pr-4">
         <div className="space-y-6">
-           <div className="space-y-2">
-              <Label>Search Payee</Label>
-              <Combobox options={residentOptions} value="" onChange={handleResidentSelect} placeholder="Search and select a resident..." />
-            </div>
+           
+           {/* Payee Selection Section */}
+           <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-4">
+               <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-muted-foreground">
+                      <UserSearch className="h-4 w-4" /> 
+                      Auto-fill Payee from Residents (Optional)
+                  </Label>
+                  <Combobox 
+                    options={residentOptions} 
+                    value="" 
+                    onChange={handleResidentSelect} 
+                    placeholder="Search resident..." 
+                  />
+               </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="payee">Payee</Label>
-            <Input id="payee" value={formData.payee} onChange={handleChange} required />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="payee" className="font-semibold text-slate-700">Payee Name</Label>
+                <Input 
+                    id="payee" 
+                    value={formData.payee} 
+                    onChange={handleChange} 
+                    placeholder="Enter name of resident or supplier"
+                    required 
+                    className="bg-white"
+                />
+              </div>
+           </div>
 
            <div className="space-y-2">
             <Label htmlFor="obrId">Obligation Request (OBR) No.</Label>
@@ -133,7 +152,7 @@ function DisbursementForm({ record, onSave, onClose, residents }: DisbursementFo
             </div>
              <div className="space-y-2">
                 <Label>Net Amount</Label>
-                <Input value={(formData.grossAmount - (formData.taxAmount ?? 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })} readOnly />
+                <Input value={(formData.grossAmount - (formData.taxAmount ?? 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })} readOnly className="bg-slate-50 font-bold text-slate-700" />
             </div>
           </div>
           
@@ -153,7 +172,7 @@ function DisbursementForm({ record, onSave, onClose, residents }: DisbursementFo
             </div>
         </div>
       </ScrollArea>
-      <DialogFooter className="border-t pt-4 mt-4">
+      <DialogFooter className="border-t pt-4 mt-0">
         <DialogClose asChild>
           <Button type="button" variant="outline">Cancel</Button>
         </DialogClose>

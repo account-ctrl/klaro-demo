@@ -8,16 +8,42 @@ import {
   CollectionReference,
   DocumentReference,
   SetOptions,
+  collection,
+  doc
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import {FirestorePermissionError} from '@/firebase/errors';
+
+/**
+ * Helper to strip custom properties (like __memo) from a CollectionReference
+ * by reconstructing a clean reference.
+ */
+function getCleanColRef(ref: CollectionReference): CollectionReference {
+  // Check if the reference is "poisoned" with custom properties
+  if ((ref as any).__memo) {
+    return collection(ref.firestore, ref.path);
+  }
+  return ref;
+}
+
+/**
+ * Helper to strip custom properties (like __memo) from a DocumentReference
+ * by reconstructing a clean reference.
+ */
+function getCleanDocRef(ref: DocumentReference): DocumentReference {
+  if ((ref as any).__memo) {
+    return doc(ref.firestore, ref.path);
+  }
+  return ref;
+}
 
 /**
  * Initiates a setDoc operation for a document reference.
  * Does NOT await the write operation internally.
  */
 export function setDocumentNonBlocking(docRef: DocumentReference, data: any, options: SetOptions) {
-  setDoc(docRef, data, { merge: true }).catch(error => {
+  const cleanRef = getCleanDocRef(docRef);
+  setDoc(cleanRef, data, { merge: true }).catch(error => {
     console.error("Firestore setDoc failed:", error);
     errorEmitter.emit(
       'permission-error',
@@ -38,7 +64,8 @@ export function setDocumentNonBlocking(docRef: DocumentReference, data: any, opt
  * Returns the Promise for the new doc ref, but typically not awaited by caller.
  */
 export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
-  const promise = addDoc(colRef, data)
+  const cleanRef = getCleanColRef(colRef);
+  const promise = addDoc(cleanRef, data)
     .catch(error => {
       console.error("Firestore addDoc failed:", error);
       errorEmitter.emit(
@@ -59,7 +86,8 @@ export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
  * Does NOT await the write operation internally.
  */
 export function updateDocumentNonBlocking(docRef: DocumentReference, data: any) {
-  updateDoc(docRef, data)
+  const cleanRef = getCleanDocRef(docRef);
+  updateDoc(cleanRef, data)
     .catch(error => {
       console.error("Firestore updateDoc failed:", error);
       errorEmitter.emit(
@@ -79,7 +107,8 @@ export function updateDocumentNonBlocking(docRef: DocumentReference, data: any) 
  * Does NOT await the write operation internally.
  */
 export function deleteDocumentNonBlocking(docRef: DocumentReference) {
-  deleteDoc(docRef)
+  const cleanRef = getCleanDocRef(docRef);
+  deleteDoc(cleanRef)
     .catch(error => {
       console.error("Firestore deleteDoc failed:", error);
       errorEmitter.emit(
