@@ -12,8 +12,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'KlaroBarangay',
+  title: 'KlaroGov',
   description: 'Transparent, efficient, and community-driven digital governance.',
+  icons: {
+    icon: '/KlaroGov Logo.png',
+    shortcut: '/KlaroGov Logo.png',
+    apple: '/KlaroGov Logo.png',
+  },
 };
 
 export default function RootLayout({
