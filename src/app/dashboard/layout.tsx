@@ -33,7 +33,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ActivityFeed } from './activity/activity-feed';
-import { Tour } from './tour';
 import { cn } from '@/lib/utils';
 
 const InnerLayout = ({ children }: { children: React.ReactNode }) => {
@@ -80,7 +79,6 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground font-sans overflow-hidden">
-      {!isEmergencyDashboard && <Tour />}
       
       {/* 1. GLOBAL HEADER (AppBar) - Hidden on Emergency Dashboard */}
       {!isEmergencyDashboard && (
