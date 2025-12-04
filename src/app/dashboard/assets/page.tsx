@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -104,7 +104,10 @@ export default function AssetsPage() {
                          <Dialog open={isAddAssetOpen} onOpenChange={setIsAddAssetOpen}>
                             <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/> Add Asset</Button></DialogTrigger>
                             <DialogContent>
-                                <DialogHeader><DialogTitle>Add New Asset</DialogTitle></DialogHeader>
+                                <DialogHeader>
+                                    <DialogTitle>Add New Asset</DialogTitle>
+                                    <DialogDescription>Enter the details of the new equipment or vehicle.</DialogDescription>
+                                </DialogHeader>
                                 <div className="space-y-4 py-4">
                                     <div className="space-y-2"><Label>Asset Name</Label><Input value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. Generator Set 01" /></div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -169,7 +172,10 @@ export default function AssetsPage() {
                          <Dialog open={isBookAssetOpen} onOpenChange={setIsBookAssetOpen}>
                             <DialogTrigger asChild><Button><Calendar className="mr-2 h-4 w-4"/> Book Asset</Button></DialogTrigger>
                             <DialogContent>
-                                <DialogHeader><DialogTitle>Schedule Booking</DialogTitle></DialogHeader>
+                                <DialogHeader>
+                                    <DialogTitle>Schedule Booking</DialogTitle>
+                                    <DialogDescription>Reserve an asset for a specific date and time.</DialogDescription>
+                                </DialogHeader>
                                 <div className="space-y-4 py-4">
                                     <div className="space-y-2"><Label>Select Asset</Label>
                                         <Select onValueChange={(val) => setNewBooking({...newBooking, assetId: val})}>

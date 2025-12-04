@@ -2,8 +2,15 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // DEMO MODE: Allow any logged-in user to read/write everything.
-    // Client-side filtering will be used for "privacy" in the UI.
+    
+    // Explicitly allow public access for demo collections to avoid any auth friction
+    match /barangays/{barangayId}/fixed_assets/{document=**} { allow read, write: if true; }
+    match /barangays/{barangayId}/asset_bookings/{document=**} { allow read, write: if true; }
+    match /barangays/{barangayId}/emergency_alerts/{document=**} { allow read, write: if true; }
+    match /barangays/{barangayId}/blotter_cases/{document=**} { allow read, write: if true; }
+    match /barangays/{barangayId}/certificate_requests/{document=**} { allow read, write: if true; }
+    
+    // Default catch-all for authenticated users
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

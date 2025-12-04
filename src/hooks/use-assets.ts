@@ -1,7 +1,7 @@
 'use client';
 
 import { collection, query, where, orderBy } from 'firebase/firestore';
-import { useFirestore, useCollection } from '@/firebase'; // Removed useMemoFirebase
+import { useFirestore, useCollection } from '@/firebase';
 import { FixedAsset, AssetBooking } from '@/lib/types';
 import { BARANGAY_ID } from './use-barangay-data';
 import { useMemo } from 'react';
@@ -12,10 +12,7 @@ export function useAssetsRef(collectionName: string) {
   const firestore = useFirestore();
   return useMemo(() => {
     if (!firestore) return null;
-    const ref = collection(firestore, `/barangays/${BARANGAY_ID}/${collectionName}`);
-    // @ts-ignore
-    ref.__memo = true;
-    return ref;
+    return collection(firestore, `/barangays/${BARANGAY_ID}/${collectionName}`);
   }, [firestore, collectionName]);
 }
 
@@ -26,6 +23,8 @@ export function useFixedAssets() {
     
     const q = useMemo(() => {
         if (!ref) return null;
+        // We manually attach __memo to the QUERY, which is what useCollection consumes.
+        // We do NOT attach it to the ref itself anymore, to avoid poisoning addDoc.
         const queryRef = query(ref, orderBy('name', 'asc'));
         // @ts-ignore
         queryRef.__memo = true;
