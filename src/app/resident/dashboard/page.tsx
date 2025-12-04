@@ -1,54 +1,23 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-    DndContext, 
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from '@dnd-kit/core';
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    verticalListSortingStrategy,
-    useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
+import { 
+  FileText, 
+  AlertTriangle, 
+  QrCode, 
+  Megaphone, 
+  ArrowRight,
+  Siren,
+  Loader2,
+  CheckCircle,
+  Clock,
+  Calendar,
+  ScrollText
+} from "lucide-react";
+import { useUser, useCollection } from '@/firebase';
+import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
-import { FileText, Megaphone, CheckCircle, Clock, Siren, Loader2, Phone, Truck } from "lucide-react";
-import { RequestDocumentCard } from "./request-document-card";
-import { BlotterWidget } from "./blotter-widget"; 
-import { TransparencyBoard } from "./transparency-board"; 
-import { CommunityCalendar } from "./community-calendar";
-import { MyHousehold } from "./household-pets-widget";
-import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
-import { collection, query, where, orderBy, limit, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
-import { CertificateRequest, Announcement, EmergencyAlert, Resident } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
-import { useToast } from "@/hooks/use-toast";
 import {
     Dialog,
     DialogContent,
@@ -56,583 +25,440 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useResidentActions } from '@/hooks/use-resident-actions';
+import { useToast } from "@/hooks/use-toast";
+import { CertificateRequest } from '@/lib/types';
+import { format } from 'date-fns';
 
-const BARANGAY_ID = 'barangay_san_isidro';
-
-
-// --- COMPONENTS (Unchanged logic, just wrappers) ---
-
-const getStatusBadgeVariant = (status: CertificateRequest['status']) => {
-    switch (status) {
-        case 'Claimed':
-        case 'Approved':
-            return 'default';
-        case 'Ready for Pickup':
-            return 'secondary';
-        case 'Denied':
-            return 'destructive';
-        default:
-            return 'outline';
-    }
+// 1. Action Card Component
+interface ActionCardProps {
+  icon: React.ElementType;
+  label: string;
+  colorClass: string;
+  bgClass: string;
+  onClick: () => void;
 }
 
-function ActiveRequests() {
-    const firestore = useFirestore();
-    const { user } = useUser();
-
-    // Removed orderBy and limit to avoid complex composite index requirement.
-    // We will filter and sort on the client side.
-    const requestsQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return query(
-            collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`),
-            where('residentId', '==', user.uid)
-        );
-    }, [firestore, user]);
-
-    const { data: rawRequests, isLoading } = useCollection<CertificateRequest>(requestsQuery);
-    
-    // Sort and limit in client memory
-    const requests = useMemo(() => {
-        if (!rawRequests) return [];
-        return [...rawRequests]
-            .sort((a, b) => (b.dateRequested?.seconds || 0) - (a.dateRequested?.seconds || 0))
-            .slice(0, 5);
-    }, [rawRequests]);
-    
-    return (
-         <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><FileText /> My Active Requests</CardTitle>
-                <CardDescription>A summary of your recent document requests.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Document Type</TableHead>
-                            <TableHead>Date Requested</TableHead>
-                            <TableHead>Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading && [...Array(2)].map((_, i) => (
-                            <TableRow key={i}>
-                                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-                            </TableRow>
-                        ))}
-                        {!isLoading && requests && requests.length > 0 ? requests.map((req) => (
-                            <TableRow key={req.requestId}>
-                                <TableCell>{req.certificateName}</TableCell>
-                                <TableCell>{req.dateRequested ? format(req.dateRequested.toDate(), 'MMM dd, yyyy') : 'N/A'}</TableCell>
-                                <TableCell>
-                                    <Badge variant={getStatusBadgeVariant(req.status)} className="flex items-center gap-1 w-fit">
-                                        {req.status === 'Ready for Pickup' ? <Clock className="h-3 w-3"/> : <CheckCircle className="h-3 w-3"/> }
-                                        {req.status}
-                                    </Badge>
-                                </TableCell>
-                            </TableRow>
-                        )) : (
-                            !isLoading && (
-                                <TableRow>
-                                    <TableCell colSpan={3} className="text-center h-24">List View for Demo is not Available</TableCell>
-                                </TableRow>
-                            )
-                        )}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-    );
-}
-
-function RecentAnnouncements() {
-    const firestore = useFirestore();
-    
-    // orderBy on a single field without where clause usually works fine with default indexes.
-    const announcementsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return query(
-            collection(firestore, `/barangays/${BARANGAY_ID}/announcements`),
-            orderBy('datePosted', 'desc'),
-            limit(3)
-        );
-    }, [firestore]);
-
-    const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
-
-    return (
-         <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Megaphone /> Recent Announcements</CardTitle>
-                <CardDescription>Stay updated with the latest news from the barangay.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {isLoading && [...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-                {!isLoading && announcements && announcements.length > 0 ? announcements.map(item => (
-                   <div key={item.announcementId} className="flex justify-between items-center">
-                       <div>
-                           <p className="font-medium">{item.title}</p>
-                           <p className="text-sm text-muted-foreground">{item.datePosted ? format(item.datePosted.toDate(), 'MMM dd, yyyy') : 'N/A'}</p>
-                       </div>
-                       <Badge variant="outline">{item.category}</Badge>
-                   </div>
-               )) : (
-                   !isLoading && <p className="text-center text-muted-foreground py-8">No announcements yet.</p>
-               )}
-            </CardContent>
-        </Card>
-    )
-}
-
-function EmergencySOSButton() {
-    const { toast } = useToast();
-    const { user } = useUser();
-    const firestore = useFirestore();
-    const [isSending, setIsSending] = useState(false);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [activeAlertId, setActiveAlertId] = useState<string | null>(null);
-    const [category, setCategory] = useState<string>('Unspecified');
-    const [message, setMessage] = useState('');
-    const [contactNumber, setContactNumber] = useState('');
-
-    // Fetch active alert document
-    const activeAlertRef = useMemoFirebase(() => {
-        if (!firestore || !activeAlertId) return null;
-        return doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
-    }, [firestore, activeAlertId]);
-
-    const { data: activeAlert } = useDoc<EmergencyAlert>(activeAlertRef);
-
-    // Initial check for existing active alert on mount
-    useEffect(() => {
-        if (!firestore || !user || activeAlertId) return; // Don't check if we already have one
-        
-        // Simple one-off check to restore state if page refreshed
-        const checkActive = async () => {
-             const q = query(
-                collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`),
-                where('residentId', '==', user.uid),
-                where('status', 'in', ['New', 'Acknowledged', 'Dispatched', 'On Scene']),
-                // orderBy('timestamp', 'desc'), // REMOVED to avoid composite index error
-                // limit(1)
-            );
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                // Manually find the latest one in Javascript
-                const alerts = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-                // Sort descending by timestamp
-                alerts.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                
-                const latest = alerts[0];
-                setActiveAlertId(latest.id);
-                setMessage(latest.message || '');
-                setCategory(latest.category || 'Unspecified');
-            }
-        }
-        checkActive();
-    }, [firestore, user, activeAlertId]);
-
-
-    const handleSendSOS = async () => {
-        if (!user || !firestore) {
-             toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to send an SOS.' });
-             return;
-        }
-
-        setIsSending(true);
-
-        if (!navigator.geolocation) {
-             toast({ variant: 'destructive', title: 'Error', description: 'Geolocation is not supported by your browser.' });
-             setIsSending(false);
-             return;
-        }
-
-        // 1. Fetch Resident Profile to get Household ID and Contact
-        let residentData: Resident | undefined;
-        let householdMembersSnapshot: { name: string; age?: string; relationship?: string }[] = [];
-
-        try {
-            const residentRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
-            const residentSnap = await getDoc(residentRef);
-            if (residentSnap.exists()) {
-                residentData = residentSnap.data() as Resident;
-                if (!contactNumber && residentData.contactNumber) {
-                     setContactNumber(residentData.contactNumber); // Update local state for UI
-                }
-                
-                // 2. Fetch Household Members if householdId exists
-                if (residentData.householdId) {
-                    const membersQuery = query(
-                        collection(firestore, `/barangays/${BARANGAY_ID}/residents`),
-                        where('householdId', '==', residentData.householdId)
-                    );
-                    const membersSnap = await getDocs(membersQuery);
-                    membersSnap.forEach(doc => {
-                        const member = doc.data() as Resident;
-                        householdMembersSnapshot.push({
-                            name: `${member.firstName} ${member.lastName}`,
-                            relationship: member.residentId === user.uid ? 'Self' : 'Member',
-                            // Calculate age safely
-                            age: member.dateOfBirth ? String(new Date().getFullYear() - new Date(member.dateOfBirth).getFullYear()) : 'N/A'
-                        });
-                    });
-                }
-            }
-        } catch (e) {
-            console.warn("Failed to fetch resident details, proceeding with basic alert.", e);
-        }
-
-
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
-                
-                try {
-                    const alertsCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`);
-                    
-                    // Prepare safe alert object, ensuring no undefined fields
-                    const newAlert: Record<string, any> = {
-                        residentId: user.uid,
-                        residentName: user.displayName || (residentData?.firstName ? `${residentData?.firstName} ${residentData?.lastName}` : 'Resident'), 
-                        latitude,
-                        longitude,
-                        status: 'New',
-                        category: category,
-                        message: message,
-                        contactNumber: contactNumber || residentData?.contactNumber || 'No contact #',
-                        householdMembersSnapshot: householdMembersSnapshot,
-                    };
-                    
-                    if (residentData?.householdId) {
-                        newAlert.householdId = residentData.householdId;
-                    }
-
-                    const docRef = await addDocumentNonBlocking(alertsCollectionRef, newAlert);
-                    if (docRef) {
-                         await updateDocumentNonBlocking(docRef, { alertId: docRef.id, timestamp: serverTimestamp() });
-                         setActiveAlertId(docRef.id);
-                    }
-
-                    toast({ 
-                        title: "SOS SENT!", 
-                        description: "Help is on the way. Keep your phone close.",
-                        className: "bg-red-600 text-white border-none"
-                    });
-                    setOpenDialog(false);
-                } catch (error: any) {
-                    console.error("Error sending SOS:", error);
-                    toast({ variant: 'destructive', title: 'Failed to send SOS', description: error.message || 'Please try again or call emergency services directly.' });
-                } finally {
-                    setIsSending(false);
-                }
-            },
-            (error) => {
-                console.error("Geolocation error:", error);
-                toast({ variant: 'destructive', title: 'Location Error', description: error.message });
-                setIsSending(false);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    };
-
-    const handleUpdateMessage = async () => {
-         if (!activeAlertId || !firestore) return;
-         const alertRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
-         updateDocumentNonBlocking(alertRef, { message, category: category as any });
-         toast({ title: "Update Sent", description: "Incident details updated." });
-    }
-
-    const handleResolveAlert = async () => {
-         if (!activeAlertId || !firestore) return;
-         const alertRef = doc(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts/${activeAlertId}`);
-         await updateDocumentNonBlocking(alertRef, { 
-             status: 'Resolved',
-             resolvedAt: serverTimestamp(),
-             notes: 'Resolved by resident.' 
-         });
-         
-         toast({ title: "Alert Closed", description: "You have marked the incident as resolved." });
-         setActiveAlertId(null);
-    }
-
-    return (
-        <Card className="bg-red-50 border-red-200">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-red-700">
-                    <Siren className="h-6 w-6 animate-pulse" />
-                    Emergency Assistance
-                </CardTitle>
-                <CardDescription className="text-red-600/80">
-                    Press the button below to instantly alert barangay authorities and send your current location.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {!activeAlertId ? (
-                    <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                        <DialogTrigger asChild>
-                            <Button 
-                                variant="destructive" 
-                                size="lg" 
-                                className="w-full h-16 text-lg font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 transition-all"
-                            >
-                                SEND SOS ALERT
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle className="text-red-600 flex items-center gap-2"><Siren className="h-5 w-5"/> CONFIRM SOS ALERT</DialogTitle>
-                                <DialogDescription>
-                                    This will send your location and details to the Barangay Response Team immediately.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                    <Label>Nature of Emergency</Label>
-                                    <Select value={category} onValueChange={setCategory}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Category" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Medical">Medical Emergency</SelectItem>
-                                            <SelectItem value="Fire">Fire</SelectItem>
-                                            <SelectItem value="Crime">Crime / Public Safety</SelectItem>
-                                            <SelectItem value="Accident">Accident</SelectItem>
-                                            <SelectItem value="Unspecified">Other / Unspecified</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Additional Details (Optional)</Label>
-                                    <Textarea 
-                                        placeholder="Briefly describe what happened..." 
-                                        value={message} 
-                                        onChange={(e) => setMessage(e.target.value)} 
-                                    />
-                                </div>
-                                 <div className="space-y-2">
-                                    <Label>Callback Number</Label>
-                                    <Input 
-                                        placeholder="Enter your phone number" 
-                                        value={contactNumber} 
-                                        onChange={(e) => setContactNumber(e.target.value)} 
-                                    />
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
-                                <Button variant="destructive" onClick={handleSendSOS} disabled={isSending}>
-                                    {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    CONFIRM & SEND
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                ) : (
-                    <div className="space-y-4">
-                         <div className="bg-red-100 text-red-800 p-4 rounded-md text-center border border-red-200">
-                            <h3 className="font-bold text-lg animate-pulse">ALERT ACTIVE</h3>
-                            <p className="text-sm mt-1">Help is on the way. Do not close this app if possible.</p>
-                            {activeAlert?.status === 'Acknowledged' && (
-                                <Badge variant="secondary" className="mt-2 bg-yellow-100 text-yellow-800 border-yellow-200">Received by Admin</Badge>
-                            )}
-                            {activeAlert?.status === 'Dispatched' && (
-                                <div className="mt-4 bg-white p-3 rounded shadow-sm text-left border border-blue-200 animate-in fade-in slide-in-from-bottom-2">
-                                    <div className="flex items-center gap-2 text-blue-700 font-bold mb-2">
-                                        <Truck className="h-5 w-5" /> RESPONDER DISPATCHED
-                                    </div>
-                                    {activeAlert.responderDetails && (
-                                        <div className="text-sm text-gray-700 space-y-1">
-                                            <p><span className="font-semibold">Officer:</span> {activeAlert.responderDetails.name}</p>
-                                            <p><span className="font-semibold">Vehicle:</span> {activeAlert.responderDetails.vehicleInfo}</p>
-                                            <Button size="sm" variant="outline" className="w-full mt-2 gap-2 text-blue-600 border-blue-200 hover:bg-blue-50" asChild>
-                                                <a href={`tel:${activeAlert.responderDetails.contactNumber}`}>
-                                                    <Phone className="h-4 w-4" /> Call Responder
-                                                </a>
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                         </div>
-                         <div className="space-y-2">
-                            <Label>Update Situation</Label>
-                            <Textarea 
-                                placeholder="Update message..." 
-                                value={message} 
-                                onChange={(e) => setMessage(e.target.value)} 
-                            />
-                            <Button onClick={handleUpdateMessage} size="sm" className="w-full">
-                                Update Message
-                            </Button>
-                         </div>
-                         <Button variant="outline" size="sm" className="w-full" onClick={handleResolveAlert}>
-                            Report Resolved / Close
-                         </Button>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
-// --- DRAGGABLE WRAPPER ---
-
-function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-    } = useSortable({ id });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-    };
-
-    return (
-        <div ref={setNodeRef} style={style} className="relative group">
-            {/* Drag Handle */}
-            <div 
-                {...attributes} 
-                {...listeners} 
-                className="absolute top-2 right-2 z-10 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
-            >
-                <GripVertical className="h-4 w-4 text-muted-foreground" />
-            </div>
-            {children}
+const ActionCard = ({ icon: Icon, label, colorClass, bgClass, onClick }: ActionCardProps) => {
+  return (
+    <div 
+        onClick={onClick}
+        className="group relative w-full h-40 md:h-56 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-8 hover:-translate-y-1 active:scale-95 hover:shadow-md hover:border-blue-100 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center select-none"
+    >
+        <div className={cn("p-3 md:p-4 rounded-full transition-colors duration-300 mb-3 md:mb-4", bgClass)}>
+            <Icon className={cn("h-8 w-8 md:h-12 md:w-12", colorClass)} strokeWidth={1.5} />
         </div>
-    );
-}
-
+        <h3 className="text-slate-800 font-bold text-base md:text-xl tracking-tight group-hover:text-blue-600 transition-colors text-center">
+            {label}
+        </h3>
+    </div>
+  );
+};
 
 export default function ResidentDashboardPage() {
-    const [leftColumnItems, setLeftColumnItems] = useState([
-        'emergency',
-        'blotter_transparency', // KEEPING THEM GROUPED
-        'active_requests',
-        'announcements'
-    ]);
+  const { user } = useUser();
+  const firstName = user?.displayName?.split(' ')[0] || 'Resident';
+  const { 
+      createAlert, 
+      fileComplaint, 
+      requestDocument, 
+      getMyRequestsQuery, 
+      getOrdinancesQuery, 
+      getHealthSchedulesQuery,
+      loading 
+  } = useResidentActions();
+  const { toast } = useToast();
 
-    const [rightColumnItems, setRightColumnItems] = useState([
-        'household_pets',
-        'request_document',
-        'calendar'
-    ]);
-    
-    // Let's try to map the IDs to components
-    const renderComponent = (id: string) => {
-        switch(id) {
-            case 'emergency': return <EmergencySOSButton />;
-            case 'blotter_transparency': 
-                return (
-                     <div className="grid md:grid-cols-2 gap-6"> {/* Removed h-full */}
-                         <div><BlotterWidget /></div>
-                         <div><TransparencyBoard /></div>
-                    </div>
-                );
-            case 'active_requests': return <ActiveRequests />;
-            case 'announcements': return <RecentAnnouncements />;
-            case 'household_pets': return <MyHousehold />;
-            case 'request_document': return <RequestDocumentCard />;
-            case 'calendar': return <CommunityCalendar />;
-            default: return null;
-        }
+  // Dialog States
+  const [activeModal, setActiveModal] = useState<'sos' | 'blotter' | 'request' | null>(null);
+
+  // Form States
+  const [sosCategory, setSosCategory] = useState('Medical');
+  const [sosMessage, setSosMessage] = useState('');
+  
+  const [blotterType, setBlotterType] = useState('Noise Complaint');
+  const [blotterDesc, setBlotterDesc] = useState('');
+  
+  const [docType, setDocType] = useState('Barangay Clearance');
+  const [docPurpose, setDocPurpose] = useState('');
+
+  // --- DATA FETCHING ---
+
+  // 1. My Requests
+  const requestsQuery = useMemo(() => {
+    const q = getMyRequestsQuery();
+    if (q) {
+        // @ts-ignore
+        q.__memo = true;
     }
+    return q;
+  }, [getMyRequestsQuery]);
+  const { data: myRequests } = useCollection<CertificateRequest>(requestsQuery);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
+  // 2. Ordinances (Legislative)
+  const ordinancesQuery = useMemo(() => {
+      const q = getOrdinancesQuery();
+      if(q) { 
+          // @ts-ignore
+          q.__memo = true; 
+      }
+      return q;
+  }, [getOrdinancesQuery]);
+  const { data: ordinances } = useCollection(ordinancesQuery);
 
-    function handleDragEnd(event: DragEndEvent) {
-        const { active, over } = event;
-        
-        if (!over) return;
+  // 3. Health Schedules
+  const healthQuery = useMemo(() => {
+      const q = getHealthSchedulesQuery();
+      if(q) {
+          // @ts-ignore
+          q.__memo = true;
+      }
+      return q;
+  }, [getHealthSchedulesQuery]);
+  const { data: healthSchedules } = useCollection(healthQuery);
 
-        // Find which column the items belong to
-        const activeId = active.id as string;
-        const overId = over.id as string;
 
-        const isLeft = leftColumnItems.includes(activeId);
-        const isRight = rightColumnItems.includes(activeId);
-        
-        // Dragging within Left Column
-        if (isLeft && leftColumnItems.includes(overId)) {
-            setLeftColumnItems((items) => {
-                const oldIndex = items.indexOf(activeId);
-                const newIndex = items.indexOf(overId);
-                return arrayMove(items, oldIndex, newIndex);
-            });
-        }
-        
-        // Dragging within Right Column
-        if (isRight && rightColumnItems.includes(overId)) {
-            setRightColumnItems((items) => {
-                const oldIndex = items.indexOf(activeId);
-                const newIndex = items.indexOf(overId);
-                return arrayMove(items, oldIndex, newIndex);
-            });
-        }
+  // HANDLERS
+
+  const handleSOS = async () => {
+    if (!navigator.geolocation) {
+        toast({ variant: 'destructive', title: "Geolocation Error", description: "Location not supported." });
+        return;
     }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const result = await createAlert(latitude, longitude, sosCategory, sosMessage);
+        if (result) setActiveModal(null);
+    }, (err) => {
+        toast({ variant: 'destructive', title: "Location Error", description: err.message });
+    });
+  };
 
+  const handleBlotter = async () => {
+    const success = await fileComplaint(blotterType, blotterDesc);
+    if (success) {
+        setActiveModal(null);
+        setBlotterDesc('');
+    }
+  };
+
+  const handleRequest = async () => {
+    const success = await requestDocument(docType, docPurpose);
+    if (success) {
+        setActiveModal(null);
+        setDocPurpose('');
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Resident Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome! Access barangay services and stay informed.
+    <div className="flex flex-col gap-6 md:gap-12 max-w-6xl mx-auto pt-2 md:pt-10 pb-20">
+      
+      {/* Header Section */}
+      <div className="text-center space-y-2 md:space-y-3 px-4">
+        <h1 className="text-2xl md:text-4xl lg:text-5xl font-extrabold text-[#1E293B] tracking-tight">
+          Magandang Araw, {firstName}!
+        </h1>
+        <p className="text-base md:text-xl text-[#64748B] font-medium">
+          What would you like to do today?
         </p>
       </div>
 
-      <DndContext 
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="grid gap-6 md:grid-cols-3">
-            {/* Left Column (2/3 width) */}
-            <div className="md:col-span-2 space-y-6">
-                <SortableContext 
-                    items={leftColumnItems}
-                    strategy={verticalListSortingStrategy}
-                >
-                    {leftColumnItems.map((id) => (
-                        <SortableItem key={id} id={id}>
-                            {renderComponent(id)}
-                        </SortableItem>
-                    ))}
-                </SortableContext>
-            </div>
+      {/* The Grid (Launcher) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 px-2 md:px-0">
+        <ActionCard 
+            label="Request Document" 
+            icon={FileText} 
+            colorClass="text-cyan-500" 
+            bgClass="bg-cyan-50 group-hover:bg-cyan-100" 
+            onClick={() => setActiveModal('request')}
+        />
+        <ActionCard 
+            label="Report Incident" 
+            icon={AlertTriangle} 
+            colorClass="text-rose-500" 
+            bgClass="bg-rose-50 group-hover:bg-rose-100" 
+            onClick={() => setActiveModal('blotter')}
+        />
+        <ActionCard 
+            label="My Digital ID" 
+            icon={QrCode} 
+            colorClass="text-slate-700" 
+            bgClass="bg-slate-100 group-hover:bg-slate-200" 
+            onClick={() => window.location.href = '/resident/profile'} // Simple redirect
+        />
+         <ActionCard 
+            label="Emergency SOS" 
+            icon={Siren} 
+            colorClass="text-red-600 animate-pulse" 
+            bgClass="bg-red-50 group-hover:bg-red-100" 
+            onClick={() => setActiveModal('sos')}
+        />
+      </div>
 
-            {/* Right Column (1/3 width) */}
-            <div className="space-y-6">
-                 <SortableContext 
-                    items={rightColumnItems}
-                    strategy={verticalListSortingStrategy}
-                >
-                    {rightColumnItems.map((id) => (
-                        <SortableItem key={id} id={id}>
-                            {renderComponent(id)}
-                        </SortableItem>
-                    ))}
-                </SortableContext>
+      {/* --- INFO SECTIONS --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-2 md:px-0">
+          
+          {/* Recent Activity */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-500" /> Recent Requests
+                    </h2>
+                    <Link href="/resident/my-requests" className="text-xs font-semibold text-blue-600 hover:text-blue-700">View All</Link>
+                </div>
+                <div className="flex-1">
+                    {myRequests && myRequests.length > 0 ? (
+                        <div className="divide-y divide-slate-100">
+                            {myRequests.slice(0, 3).map((req) => (
+                                <div key={req.requestId} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-full ${req.status === 'Ready for Pickup' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+                                            <FileText className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-slate-800 text-sm">{req.certificateName}</p>
+                                            <p className="text-xs text-slate-500">{req.dateRequested ? format(req.dateRequested.toDate(), 'MMM dd, yyyy') : 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                    <div className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                        req.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                        req.status === 'Ready for Pickup' ? 'bg-green-50 text-green-700 border-green-200' :
+                                        'bg-slate-50 text-slate-600 border-slate-200'
+                                    }`}>
+                                        {req.status}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-8 text-center text-slate-500">
+                            <p className="text-sm">No recent requests.</p>
+                        </div>
+                    )}
+                </div>
+          </div>
+
+          {/* Legislative & Health (Tabbed or Stacked) */}
+          <div className="space-y-6">
+              
+              {/* Legislative Corner */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                      <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                          <ScrollText className="h-4 w-4 text-purple-500" /> Legislative Corner
+                      </h2>
+                  </div>
+                  <div className="p-4">
+                      {ordinances && ordinances.length > 0 ? (
+                          <ul className="space-y-3">
+                              {ordinances.slice(0, 3).map((ord: any) => (
+                                  <li key={ord.id} className="text-sm">
+                                      <span className="font-semibold text-slate-700 block">{ord.title || 'Barangay Ordinance'}</span>
+                                      <span className="text-slate-500 text-xs line-clamp-1">{ord.description || 'No description provided.'}</span>
+                                  </li>
+                              ))}
+                          </ul>
+                      ) : (
+                          // Dummy Data for Demo
+                          <ul className="space-y-3">
+                              <li className="text-sm border-l-2 border-purple-200 pl-3">
+                                  <span className="font-semibold text-slate-700 block">Ordinance No. 2024-001</span>
+                                  <span className="text-slate-500 text-xs">Curfew for minors set to 10:00 PM.</span>
+                              </li>
+                              <li className="text-sm border-l-2 border-purple-200 pl-3">
+                                  <span className="font-semibold text-slate-700 block">Resolution 05-2024</span>
+                                  <span className="text-slate-500 text-xs">Approval of new waste management schedule.</span>
+                              </li>
+                          </ul>
+                      )}
+                  </div>
+              </div>
+
+              {/* Health Schedule */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                      <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-emerald-500" /> Health Center
+                      </h2>
+                  </div>
+                  <div className="p-4">
+                      {healthSchedules && healthSchedules.length > 0 ? (
+                          <div className="space-y-3">
+                              {healthSchedules.slice(0, 2).map((sched: any) => (
+                                  <div key={sched.id} className="flex gap-3 text-sm">
+                                      <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-center min-w-[50px]">
+                                          <div className="font-bold">{sched.date ? format(sched.date.toDate(), 'dd') : '01'}</div>
+                                          <div className="text-[10px] uppercase">{sched.date ? format(sched.date.toDate(), 'MMM') : 'JAN'}</div>
+                                      </div>
+                                      <div>
+                                          <div className="font-semibold text-slate-700">{sched.activity || 'Health Activity'}</div>
+                                          <div className="text-slate-500 text-xs">{sched.time || '8:00 AM'}</div>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      ) : (
+                          // Dummy Data for Demo
+                          <div className="space-y-3">
+                              <div className="flex gap-3 text-sm border-b border-dashed border-slate-100 pb-2">
+                                  <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-center min-w-[50px] flex flex-col justify-center">
+                                      <div className="font-bold text-lg leading-none">15</div>
+                                      <div className="text-[10px] uppercase font-bold">DEC</div>
+                                  </div>
+                                  <div>
+                                      <div className="font-semibold text-slate-700">Free Vaccination Drive</div>
+                                      <div className="text-slate-500 text-xs">8:00 AM - 12:00 PM • Brgy. Hall</div>
+                                  </div>
+                              </div>
+                              <div className="flex gap-3 text-sm">
+                                  <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-center min-w-[50px] flex flex-col justify-center">
+                                      <div className="font-bold text-lg leading-none">20</div>
+                                      <div className="text-[10px] uppercase font-bold">DEC</div>
+                                  </div>
+                                  <div>
+                                      <div className="font-semibold text-slate-700">Maternal Health Checkup</div>
+                                      <div className="text-slate-500 text-xs">1:00 PM - 4:00 PM • Health Center</div>
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              </div>
+
+          </div>
+      </div>
+
+      {/* --- MODALS --- */}
+
+      {/* SOS MODAL */}
+      <Dialog open={activeModal === 'sos'} onOpenChange={(open) => !open && setActiveModal(null)}>
+        <DialogContent className="sm:max-w-[425px] border-red-200 bg-red-50">
+            <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700"><Siren className="h-5 w-5"/> CONFIRM SOS</DialogTitle>
+            <DialogDescription className="text-red-600/80">
+                This will send your location to the Command Center.
+            </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="sos-cat">Emergency Type</Label>
+                    <Select onValueChange={setSosCategory} defaultValue={sosCategory}>
+                        <SelectTrigger className="bg-white border-red-200"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Medical">Medical</SelectItem>
+                            <SelectItem value="Fire">Fire</SelectItem>
+                            <SelectItem value="Crime">Crime</SelectItem>
+                            <SelectItem value="Accident">Accident</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="sos-msg">Details (Optional)</Label>
+                    <Textarea 
+                        id="sos-msg" 
+                        className="bg-white border-red-200" 
+                        placeholder="Describe the situation..."
+                        value={sosMessage}
+                        onChange={(e) => setSosMessage(e.target.value)}
+                    />
+                </div>
             </div>
-        </div>
-      </DndContext>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setActiveModal(null)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleSOS} disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} SEND ALERT
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* BLOTTER MODAL */}
+      <Dialog open={activeModal === 'blotter'} onOpenChange={(open) => !open && setActiveModal(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-rose-500"/> Report Incident</DialogTitle>
+            <DialogDescription>
+                File a confidential report to the Peace & Order committee.
+            </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                    <Label>Incident Type</Label>
+                    <Select onValueChange={setBlotterType} defaultValue={blotterType}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Noise Complaint">Noise Complaint</SelectItem>
+                            <SelectItem value="Theft">Theft / Robbery</SelectItem>
+                            <SelectItem value="Vandalism">Vandalism</SelectItem>
+                            <SelectItem value="Harassment">Harassment</SelectItem>
+                            <SelectItem value="Others">Others</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid gap-2">
+                    <Label>Narrative</Label>
+                    <Textarea 
+                        className="min-h-[100px]" 
+                        placeholder="Please describe what happened..."
+                        value={blotterDesc}
+                        onChange={(e) => setBlotterDesc(e.target.value)}
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
+                <Button onClick={handleBlotter} disabled={loading || !blotterDesc} className="bg-rose-600 hover:bg-rose-700">
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit Report
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* REQUEST MODAL */}
+      <Dialog open={activeModal === 'request'} onOpenChange={(open) => !open && setActiveModal(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-cyan-500"/> Request Document</DialogTitle>
+            <DialogDescription>
+                Select a document type to request from the barangay hall.
+            </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                    <Label>Document Type</Label>
+                    <Select onValueChange={setDocType} defaultValue={docType}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Barangay Clearance">Barangay Clearance</SelectItem>
+                            <SelectItem value="Certificate of Indigency">Certificate of Indigency</SelectItem>
+                            <SelectItem value="Business Permit">Business Permit</SelectItem>
+                            <SelectItem value="Certificate of Residency">Certificate of Residency</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid gap-2">
+                    <Label>Purpose</Label>
+                    <Input 
+                        placeholder="e.g., Employment, Scholarship"
+                        value={docPurpose}
+                        onChange={(e) => setDocPurpose(e.target.value)}
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
+                <Button onClick={handleRequest} disabled={loading || !docPurpose} className="bg-cyan-600 hover:bg-cyan-700">
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit Request
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

@@ -25,22 +25,22 @@ const NavItem = ({
   pathname: string;
   active?: boolean;
 }) => {
-  const isActive = active || pathname.startsWith(href);
+  const isActive = active || pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <Link href={href}>
+    <Link href={href} className="block mb-1">
       <div
         className={cn(
-          "group flex cursor-pointer items-center justify-between px-4 py-2 text-[14px] rounded-r-full mr-4",
+          "flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm rounded-md transition-all duration-200",
           isActive
-            ? "bg-primary/10 text-primary font-semibold"
-            : "text-foreground/70 hover:bg-muted hover:text-primary"
+            ? "bg-cyan-50 text-cyan-700 font-semibold shadow-sm ring-1 ring-cyan-200"
+            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         )}
       >
-        <div className="flex items-center gap-3">
-          <span className={cn(isActive ? "text-primary" : "text-muted-foreground", "group-hover:text-primary")}>{icon}</span>
-          <span className="font-medium">{label}</span>
-        </div>
+        <span className={cn(isActive ? "text-cyan-600" : "text-slate-400 group-hover:text-slate-600")}>
+          {icon}
+        </span>
+        <span>{label}</span>
       </div>
     </Link>
   );
@@ -50,14 +50,14 @@ export function SidebarNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/resident/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/resident/my-requests", label: "My Requests", icon: <FileText size={18} /> },
-    { href: "/resident/announcements", label: "Announcements", icon: <Megaphone size={18} /> },
-    { href: "/resident/directory", label: "Directory", icon: <Users size={18} /> },
+    { href: "/resident/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+    { href: "/resident/my-requests", label: "My Requests", icon: <FileText size={20} /> },
+    { href: "/resident/announcements", label: "Announcements", icon: <Megaphone size={20} /> },
+    { href: "/resident/directory", label: "Directory", icon: <Users size={20} /> },
   ];
 
   return (
-    <div className="py-4">
+    <nav>
       {navItems.map((item) => (
         <NavItem
           key={item.href}
@@ -65,9 +65,8 @@ export function SidebarNav() {
           label={item.label}
           href={item.href}
           pathname={pathname}
-          active={pathname === item.href}
         />
       ))}
-    </div>
+    </nav>
   );
 }
