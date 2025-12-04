@@ -4,13 +4,12 @@ import { cn } from "@/lib/utils"
 
 export interface TextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  asChild?: boolean; // Add asChild to props interface
+  asChild?: boolean;
 }
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, asChild, ...props }, ref) => { // Destructure asChild
-    // If asChild is true, we should render a Slot. Since we're not using Slot here,
-    // and this component renders a native textarea, we simply ensure asChild is not passed down.
+  ({ className, asChild, ...props }, ref) => {
+    // asChild is not used for native elements, so we omit it from props
     return (
       <textarea
         className={cn(

@@ -22,11 +22,12 @@ const alertVariants = cva(
 interface AlertProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof alertVariants> {
-        asChild?: boolean; // Add asChild to props interface
-    }
+  asChild?: boolean;
+}
 
 const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant, asChild, ...props }, ref) => ( // Destructure asChild
+  ({ className, variant, asChild, ...props }, ref) => (
+    // asChild is not used for native elements, so we omit it from props
     <div
       ref={ref}
       role="alert"
@@ -39,7 +40,7 @@ Alert.displayName = "Alert"
 
 const AlertTitle = React.forwardRef<
   HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
+  React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
   <h5
     ref={ref}
