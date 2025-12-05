@@ -35,6 +35,8 @@ import {
 import { ActivityFeed } from './activity/activity-feed';
 import { cn } from '@/lib/utils';
 
+// Removed Tour import
+
 const InnerLayout = ({ children }: { children: React.ReactNode }) => {
   // Default to false (expanded)
   const [isCollapsed, setIsCollapsed] = useState(false);
