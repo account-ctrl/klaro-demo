@@ -15,8 +15,8 @@ export const metadata: Metadata = {
   title: 'KlaroGov',
   description: 'Transparent, efficient, and community-driven digital governance.',
   icons: {
-    icon: '/KlaroGov Logo.png',
-    shortcut: '/KlaroGov Logo.png',
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
     apple: '/KlaroGov Logo.png',
   },
 };
