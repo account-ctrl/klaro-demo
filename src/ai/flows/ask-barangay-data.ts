@@ -37,6 +37,7 @@ export async function askBarangayData(
 
 const prompt = ai.definePrompt({
   name: 'askBarangayDataPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: AskBarangayDataInputSchema },
   output: { schema: AskBarangayDataOutputSchema },
   prompt: `You are an expert data analyst for a local government unit in the Philippines. Your task is to answer questions based on the provided JSON data about the barangay.
