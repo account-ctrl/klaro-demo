@@ -1,10 +1,6 @@
 'use server';
 /**
  * @fileOverview An AI tool that answers questions about Barangay data from Firestore.
- *
- * - askBarangayData - A function that handles answering questions about Barangay data.
- * - AskBarangayDataInput - The input type for the askBarangayData function.
- * - AskBarangayDataOutput - The return type for the askBarangayData function.
  */
 
 import { ai } from '@/ai/genkit';
@@ -32,7 +28,16 @@ export type AskBarangayDataOutput = z.infer<typeof AskBarangayDataOutputSchema>;
 export async function askBarangayData(
   input: AskBarangayDataInput
 ): Promise<AskBarangayDataOutput> {
-  return askBarangayDataFlow(input);
+  console.log("Running askBarangayData flow with input length:", JSON.stringify(input).length);
+  try {
+    const result = await askBarangayDataFlow(input);
+    return result;
+  } catch (error: any) {
+    console.error("Genkit Flow Error:", error);
+    return {
+      answer: `AI Service Error: ${error.message || 'Unknown error'}. Please check API key quotas or limits.`
+    };
+  }
 }
 
 const prompt = ai.definePrompt({
