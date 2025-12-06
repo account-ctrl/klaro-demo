@@ -4,16 +4,17 @@
 import { useState, useMemo } from 'react';
 import { useInventoryItems, useInventoryBatches, useEHealthRef } from '@/hooks/use-ehealth';
 import { MedicineItem, MedicineBatch } from '@/lib/ehealth-types';
-import { addDocumentNonBlocking, updateDocumentNonBlocking, useFirestore } from '@/firebase';
+import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, useFirestore } from '@/firebase';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Package, AlertTriangle, History, Search, Filter, AlertCircle } from 'lucide-react';
+import { Plus, Package, AlertTriangle, History, Search, Filter, AlertCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { serverTimestamp, doc, increment } from 'firebase/firestore';
 import { BARANGAY_ID } from '@/hooks/use-barangay-data'; 
@@ -61,6 +62,18 @@ export default function InventoryPage() {
         setIsAddItemOpen(false);
         setNewItem({ name: '', dosage: '', unit: '', reorderPoint: '10' });
         toast({ title: "Item Added", description: `${newItem.name} added to master inventory.` });
+    };
+
+    const handleDeleteItem = async (itemId: string) => {
+        if (!firestore) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ehealth_inventory_items/${itemId}`);
+        try {
+            await deleteDocumentNonBlocking(docRef);
+            toast({ title: "Item Deleted", description: "Inventory item has been removed." });
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete item." });
+        }
     };
 
     const handleAddBatch = async () => {
@@ -171,7 +184,7 @@ export default function InventoryPage() {
                         const itemId = item.id;
 
                         return (
-                            <Card key={itemId} className={`flex flex-col ${isLowStock ? 'border-red-200 shadow-sm' : ''}`}>
+                            <Card key={itemId} className={`flex flex-col group relative ${isLowStock ? 'border-red-200 shadow-sm' : ''}`}>
                                 <CardHeader className="pb-3">
                                     <div className="flex justify-between items-start">
                                         <div className="space-y-1">
@@ -188,6 +201,29 @@ export default function InventoryPage() {
                                             <div className="text-2xl font-bold">{item.totalStock || 0}</div>
                                             <div className="text-xs text-muted-foreground">Total Qty</div>
                                         </div>
+                                    </div>
+                                    
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-600">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Delete Inventory Item?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will delete <strong>{item.name}</strong> from the master list. 
+                                                        Existing batches may remain in the database but will be orphaned.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDeleteItem(itemId)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="flex-grow">

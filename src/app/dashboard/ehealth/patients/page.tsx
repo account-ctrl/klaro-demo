@@ -2,19 +2,20 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useResidents } from '@/hooks/use-barangay-data';
+import { useResidents, BARANGAY_ID } from '@/hooks/use-barangay-data';
 import { useHealthProfiles, useDispensingLogs, useEHealthRef } from '@/hooks/use-ehealth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, FileText, History, Activity, Edit2, User, HeartPulse, AlertTriangle, Clock } from 'lucide-react';
+import { Search, FileText, History, Activity, Edit2, User, HeartPulse, AlertTriangle, Clock, Users, Home, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { doc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Separator } from '@/components/ui/separator';
@@ -36,12 +37,18 @@ export default function PatientRecordsPage() {
 
     // Use r.id for robust selection
     const selectedResident = useMemo(() => residents?.find(r => r.id === selectedResidentId), [residents, selectedResidentId]);
+    
+    // Find family members (same householdId)
+    const familyMembers = useMemo(() => {
+        if (!residents || !selectedResident || !selectedResident.householdId) return [];
+        return residents.filter(r => r.householdId === selectedResident.householdId && r.id !== selectedResident.id);
+    }, [residents, selectedResident]);
 
     return (
         <div className="space-y-6 h-[calc(100vh-10rem)] flex flex-col">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Patient Health Records</h1>
-                <p className="text-muted-foreground">View medical history and health profiles.</p>
+                <p className="text-muted-foreground">View medical history, family grouping, and health profiles.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow min-h-0">
@@ -76,7 +83,7 @@ export default function PatientRecordsPage() {
                 {/* Detail Panel */}
                 <Card className="lg:col-span-2 h-full flex flex-col shadow-none border-0 lg:border">
                     {selectedResident ? (
-                        <PatientDetailView resident={selectedResident} />
+                        <PatientDetailView resident={selectedResident} familyMembers={familyMembers} />
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
                             <div className="p-6 bg-muted/20 rounded-full">
@@ -91,7 +98,7 @@ export default function PatientRecordsPage() {
     );
 }
 
-function PatientDetailView({ resident }: { resident: WithId<Resident> }) {
+function PatientDetailView({ resident, familyMembers }: { resident: WithId<Resident>, familyMembers: WithId<Resident>[] }) {
     const { data: profiles } = useHealthProfiles();
     const { data: logs } = useDispensingLogs();
     const firestore = useFirestore();
@@ -136,6 +143,12 @@ function PatientDetailView({ resident }: { resident: WithId<Resident> }) {
              addDocumentNonBlocking(profilesRef, data);
         }
         setIsEditing(false);
+    }
+
+    const handleDeleteLog = async (logId: string) => {
+        if (!firestore) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ehealth_dispensing_logs/${logId}`);
+        await deleteDocumentNonBlocking(docRef);
     }
 
     return (
@@ -261,6 +274,29 @@ function PatientDetailView({ resident }: { resident: WithId<Resident> }) {
                                         </Card>
                                     </div>
 
+                                    {/* Household Context */}
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                                <Home className="h-4 w-4 text-muted-foreground"/> Household Members
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {familyMembers.length > 0 ? (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    {familyMembers.map(m => (
+                                                        <div key={m.id} className="flex items-center gap-2 p-2 bg-background border rounded text-sm">
+                                                            <Users className="h-3 w-3 text-muted-foreground"/>
+                                                            <span className="truncate">{m.firstName} {m.lastName}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-sm text-muted-foreground italic">No other household members listed.</span>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
                                     {/* Notes Section */}
                                     <Card>
                                         <CardHeader className="pb-2">
@@ -293,7 +329,7 @@ function PatientDetailView({ resident }: { resident: WithId<Resident> }) {
                                     {patientLogs.map((log, i) => (
                                         <div key={log.logId} className="relative pl-6 border-l-2 border-muted pb-6 last:pb-0 last:border-0">
                                             <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-primary border-4 border-white shadow-sm" />
-                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 bg-white p-4 rounded-lg border shadow-sm">
+                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 bg-white p-4 rounded-lg border shadow-sm group">
                                                 <div>
                                                     <p className="font-bold text-slate-900">{log.itemName}</p>
                                                     <div className="flex items-center gap-2 mt-1">
@@ -301,12 +337,33 @@ function PatientDetailView({ resident }: { resident: WithId<Resident> }) {
                                                         <span className="text-sm text-muted-foreground">Qty: <strong>{log.quantity}</strong></span>
                                                     </div>
                                                 </div>
-                                                <div className="text-right text-xs text-muted-foreground">
-                                                    <div className="flex items-center justify-end gap-1 mb-1">
-                                                        <Clock className="h-3 w-3" />
-                                                        {log.dateDispensed ? formatDistanceToNow(log.dateDispensed.toDate(), { addSuffix: true }) : 'Unknown date'}
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <div className="text-right text-xs text-muted-foreground">
+                                                        <div className="flex items-center justify-end gap-1 mb-1">
+                                                            <Clock className="h-3 w-3" />
+                                                            {log.dateDispensed ? formatDistanceToNow(log.dateDispensed.toDate(), { addSuffix: true }) : 'Unknown date'}
+                                                        </div>
+                                                        <p>Dispensed by {log.dispensedByUserName}</p>
                                                     </div>
-                                                    <p>Dispensed by {log.dispensedByUserName}</p>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Delete Log Entry?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    This will remove this dispensing record. Note: This action does <strong>not</strong> automatically restore inventory stock.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDeleteLog(log.logId)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                 </div>
                                             </div>
                                         </div>
