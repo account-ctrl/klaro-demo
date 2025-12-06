@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -51,7 +52,7 @@ export interface InternalQuery extends Query<DocumentData> {
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    targetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
+    targetRefOrQuery: (CollectionReference<DocumentData> | Query<DocumentData>) | null | undefined,
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -64,7 +65,7 @@ export function useCollection<T = any>(
   const prevQueryRef = useRef<typeof targetRefOrQuery>(undefined);
 
   useEffect(() => {
-    // Skip if query hasn't changed (based on strict equality or memoization check)
+    // Basic strict equality check, but we trust the caller to memoize.
     if (prevQueryRef.current === targetRefOrQuery) {
       return;
     }
@@ -76,22 +77,6 @@ export function useCollection<T = any>(
       setError(null);
       return;
     }
-
-    // If not memoized with useMemoFirebase (indicated by __memo prop), log a warning or throw in dev
-    // but attempting to handle standard memoization too.
-    // The previous strict check threw error, maybe we can relax it or fix the caller.
-    // For now, let's just use it.
-    
-    // Wait, if we relax the check, we might get infinite loops if the user creates a new query on every render.
-    // But the error message says "[object Object] was not properly memoized using useMemoFirebase".
-    // This means targetRefOrQuery.__memo is undefined or false.
-    
-    // If I fix use-assets.ts to use useMemoFirebase, it might solve it.
-    // However, user requested to fix the error. Modifying useCollection to be more robust or fixing the caller.
-    // The error comes from the check: 
-    // if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) throw ...
-    
-    // I should check if I can fix the caller first.
 
     setIsLoading(true);
     setError(null);
@@ -108,16 +93,21 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       (error: FirestoreError) => {
-        const path: string =
-          targetRefOrQuery.type === 'collection'
+        let path = 'unknown-path';
+        try {
+            path = targetRefOrQuery.type === 'collection'
             ? (targetRefOrQuery as CollectionReference).path
             : (targetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString()
+        } catch (e) {
+            // ignore
+        }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
           path,
         })
 
+        console.error("useCollection subscription error:", error);
         setError(contextualError)
         setData(null)
         setIsLoading(false)
@@ -127,8 +117,5 @@ export function useCollection<T = any>(
     return () => unsubscribe();
   }, [targetRefOrQuery]); 
 
-  // Removed the strict check that was throwing the error
-  // if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) { ... }
-  
   return { data, isLoading, error };
 }
