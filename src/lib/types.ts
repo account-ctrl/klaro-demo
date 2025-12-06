@@ -394,10 +394,15 @@ export type FixedAsset = {
   assetId: string;
   name: string; // e.g., "Barangay Patrol 01"
   type: 'Vehicle' | 'Equipment' | 'Facility' | 'Furniture';
-  status: 'Available' | 'In Use' | 'Maintenance' | 'Decommissioned';
+  status: 'Available' | 'In Use' | 'Maintenance' | 'Decommissioned' | 'Damaged' | 'Deployed';
   purchaseDate: string; // ISO Date string
   serialNumber?: string;
   
+  // Location and Custodian
+  location?: string; // e.g., "Barangay Hall Storage", "Health Center"
+  custodianId?: string; // Link to User or Resident
+  custodianName?: string; // Denormalized name for easier display
+
   // Fleet specific fields
   plateNumber?: string; 
   lastMaintenanceDate?: string; // ISO Date string
