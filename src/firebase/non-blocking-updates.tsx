@@ -39,11 +39,11 @@ function getCleanDocRef(ref: DocumentReference): DocumentReference {
 
 /**
  * Initiates a setDoc operation for a document reference.
- * Does NOT await the write operation internally.
+ * Returns the Promise so the caller can await it if desired.
  */
 export function setDocumentNonBlocking(docRef: DocumentReference, data: any, options: SetOptions) {
   const cleanRef = getCleanDocRef(docRef);
-  setDoc(cleanRef, data, { merge: true }).catch(error => {
+  return setDoc(cleanRef, data, { merge: true }).catch(error => {
     console.error("Firestore setDoc failed:", error);
     errorEmitter.emit(
       'permission-error',
@@ -52,20 +52,19 @@ export function setDocumentNonBlocking(docRef: DocumentReference, data: any, opt
         operation: 'write', // or 'create'/'update' based on options
         requestResourceData: data,
       })
-    )
-  })
-  // Execution continues immediately
+    );
+    throw error; // Re-throw so the caller knows it failed
+  });
 }
 
 
 /**
  * Initiates an addDoc operation for a collection reference.
- * Does NOT await the write operation internally.
- * Returns the Promise for the new doc ref, but typically not awaited by caller.
+ * Returns the Promise for the new doc ref.
  */
 export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
   const cleanRef = getCleanColRef(colRef);
-  const promise = addDoc(cleanRef, data)
+  return addDoc(cleanRef, data)
     .catch(error => {
       console.error("Firestore addDoc failed:", error);
       errorEmitter.emit(
@@ -75,19 +74,19 @@ export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
           operation: 'create',
           requestResourceData: data,
         })
-      )
+      );
+      throw error;
     });
-  return promise;
 }
 
 
 /**
  * Initiates an updateDoc operation for a document reference.
- * Does NOT await the write operation internally.
+ * Returns the Promise.
  */
 export function updateDocumentNonBlocking(docRef: DocumentReference, data: any) {
   const cleanRef = getCleanDocRef(docRef);
-  updateDoc(cleanRef, data)
+  return updateDoc(cleanRef, data)
     .catch(error => {
       console.error("Firestore updateDoc failed:", error);
       errorEmitter.emit(
@@ -97,18 +96,19 @@ export function updateDocumentNonBlocking(docRef: DocumentReference, data: any) 
           operation: 'update',
           requestResourceData: data,
         })
-      )
+      );
+      throw error;
     });
 }
 
 
 /**
  * Initiates a deleteDoc operation for a document reference.
- * Does NOT await the write operation internally.
+ * Returns the Promise.
  */
 export function deleteDocumentNonBlocking(docRef: DocumentReference) {
   const cleanRef = getCleanDocRef(docRef);
-  deleteDoc(cleanRef)
+  return deleteDoc(cleanRef)
     .catch(error => {
       console.error("Firestore deleteDoc failed:", error);
       errorEmitter.emit(
@@ -117,6 +117,7 @@ export function deleteDocumentNonBlocking(docRef: DocumentReference) {
           path: docRef.path,
           operation: 'delete',
         })
-      )
+      );
+      throw error;
     });
 }
