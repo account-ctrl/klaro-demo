@@ -17,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Microscope, AlertCircle, MapPin, CheckCircle, Plus, CalendarDays } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function EpidemiologyPage() {
     const { data: cases } = useEpidemiologyCases();
@@ -48,7 +47,6 @@ export default function EpidemiologyPage() {
 
     return (
         <div className="space-y-6 h-[calc(100vh-10rem)] flex flex-col">
-            <DemoRestrictionModal />
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Disease Surveillance</h1>

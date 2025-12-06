@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label';
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
-import { DemoRestrictionModal } from '@/components/demo-restriction-modal';
 
 export default function PatientRecordsPage() {
     const { data: residents } = useResidents();
@@ -37,7 +36,6 @@ export default function PatientRecordsPage() {
 
     return (
         <div className="space-y-6 h-[calc(100vh-10rem)] flex flex-col">
-            <DemoRestrictionModal />
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Patient Health Records</h1>
                 <p className="text-muted-foreground">View medical history and health profiles.</p>
