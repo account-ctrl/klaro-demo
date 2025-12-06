@@ -53,6 +53,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
+import { usePuroks } from '@/hooks/use-barangay-data'; // Import usePuroks
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -68,15 +69,9 @@ type HouseholdFormProps = {
   residents: Resident[];
 };
 
-// Mock Purok data. In a real app, this would be fetched from Firestore.
-const puroks: Purok[] = [
-    { purokId: 'purok-1', name: 'Purok 1' },
-    { purokId: 'purok-2', name: 'Purok 2' },
-    { purokId: 'purok-3', name: 'Purok 3' },
-    { purokId: 'purok-4', name: 'Purok 4' },
-];
+export function HouseholdForm({ record, onSave, onClose, residents }: HouseholdFormProps) {
+  const { data: puroks, isLoading: isLoadingPuroks } = usePuroks(); // Fetch puroks dynamically
 
-function HouseholdForm({ record, onSave, onClose, residents }: HouseholdFormProps) {
   const [formData, setFormData] = useState<HouseholdFormValues>({
     address: record?.address ?? '',
     purokId: record?.purokId ?? '',
@@ -154,11 +149,15 @@ function HouseholdForm({ record, onSave, onClose, residents }: HouseholdFormProp
                             <SelectValue placeholder="Select a Purok" />
                         </SelectTrigger>
                         <SelectContent>
-                            {puroks.map(p => (
-                                <SelectItem key={p.purokId} value={p.purokId}>
-                                    {p.name}
-                                </SelectItem>
-                            ))}
+                            {isLoadingPuroks ? (
+                                <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : (
+                                puroks?.map(p => (
+                                    <SelectItem key={p.purokId} value={p.purokId}>
+                                        {p.name}
+                                    </SelectItem>
+                                ))
+                            )}
                         </SelectContent>
                     </Select>
                 </div>

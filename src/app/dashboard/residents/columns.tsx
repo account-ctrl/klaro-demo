@@ -75,6 +75,22 @@ const getAge = (dateString: string) => {
     return age;
 }
 
+const BooleanCell = ({ value, onClick, colorClass = "text-green-600" }: { value: boolean | undefined, onClick: () => void, colorClass?: string }) => {
+    return (
+        <div 
+            className="flex justify-center items-center cursor-pointer hover:bg-muted/50 p-1 rounded-md transition-colors" 
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            title="Click to toggle"
+        >
+            {value ? (
+                <CheckCircle className={`h-4 w-4 ${colorClass}`} />
+            ) : (
+                <XCircle className="h-4 w-4 text-muted-foreground/30" />
+            )}
+        </div>
+    )
+}
+
 export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete: (id: string) => void, households: Household[]): ColumnDef<Resident>[] => [
   {
     id: "select",
@@ -101,7 +117,7 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
   {
       accessorKey: "residentId",
       header: "Resident ID",
-      cell: ({ row }) => <span className="font-mono text-xs">{row.original.residentId}</span>,
+      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.residentId}</span>,
   },
   {
     accessorKey: "lastName",
@@ -138,8 +154,8 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
         if (!dob) return 'N/A';
         return (
             <div className="flex flex-col">
-                <span>{dob}</span>
-                <span className="text-xs text-muted-foreground">{getAge(dob)} years old</span>
+                <span className="text-sm">{dob}</span>
+                <span className="text-xs text-muted-foreground">{getAge(dob)} yrs</span>
             </div>
         );
     }
@@ -156,12 +172,42 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
   {
     accessorKey: "isVoter",
     header: "Voter",
-    cell: ({ row }) => row.original.isVoter ? <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">VOTER</Badge> : null,
+    cell: ({ row }) => (
+        <BooleanCell 
+            value={row.original.isVoter} 
+            onClick={() => onEdit({...row.original, isVoter: !row.original.isVoter})} 
+        />
+    ),
   },
-   {
+  {
     accessorKey: "isPwd",
     header: "PWD",
-    cell: ({ row }) => row.original.isPwd ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">PWD</Badge> : null,
+    cell: ({ row }) => (
+        <BooleanCell 
+            value={row.original.isPwd} 
+            onClick={() => onEdit({...row.original, isPwd: !row.original.isPwd})} 
+            colorClass="text-blue-600"
+        />
+    ),
+  },
+  {
+    accessorKey: "is4ps",
+    header: "4Ps",
+    cell: ({ row }) => (
+        <BooleanCell 
+            value={row.original.is4ps} 
+            onClick={() => onEdit({...row.original, is4ps: !row.original.is4ps})} 
+            colorClass="text-amber-600"
+        />
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      const status = row.original.status;
+      return <Badge variant={status === 'Active' ? 'secondary' : 'outline'}>{status}</Badge>
+    }
   },
   {
     accessorKey: "vulnerability_tags", // Ensure this exists in your type or custom filter accessor
@@ -178,24 +224,10 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     filterFn: 'arrayFilter' as any, // Tell react-table to use custom array filter
   },
   {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const status = row.original.status;
-      return <Badge variant={status === 'Active' ? 'secondary' : 'outline'}>{status}</Badge>
-    }
-  },
-  {
-    // Hidden columns for filtering
+    // Hidden columns for filtering but available
     accessorKey: "civilStatus",
     header: "Civil Status",
     enableHiding: true, 
-  },
-  {
-    // Hidden columns for filtering
-    accessorKey: "is4ps",
-    header: "4Ps",
-    enableHiding: true,
   },
   {
     id: "actions",

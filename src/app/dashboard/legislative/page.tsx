@@ -10,17 +10,30 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter } from 'lucide-react';
+import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { Ordinance } from '@/lib/types';
+import { Ordinance, WithId } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { caseTypes } from '../blotter/case-types';
 
-type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'>;
+type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'> & {
+    relatedViolation?: string;
+};
 
 const initialFormValues: OrdinanceFormValues = {
     ordinanceNumber: '',
@@ -29,7 +42,8 @@ const initialFormValues: OrdinanceFormValues = {
     category: 'General',
     penaltyAmount: 0,
     pdfUrl: '',
-    dateEnacted: ''
+    dateEnacted: '',
+    relatedViolation: ''
 };
 
 export default function LegislativePage() {
@@ -38,21 +52,24 @@ export default function LegislativePage() {
     const ordinancesRef = useLegislativeRef('ordinances');
     const { toast } = useToast();
     
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [currentOrdinanceId, setCurrentOrdinanceId] = useState<string | null>(null);
     const [formData, setFormData] = useState<OrdinanceFormValues>(initialFormValues);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
     const handleOpenAdd = () => {
         setFormData(initialFormValues);
         setIsEditMode(false);
         setCurrentOrdinanceId(null);
-        setIsDialogOpen(true);
+        setIsSheetOpen(true);
     };
 
-    const handleOpenEdit = (ordinance: Ordinance) => {
+    const handleOpenEdit = (ordinance: WithId<Ordinance> & { relatedViolation?: string }) => {
+        const id = ordinance.ordinanceId || ordinance.id;
+        
         setFormData({
             ordinanceNumber: ordinance.ordinanceNumber,
             title: ordinance.title,
@@ -60,11 +77,12 @@ export default function LegislativePage() {
             category: ordinance.category,
             penaltyAmount: ordinance.penaltyAmount,
             pdfUrl: ordinance.pdfUrl || '',
-            dateEnacted: ordinance.dateEnacted
+            dateEnacted: ordinance.dateEnacted,
+            relatedViolation: ordinance.relatedViolation || ''
         });
-        setCurrentOrdinanceId(ordinance.ordinanceId);
+        setCurrentOrdinanceId(id);
         setIsEditMode(true);
-        setIsDialogOpen(true);
+        setIsSheetOpen(true);
     };
 
     const handleSubmit = () => {
@@ -77,13 +95,15 @@ export default function LegislativePage() {
             return;
         }
 
+        const dataToSave = {
+            ...formData,
+            penaltyAmount: Number(formData.penaltyAmount) || 0,
+        };
+
         if (isEditMode && currentOrdinanceId && firestore) {
             // Edit Mode
             const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
-            setDocumentNonBlocking(docRef, {
-                ...formData,
-                penaltyAmount: Number(formData.penaltyAmount) || 0 // Ensure number
-            }, { merge: true });
+            setDocumentNonBlocking(docRef, dataToSave, { merge: true });
             
             toast({
                 title: "Ordinance Updated",
@@ -91,11 +111,8 @@ export default function LegislativePage() {
             });
         } else if (ordinancesRef) {
             // Create Mode
-            // Generate a temporary ID if strictly needed by frontend logic before server responds, 
-            // but addDocumentNonBlocking usually handles this well.
             addDocumentNonBlocking(ordinancesRef, {
-                ...formData,
-                penaltyAmount: Number(formData.penaltyAmount) || 0, // Ensure number
+                ...dataToSave,
                 status: 'Active',
                 createdAt: serverTimestamp()
             });
@@ -106,7 +123,7 @@ export default function LegislativePage() {
             });
         }
 
-        setIsDialogOpen(false);
+        setIsSheetOpen(false);
     };
 
     const handleDelete = (id: string) => {
@@ -164,176 +181,285 @@ export default function LegislativePage() {
                             <SelectItem value="Traffic">Traffic/Parking</SelectItem>
                         </SelectContent>
                     </Select>
+                    <div className="border-l pl-2 flex gap-1">
+                        <Button 
+                            variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
+                            size="icon" 
+                            onClick={() => setViewMode('list')}
+                            title="List View"
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                            size="icon" 
+                            onClick={() => setViewMode('grid')}
+                            title="Grid View"
+                        >
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* Content Area - Removed parent ScrollArea to let window scroll */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-6">
-                {isLoading && <div className="col-span-full text-center py-10 text-muted-foreground">Loading ordinances...</div>}
-                
-                {!isLoading && filteredOrdinances?.length === 0 && (
-                    <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/20">
-                        <Scale className="h-12 w-12 mb-4 opacity-20" />
-                        <p className="font-medium">No ordinances found.</p>
-                        <p className="text-sm">Try adjusting your filters or add a new one.</p>
+            {/* Content Area */}
+            {isLoading && <div className="text-center py-10 text-muted-foreground">Loading ordinances...</div>}
+            
+            {!isLoading && filteredOrdinances?.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/20">
+                    <Scale className="h-12 w-12 mb-4 opacity-20" />
+                    <p className="font-medium">No ordinances found.</p>
+                    <p className="text-sm">Try adjusting your filters or add a new one.</p>
+                </div>
+            )}
+
+            {!isLoading && filteredOrdinances && filteredOrdinances.length > 0 && (
+                viewMode === 'grid' ? (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-6">
+                        {filteredOrdinances.map((ord: WithId<Ordinance> & { relatedViolation?: string }) => {
+                            const docId = ord.id || ord.ordinanceId;
+                            return (
+                                <Card key={docId} className="flex flex-col hover:shadow-md transition-all group relative">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex justify-between items-start">
+                                            <Badge variant="outline" className="font-mono">{ord.ordinanceNumber}</Badge>
+                                            <Badge variant={ord.status === 'Active' ? 'default' : 'secondary'} className={ord.status === 'Active' ? 'bg-green-600 hover:bg-green-700' : ''}>
+                                                {ord.status}
+                                            </Badge>
+                                        </div>
+                                        <CardTitle className="mt-2 text-lg leading-tight line-clamp-2" title={ord.title}>{ord.title}</CardTitle>
+                                        <CardDescription>Enacted: {ord.dateEnacted ? format(new Date(ord.dateEnacted), 'MMM d, yyyy') : 'N/A'}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="flex-grow text-sm text-muted-foreground">
+                                        <p className="line-clamp-3 mb-4">{ord.description}</p>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex items-center gap-2 font-medium text-foreground bg-muted/50 p-2 rounded-md">
+                                                <Gavel className="h-4 w-4 text-orange-600" />
+                                                <span>Penalty: ₱ {ord.penaltyAmount?.toLocaleString() || '0'}</span>
+                                            </div>
+                                            {ord.relatedViolation && (
+                                                <div className="text-xs bg-red-50 text-red-700 p-2 rounded border border-red-100">
+                                                    <strong>Related Violation:</strong> {ord.relatedViolation}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                    <CardFooter className="border-t pt-4 flex justify-between items-center gap-2">
+                                        <div className="flex gap-2">
+                                            <Badge variant="secondary" className="text-xs">{ord.category}</Badge>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            {ord.pdfUrl && (
+                                                <Button variant="ghost" size="icon" asChild title="Download PDF">
+                                                    <a href={ord.pdfUrl} target="_blank" rel="noopener noreferrer">
+                                                        <Download className="h-4 w-4" />
+                                                    </a>
+                                                </Button>
+                                            )}
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(ord)} title="Edit">
+                                                <PenLine className="h-4 w-4 text-blue-600" />
+                                            </Button>
+                                            <DeleteAction docId={docId} ordNo={ord.ordinanceNumber} onDelete={handleDelete} />
+                                        </div>
+                                    </CardFooter>
+                                </Card>
+                            );
+                        })}
                     </div>
-                )}
-
-                {filteredOrdinances?.map(ord => (
-                    <Card key={ord.ordinanceId} className="flex flex-col hover:shadow-md transition-all group relative">
-                        <CardHeader className="pb-3">
-                            <div className="flex justify-between items-start">
-                                <Badge variant="outline" className="font-mono">{ord.ordinanceNumber}</Badge>
-                                <Badge variant={ord.status === 'Active' ? 'default' : 'secondary'} className={ord.status === 'Active' ? 'bg-green-600 hover:bg-green-700' : ''}>
-                                    {ord.status}
-                                </Badge>
-                            </div>
-                            <CardTitle className="mt-2 text-lg leading-tight line-clamp-2" title={ord.title}>{ord.title}</CardTitle>
-                            <CardDescription>Enacted: {ord.dateEnacted ? format(new Date(ord.dateEnacted), 'MMM d, yyyy') : 'N/A'}</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-grow text-sm text-muted-foreground">
-                            <p className="line-clamp-3 mb-4">{ord.description}</p>
-                            <div className="flex items-center gap-2 font-medium text-foreground bg-muted/50 p-2 rounded-md">
-                                <Gavel className="h-4 w-4 text-orange-600" />
-                                <span>Penalty: ₱ {ord.penaltyAmount?.toLocaleString() || '0'}</span>
-                            </div>
-                        </CardContent>
-                        <CardFooter className="border-t pt-4 flex justify-between items-center gap-2">
-                            <div className="flex gap-2">
-                                <Badge variant="secondary" className="text-xs">{ord.category}</Badge>
-                            </div>
-                            <div className="flex gap-1">
-                                {ord.pdfUrl && (
-                                    <Button variant="ghost" size="icon" asChild title="Download PDF">
-                                        <a href={ord.pdfUrl} target="_blank" rel="noopener noreferrer">
-                                            <Download className="h-4 w-4" />
-                                        </a>
-                                    </Button>
-                                )}
-                                <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(ord)} title="Edit">
-                                    <PenLine className="h-4 w-4 text-blue-600" />
-                                </Button>
-                                
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="hover:text-destructive hover:bg-destructive/10" title="Delete">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Delete Ordinance?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This action cannot be undone. This will permanently remove <strong>{ord.ordinanceNumber}</strong> from the records.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDelete(ord.ordinanceId)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </div>
-                        </CardFooter>
+                ) : (
+                    <Card>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Ordinance No.</TableHead>
+                                    <TableHead>Title</TableHead>
+                                    <TableHead>Category</TableHead>
+                                    <TableHead>Penalty</TableHead>
+                                    <TableHead>Enacted</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredOrdinances.map((ord: WithId<Ordinance> & { relatedViolation?: string }) => {
+                                    const docId = ord.id || ord.ordinanceId;
+                                    return (
+                                        <TableRow key={docId}>
+                                            <TableCell className="font-mono font-medium">{ord.ordinanceNumber}</TableCell>
+                                            <TableCell>
+                                                <div className="font-medium">{ord.title}</div>
+                                                {ord.relatedViolation && <div className="text-xs text-muted-foreground text-red-600">Re: {ord.relatedViolation}</div>}
+                                            </TableCell>
+                                            <TableCell><Badge variant="outline">{ord.category}</Badge></TableCell>
+                                            <TableCell>₱ {ord.penaltyAmount?.toLocaleString()}</TableCell>
+                                            <TableCell>{ord.dateEnacted ? format(new Date(ord.dateEnacted), 'MMM d, yyyy') : '-'}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={ord.status === 'Active' ? 'default' : 'secondary'} className={ord.status === 'Active' ? 'bg-green-600' : ''}>
+                                                    {ord.status}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                    {ord.pdfUrl && (
+                                                        <Button variant="ghost" size="icon" asChild title="Download PDF">
+                                                            <a href={ord.pdfUrl} target="_blank" rel="noopener noreferrer">
+                                                                <Download className="h-4 w-4" />
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(ord)} title="Edit">
+                                                        <PenLine className="h-4 w-4 text-blue-600" />
+                                                    </Button>
+                                                    <DeleteAction docId={docId} ordNo={ord.ordinanceNumber} onDelete={handleDelete} />
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })}
+                            </TableBody>
+                        </Table>
                     </Card>
-                ))}
-            </div>
+                )
+            )}
 
-            {/* Add/Edit Dialog */}
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                        <DialogTitle>{isEditMode ? 'Edit Ordinance' : 'Add New Ordinance'}</DialogTitle>
-                        <DialogDescription>
+            {/* Add/Edit Sheet */}
+            <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                <SheetContent className="sm:max-w-xl overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>{isEditMode ? 'Edit Ordinance' : 'Add New Ordinance'}</SheetTitle>
+                        <SheetDescription>
                             {isEditMode ? 'Update the details of the existing ordinance.' : 'Fill in the details to create a new barangay ordinance.'}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <ScrollArea className="max-h-[70vh] px-1">
-                        <div className="space-y-4 py-2">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="ordNo">Ordinance No. <span className="text-destructive">*</span></Label>
-                                    <Input 
-                                        id="ordNo"
-                                        value={formData.ordinanceNumber} 
-                                        onChange={e => setFormData({...formData, ordinanceNumber: e.target.value})} 
-                                        placeholder="e.g., Ord-2024-001" 
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="category">Category</Label>
-                                    <Select 
-                                        onValueChange={(val) => setFormData({...formData, category: val as any})} 
-                                        value={formData.category}
-                                    >
-                                        <SelectTrigger id="category"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="General">General</SelectItem>
-                                            <SelectItem value="Curfew">Curfew</SelectItem>
-                                            <SelectItem value="Noise">Noise Control</SelectItem>
-                                            <SelectItem value="Sanitation">Sanitation/Waste</SelectItem>
-                                            <SelectItem value="Traffic">Traffic/Parking</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-6 py-6">
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="title">Title <span className="text-destructive">*</span></Label>
+                                <Label htmlFor="ordNo">Ordinance No. <span className="text-destructive">*</span></Label>
                                 <Input 
-                                    id="title"
-                                    value={formData.title} 
-                                    onChange={e => setFormData({...formData, title: e.target.value})} 
-                                    placeholder="Title of the ordinance"
+                                    id="ordNo"
+                                    value={formData.ordinanceNumber} 
+                                    onChange={e => setFormData({...formData, ordinanceNumber: e.target.value})} 
+                                    placeholder="e.g., Ord-2024-001" 
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="desc">Description / Key Provisions</Label>
-                                <Textarea 
-                                    id="desc"
-                                    value={formData.description} 
-                                    onChange={e => setFormData({...formData, description: e.target.value})} 
-                                    placeholder="Brief summary or full text..."
-                                    rows={5}
+                                <Label htmlFor="category">Category</Label>
+                                <Select 
+                                    onValueChange={(val) => setFormData({...formData, category: val as any})} 
+                                    value={formData.category}
+                                >
+                                    <SelectTrigger id="category"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="General">General</SelectItem>
+                                        <SelectItem value="Curfew">Curfew</SelectItem>
+                                        <SelectItem value="Noise">Noise Control</SelectItem>
+                                        <SelectItem value="Sanitation">Sanitation/Waste</SelectItem>
+                                        <SelectItem value="Traffic">Traffic/Parking</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="title">Title <span className="text-destructive">*</span></Label>
+                            <Input 
+                                id="title"
+                                value={formData.title} 
+                                onChange={e => setFormData({...formData, title: e.target.value})} 
+                                placeholder="Title of the ordinance"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="desc">Description / Key Provisions</Label>
+                            <Textarea 
+                                id="desc"
+                                value={formData.description} 
+                                onChange={e => setFormData({...formData, description: e.target.value})} 
+                                placeholder="Brief summary or full text..."
+                                rows={5}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="penalty">Penalty Amount (₱)</Label>
+                                <Input 
+                                    id="penalty"
+                                    type="number" 
+                                    value={formData.penaltyAmount} 
+                                    onChange={e => setFormData({...formData, penaltyAmount: parseFloat(e.target.value) || 0})} 
+                                    min={0}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="penalty">Penalty Amount (₱)</Label>
-                                    <Input 
-                                        id="penalty"
-                                        type="number" 
-                                        value={formData.penaltyAmount} 
-                                        onChange={e => setFormData({...formData, penaltyAmount: parseFloat(e.target.value) || 0})} 
-                                        min={0}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="date">Date Enacted</Label>
-                                    <Input 
-                                        id="date"
-                                        type="date" 
-                                        value={formData.dateEnacted} 
-                                        onChange={e => setFormData({...formData, dateEnacted: e.target.value})} 
-                                    />
-                                </div>
-                            </div>
                             <div className="space-y-2">
-                                <Label htmlFor="pdf">PDF Link (Optional)</Label>
+                                <Label htmlFor="date">Date Enacted</Label>
                                 <Input 
-                                    id="pdf"
-                                    value={formData.pdfUrl} 
-                                    onChange={e => setFormData({...formData, pdfUrl: e.target.value})} 
-                                    placeholder="https://example.com/document.pdf" 
+                                    id="date"
+                                    type="date" 
+                                    value={formData.dateEnacted} 
+                                    onChange={e => setFormData({...formData, dateEnacted: e.target.value})} 
                                 />
                             </div>
                         </div>
-                    </ScrollArea>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                        
+                        <div className="space-y-2">
+                            <Label htmlFor="relatedViolation">Related Blotter Violation (Optional)</Label>
+                            <Select 
+                                onValueChange={(val) => setFormData({...formData, relatedViolation: val === 'none' ? '' : val})} 
+                                value={formData.relatedViolation || 'none'}
+                            >
+                                <SelectTrigger id="relatedViolation"><SelectValue placeholder="Select related violation..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">-- None --</SelectItem>
+                                    {Object.entries(caseTypes).map(([group, types]) => (
+                                        <SelectGroup key={group}>
+                                            <SelectLabel className="capitalize">{group}</SelectLabel>
+                                            {types.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                        </SelectGroup>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">Link this ordinance to specific case types for auto-suggestions in blotter.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="pdf">PDF Link (Optional)</Label>
+                            <Input 
+                                id="pdf"
+                                value={formData.pdfUrl} 
+                                onChange={e => setFormData({...formData, pdfUrl: e.target.value})} 
+                                placeholder="https://example.com/document.pdf" 
+                            />
+                        </div>
+                    </div>
+                    <SheetFooter>
+                        <Button variant="outline" onClick={() => setIsSheetOpen(false)}>Cancel</Button>
                         <Button onClick={handleSubmit}>{isEditMode ? 'Update' : 'Create'}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </div>
     );
+}
+
+function DeleteAction({ docId, ordNo, onDelete }: { docId: string, ordNo: string, onDelete: (id: string) => void }) {
+    return (
+        <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="hover:text-destructive hover:bg-destructive/10" title="Delete">
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Ordinance?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently remove <strong>{ordNo}</strong> from the records.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onDelete(docId)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
 }

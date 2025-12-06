@@ -270,6 +270,13 @@ export type Announcement = {
     category: 'General Info' | 'Event' | 'Health' | 'Ordinance' | 'Emergency';
     datePosted: Timestamp;
     postedByUserId: string;
+    // New fields for events
+    eventDate?: string; // ISO Date string
+    eventTime?: string; // Time string
+    eventLocation?: string;
+    contactPerson?: string;
+    contactNumber?: string;
+    registrationLink?: string;
 };
 
 export type Pet = {
@@ -378,6 +385,7 @@ export type Ordinance = {
     dateEnacted: string; // ISO Date string
     status: 'Active' | 'Repealed' | 'Pending';
     createdAt: Timestamp;
+    relatedViolation?: string;
 };
 
 // --- NEW TYPES FOR ASSETS & FLEET (Phase 3) ---

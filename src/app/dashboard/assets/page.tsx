@@ -11,7 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +28,6 @@ import { Truck, Wrench, Calendar, Plus, Search, AlertTriangle, PenLine, Trash2, 
 import { format, isBefore } from 'date-fns';
 import { FixedAsset, AssetBooking } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 type AssetFormValues = Omit<FixedAsset, 'assetId' | 'createdAt' | 'purchaseDate'> & { purchaseDate?: string };
 
@@ -40,12 +48,12 @@ export default function AssetsPage() {
     const bookingsRef = useAssetsRef('asset_bookings');
     const { toast } = useToast();
 
-    // Dialog States
-    const [isAssetDialogOpen, setIsAssetDialogOpen] = useState(false);
+    // Sheet States
+    const [isAssetSheetOpen, setIsAssetSheetOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [currentAssetId, setCurrentAssetId] = useState<string | null>(null);
-    const [isBookAssetOpen, setIsBookAssetOpen] = useState(false);
-    const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false);
+    const [isBookSheetOpen, setIsBookSheetOpen] = useState(false);
+    const [isMaintenanceSheetOpen, setIsMaintenanceSheetOpen] = useState(false);
 
     // Form States
     const [assetForm, setAssetForm] = useState<AssetFormValues>(initialAssetForm);
@@ -62,7 +70,7 @@ export default function AssetsPage() {
         setAssetForm(initialAssetForm);
         setIsEditMode(false);
         setCurrentAssetId(null);
-        setIsAssetDialogOpen(true);
+        setIsAssetSheetOpen(true);
     };
 
     const handleOpenEditAsset = (asset: FixedAsset) => {
@@ -76,7 +84,7 @@ export default function AssetsPage() {
         });
         setCurrentAssetId(asset.assetId);
         setIsEditMode(true);
-        setIsAssetDialogOpen(true);
+        setIsAssetSheetOpen(true);
     };
 
     const handleSaveAsset = () => {
@@ -101,7 +109,7 @@ export default function AssetsPage() {
              });
              toast({ title: "Asset Added", description: `${assetForm.name} added to inventory.` });
         }
-        setIsAssetDialogOpen(false);
+        setIsAssetSheetOpen(false);
     };
 
     const handleDeleteAsset = (id: string) => {
@@ -149,7 +157,7 @@ export default function AssetsPage() {
             createdAt: serverTimestamp()
         });
 
-        setIsBookAssetOpen(false);
+        setIsBookSheetOpen(false);
         setNewBooking({ assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
         toast({ title: "Booking Confirmed", description: "Asset scheduled successfully." });
     };
@@ -162,7 +170,7 @@ export default function AssetsPage() {
             status: asset.status === 'Available' ? 'Maintenance' : asset.status,
             nextMaintenanceDue: asset.nextMaintenanceDue || ''
         });
-        setIsMaintenanceOpen(true);
+        setIsMaintenanceSheetOpen(true);
     }
 
     const handleSaveMaintenance = () => {
@@ -174,7 +182,7 @@ export default function AssetsPage() {
             nextMaintenanceDue: maintenanceForm.nextMaintenanceDue
         }, { merge: true });
 
-        setIsMaintenanceOpen(false);
+        setIsMaintenanceSheetOpen(false);
         toast({ title: "Status Updated", description: "Vehicle status and maintenance schedule updated." });
     }
 
@@ -289,7 +297,7 @@ export default function AssetsPage() {
 
                 <TabsContent value="bookings" className="space-y-4">
                      <div className="flex justify-end">
-                         <Button onClick={() => setIsBookAssetOpen(true)}><Calendar className="mr-2 h-4 w-4"/> Book Asset</Button>
+                         <Button onClick={() => setIsBookSheetOpen(true)}><Calendar className="mr-2 h-4 w-4"/> Book Asset</Button>
                     </div>
                     <Card>
                         <Table>
@@ -356,14 +364,14 @@ export default function AssetsPage() {
                 </TabsContent>
             </Tabs>
 
-            {/* Asset Dialog */}
-            <Dialog open={isAssetDialogOpen} onOpenChange={setIsAssetDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{isEditMode ? 'Edit Asset' : 'Add New Asset'}</DialogTitle>
-                        <DialogDescription>Enter the details of the asset.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
+            {/* Asset Sheet */}
+            <Sheet open={isAssetSheetOpen} onOpenChange={setIsAssetSheetOpen}>
+                <SheetContent className="sm:max-w-xl overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>{isEditMode ? 'Edit Asset' : 'Add New Asset'}</SheetTitle>
+                        <SheetDescription>Enter the details of the asset.</SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-6 py-6">
                         <div className="space-y-2"><Label>Asset Name *</Label><Input value={assetForm.name} onChange={e => setAssetForm({...assetForm, name: e.target.value})} placeholder="e.g. Generator Set 01" /></div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2"><Label>Type</Label>
@@ -395,18 +403,21 @@ export default function AssetsPage() {
                                 <div className="space-y-2"><Label>Plate Number</Label><Input value={assetForm.plateNumber} onChange={e => setAssetForm({...assetForm, plateNumber: e.target.value})} /></div>
                         )}
                     </div>
-                    <DialogFooter><Button onClick={handleSaveAsset}>{isEditMode ? 'Update' : 'Save'}</Button></DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    <SheetFooter>
+                        <Button variant="outline" onClick={() => setIsAssetSheetOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveAsset}>{isEditMode ? 'Update' : 'Save'}</Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
 
-            {/* Booking Dialog */}
-            <Dialog open={isBookAssetOpen} onOpenChange={setIsBookAssetOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Schedule Booking</DialogTitle>
-                        <DialogDescription>Reserve an asset for a specific date and time.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
+            {/* Booking Sheet */}
+            <Sheet open={isBookSheetOpen} onOpenChange={setIsBookSheetOpen}>
+                <SheetContent className="sm:max-w-xl overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>Schedule Booking</SheetTitle>
+                        <SheetDescription>Reserve an asset for a specific date and time.</SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-6 py-6">
                         <div className="space-y-2"><Label>Select Asset</Label>
                             <Select onValueChange={(val) => setNewBooking({...newBooking, assetId: val})}>
                                 <SelectTrigger><SelectValue placeholder="Choose asset..." /></SelectTrigger>
@@ -424,17 +435,21 @@ export default function AssetsPage() {
                             <div className="space-y-2"><Label>End Time</Label><Input type="datetime-local" value={newBooking.endDateTime} onChange={e => setNewBooking({...newBooking, endDateTime: e.target.value})} /></div>
                         </div>
                     </div>
-                    <DialogFooter><Button onClick={handleBookAsset}>Confirm Booking</Button></DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    <SheetFooter>
+                        <Button variant="outline" onClick={() => setIsBookSheetOpen(false)}>Cancel</Button>
+                        <Button onClick={handleBookAsset}>Confirm Booking</Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
 
-            {/* Maintenance Dialog */}
-            <Dialog open={isMaintenanceOpen} onOpenChange={setIsMaintenanceOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Update Status & Maintenance</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
+            {/* Maintenance Sheet */}
+            <Sheet open={isMaintenanceSheetOpen} onOpenChange={setIsMaintenanceSheetOpen}>
+                <SheetContent className="sm:max-w-md overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>Update Status & Maintenance</SheetTitle>
+                        <SheetDescription>Update the vehicle status and maintenance schedule.</SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-6 py-6">
                         <div className="space-y-2"><Label>Status</Label>
                             <Select onValueChange={(val) => setMaintenanceForm({...maintenanceForm, status: val})} value={maintenanceForm.status}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -448,9 +463,12 @@ export default function AssetsPage() {
                         </div>
                         <div className="space-y-2"><Label>Next Maintenance Due</Label><Input type="date" value={maintenanceForm.nextMaintenanceDue} onChange={e => setMaintenanceForm({...maintenanceForm, nextMaintenanceDue: e.target.value})} /></div>
                     </div>
-                    <DialogFooter><Button onClick={handleSaveMaintenance}>Update</Button></DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    <SheetFooter>
+                        <Button variant="outline" onClick={() => setIsMaintenanceSheetOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveMaintenance}>Update</Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }
