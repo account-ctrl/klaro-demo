@@ -1,7 +1,7 @@
 
 'use client';
 
-import { collection } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { 
     Resident, 
@@ -36,9 +36,17 @@ export function useBarangayRef(collectionName: string) {
  * Generic hook to fetch a collection under the current barangay.
  * Abstracts away the firestore instance and path construction.
  */
-function useBarangayCollection<T>(collectionName: string) {
+function useBarangayCollection<T>(collectionName: string, orderByField?: string, orderDirection?: 'asc' | 'desc') {
   const collectionRef = useBarangayRef(collectionName);
-  return useCollection<T>(collectionRef);
+  const q = useMemoFirebase(() => {
+      if (!collectionRef) return null;
+      if (orderByField) {
+          return query(collectionRef, orderBy(orderByField, orderDirection || 'asc'));
+      }
+      return collectionRef;
+  }, [collectionRef, orderByField, orderDirection]);
+
+  return useCollection<T>(q);
 }
 
 export function useResidents() {
@@ -46,7 +54,8 @@ export function useResidents() {
 }
 
 export function useDocuments() {
-    return useBarangayCollection<CertificateRequest>('certificate_requests');
+    // Sort by dateRequested descending to show most recent first
+    return useBarangayCollection<CertificateRequest>('certificate_requests', 'dateRequested', 'desc');
 }
 
 export function useDocumentTypes() {

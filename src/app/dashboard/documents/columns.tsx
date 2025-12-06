@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EditDocument, DeleteDocument, PrintDocument } from "./document-actions";
 import { Badge } from "@/components/ui/badge";
+import { format } from 'date-fns';
 
 type CertificateRequestWithId = CertificateRequest & { id?: string };
 
@@ -72,10 +73,23 @@ export const getColumns = (
   residents: Resident[],
   certificateTypes: CertificateType[]
 ): ColumnDef<CertificateRequest>[] => [
+   {
+    accessorKey: "dateRequested",
+    header: "Date Requested",
+     cell: ({ row }) => {
+      const date = row.original.dateRequested;
+      // Check if date is a Firestore Timestamp (has toDate method) or serialized string/object
+      const dateObj = date && typeof (date as any).toDate === 'function' 
+          ? (date as any).toDate() 
+          : (date ? new Date(date as any) : null);
+          
+      return <div className="font-medium">{dateObj ? format(dateObj, 'MMM d, yyyy') : 'N/A'}</div>;
+    },
+  },
   {
     accessorKey: "requestNumber",
     header: "Request No.",
-    cell: ({ row }) => <span className="font-mono text-xs">{row.original.requestNumber}</span>
+    cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.requestNumber}</span>
   },
   {
     accessorKey: "residentName",
@@ -104,14 +118,6 @@ export const getColumns = (
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => <Badge variant={getStatusBadgeVariant(row.original.status)}>{row.original.status}</Badge>
-  },
-   {
-    accessorKey: "dateRequested",
-    header: "Date Requested",
-     cell: ({ row }) => {
-      const date = row.original.dateRequested?.toDate();
-      return <div className="text-muted-foreground">{date ? date.toLocaleDateString() : 'N/A'}</div>;
-    },
   },
   {
     id: "actions",
