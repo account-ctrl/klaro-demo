@@ -405,7 +405,11 @@ export type FixedAsset = {
   custodianName?: string; // Denormalized name for easier display
 
   // Fleet specific fields
+  brand?: string;
+  model?: string;
   plateNumber?: string; 
+  chassisNumber?: string;
+  engineNumber?: string;
   lastMaintenanceDate?: string; // ISO Date string
   nextMaintenanceDue?: string; // ISO Date string
   odometerReading?: number;
@@ -436,15 +440,19 @@ export type AssetBooking = {
 
 export type MaintenanceLog = {
     logId: string;
-    vehicleId: string; // FK to FixedAsset
-    serviceType: string; // e.g., "Change Oil", "Tire Replacement"
-    cost: number;
-    mechanicNotes?: string;
-    receiptUrl?: string;
+    assetId: string; // FK to FixedAsset
     serviceDate: string; // ISO Date string
+    serviceType: string; // e.g., "Change Oil", "Tire Replacement", "Repair"
+    description: string; // Detailed reason for maintenance
+    partsUsed?: string; // Comma-separated list of parts
+    servicedBy?: string; // Name of shop or mechanic
+    cost: number;
     odometerReading?: number;
+    receiptUrl?: string;
+    notes?: string; // General notes
     createdAt: Timestamp;
 };
+
 
 // Deprecated old types. To be removed after full refactoring.
 export type Blotter = BlotterCase;

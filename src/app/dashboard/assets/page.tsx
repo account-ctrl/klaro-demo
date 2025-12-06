@@ -6,7 +6,7 @@ import { useFixedAssets, useAssetBookings, useAssetsRef, BARANGAY_ID } from '@/h
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useFirestore } from '@/firebase';
 import { serverTimestamp, doc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
-import { FixedAsset } from '@/lib/types';
+import { FixedAsset, MaintenanceLog } from '@/lib/types';
 import { AssetFilters } from '@/components/dashboard/assets/asset-filters';
 import { AssetTabs } from '@/components/dashboard/assets/asset-tabs';
 import { AssetModals, initialAssetForm } from '@/components/dashboard/assets/asset-modals';
@@ -17,6 +17,7 @@ export default function AssetsPage() {
     const { data: bookings } = useAssetBookings();
     const assetsRef = useAssetsRef('fixed_assets');
     const bookingsRef = useAssetsRef('asset_bookings');
+    const maintenanceRef = useAssetsRef('maintenance_logs');
     const { toast } = useToast();
 
     // Sheet States
@@ -30,8 +31,9 @@ export default function AssetsPage() {
 
     // Form States
     const [assetForm, setAssetForm] = useState(initialAssetForm);
-    const [newBooking, setNewBooking] = useState({ assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
-    const [maintenanceForm, setMaintenanceForm] = useState({ assetId: '', status: 'Maintenance', nextMaintenanceDue: '' });
+    const [newBooking, setNewBooking] = useState({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
+    const [maintenanceForm, setMaintenanceForm] = useState<Partial<MaintenanceLog>>({ assetId: '', serviceType: '', description: '', servicedBy: '', partsUsed: '', cost: 0, serviceDate: '', nextMaintenanceDue: '' });
+    const [isEditBooking, setIsEditBooking] = useState(false);
 
     // Search/Filter States
     const [searchTerm, setSearchTerm] = useState('');
@@ -52,7 +54,11 @@ export default function AssetsPage() {
             type: asset.type,
             status: asset.status,
             serialNumber: asset.serialNumber || '',
+            brand: asset.brand || '',
+            model: asset.model || '',
             plateNumber: asset.plateNumber || '',
+            chassisNumber: asset.chassisNumber || '',
+            engineNumber: asset.engineNumber || '',
             purchaseDate: asset.purchaseDate ? asset.purchaseDate : '',
             location: asset.location || '',
             custodianName: asset.custodianName || '',
@@ -112,7 +118,25 @@ export default function AssetsPage() {
 
     // --- Booking Logic ---
 
-    const handleBookAsset = async () => {
+    const handleOpenBookAsset = (booking: any | null = null) => {
+        if (booking) {
+            setNewBooking({
+                bookingId: booking.bookingId,
+                assetId: booking.assetId,
+                borrowerName: booking.borrowerName,
+                purpose: booking.purpose,
+                startDateTime: booking.startDateTime,
+                endDateTime: booking.endDateTime
+            });
+            setIsEditBooking(true);
+        } else {
+            setNewBooking({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
+            setIsEditBooking(false);
+        }
+        setIsBookSheetOpen(true);
+    }
+
+    const handleSaveBooking = async () => {
         if (!bookingsRef) {
              console.error("Booking ref not available");
              return;
@@ -147,6 +171,7 @@ export default function AssetsPage() {
         }
         
         const hasOverlap = bookings?.some(b => {
+            if (isEditBooking && b.bookingId === newBooking.bookingId) return false; // Ignore self in edit mode
             if (b.assetId !== newBooking.assetId || b.status === 'Rejected' || b.status === 'Returned') return false;
             const bStart = new Date(b.startDateTime).getTime();
             const bEnd = new Date(b.endDateTime).getTime();
@@ -161,48 +186,81 @@ export default function AssetsPage() {
         const selectedAsset = assets?.find(a => a.assetId === newBooking.assetId);
 
         try {
-            await addDocumentNonBlocking(bookingsRef, {
+            const bookingData = {
                 assetId: newBooking.assetId,
                 assetName: selectedAsset?.name || 'Unknown Asset',
                 borrowerName: newBooking.borrowerName,
                 purpose: newBooking.purpose,
                 startDateTime: newBooking.startDateTime,
                 endDateTime: newBooking.endDateTime,
-                status: 'Approved',
-                createdAt: serverTimestamp()
-            });
+                status: 'Approved' // Default status
+            };
+
+            if (isEditBooking && newBooking.bookingId) {
+                const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/asset_bookings/${newBooking.bookingId}`);
+                await setDocumentNonBlocking(docRef, bookingData, { merge: true });
+                toast({ title: "Booking Updated", description: "Booking details updated successfully." });
+            } else {
+                await addDocumentNonBlocking(bookingsRef, { ...bookingData, createdAt: serverTimestamp() });
+                toast({ title: "Booking Confirmed", description: "Asset scheduled successfully." });
+            }
 
             setIsBookSheetOpen(false);
-            setNewBooking({ assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
-            toast({ title: "Booking Confirmed", description: "Asset scheduled successfully." });
+            setNewBooking({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
         } catch (e) {
             console.error("Booking failed", e);
             toast({ variant: "destructive", title: "Booking Failed", description: "Could not save booking to database." });
         }
     };
 
+    const handleDeleteBooking = async (bookingId: string) => {
+        if (!firestore) return;
+        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/asset_bookings/${bookingId}`);
+        try {
+            await deleteDocumentNonBlocking(docRef);
+            toast({ title: "Booking Deleted", description: "The booking has been successfully deleted." });
+        } catch (error) {
+            console.error("Booking delete error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete booking." });
+        }
+    };
+
+
     // --- Maintenance Logic ---
 
     const handleOpenMaintenance = (asset: FixedAsset) => {
-        setMaintenanceForm({
-            assetId: asset.assetId,
-            status: asset.status === 'Available' ? 'Maintenance' : asset.status,
-            nextMaintenanceDue: asset.nextMaintenanceDue || ''
+        setMaintenanceForm({ 
+            assetId: asset.assetId, 
+            serviceDate: new Date().toISOString().split('T')[0],
+            nextMaintenanceDue: asset.nextMaintenanceDue || '' 
         });
         setIsMaintenanceSheetOpen(true);
     }
 
-    const handleSaveMaintenance = () => {
-        if (!firestore || !maintenanceForm.assetId) return;
-        
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${maintenanceForm.assetId}`);
-        setDocumentNonBlocking(docRef, {
-            status: maintenanceForm.status,
-            nextMaintenanceDue: maintenanceForm.nextMaintenanceDue
-        }, { merge: true });
+    const handleSaveMaintenance = async () => {
+        if (!maintenanceRef || !maintenanceForm.assetId) return;
 
-        setIsMaintenanceSheetOpen(false);
-        toast({ title: "Status Updated", description: "Vehicle status and maintenance schedule updated." });
+        try {
+            await addDocumentNonBlocking(maintenanceRef, { 
+                ...maintenanceForm,
+                createdAt: serverTimestamp() 
+            });
+
+            // Also update the asset's next maintenance due date
+            if (firestore) {
+                const assetDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${maintenanceForm.assetId}`);
+                await setDocumentNonBlocking(assetDocRef, { 
+                    nextMaintenanceDue: maintenanceForm.nextMaintenanceDue,
+                    status: 'Maintenance' // Or based on a form field
+                }, { merge: true });
+            }
+            
+            setIsMaintenanceSheetOpen(false);
+            toast({ title: "Maintenance Logged", description: "New maintenance record saved successfully." });
+        } catch (error) {
+             console.error("Maintenance log error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to save maintenance log." });
+        }
     }
 
     // Calendar Visualization (Simple Timeline)
@@ -220,11 +278,12 @@ export default function AssetsPage() {
         const start = new Date(newBooking.startDateTime).getTime();
         const end = new Date(newBooking.endDateTime).getTime();
         return bookingConflicts.some(b => {
+            if (isEditBooking && b.bookingId === newBooking.bookingId) return false;
              const bStart = new Date(b.startDateTime).getTime();
              const bEnd = new Date(b.endDateTime).getTime();
              return (start < bEnd && end > bStart);
         });
-    }, [newBooking, bookingConflicts]);
+    }, [newBooking, bookingConflicts, isEditBooking]);
 
 
     return (
@@ -252,9 +311,10 @@ export default function AssetsPage() {
                 onEdit={handleOpenEditAsset} 
                 onDelete={handleDeleteAsset} 
                 onGenerateQR={handleGenerateQR} 
-                onBook={() => setIsBookSheetOpen(true)} 
+                onBook={handleOpenBookAsset} 
                 onOpenMaintenance={handleOpenMaintenance} 
                 bookings={bookings || []} 
+                onDeleteBooking={handleDeleteBooking}
             />
 
             <AssetModals 
@@ -271,7 +331,7 @@ export default function AssetsPage() {
                 setIsBookSheetOpen={setIsBookSheetOpen} 
                 newBooking={newBooking} 
                 setNewBooking={setNewBooking} 
-                handleBookAsset={handleBookAsset} 
+                handleBookAsset={handleSaveBooking} 
                 isConflict={isConflict} 
                 bookingConflicts={bookingConflicts} 
                 assets={assets || []} 
@@ -280,6 +340,7 @@ export default function AssetsPage() {
                 maintenanceForm={maintenanceForm} 
                 setMaintenanceForm={setMaintenanceForm} 
                 handleSaveMaintenance={handleSaveMaintenance} 
+                isEditBooking={isEditBooking}
             />
         </div>
     );

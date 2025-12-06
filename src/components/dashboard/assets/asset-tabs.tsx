@@ -1,8 +1,7 @@
 
 "use client";
 
-import {
-  Tabs,  TabsContent,  TabsList,  TabsTrigger,} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssetList } from "./asset-list";
 import { BookingSchedule } from "./booking-schedule";
 import { FleetMaintenance } from "./fleet-maintenance";
@@ -14,11 +13,12 @@ interface AssetTabsProps {
   searchTerm: string;
   typeFilter: string;
   onEdit: (asset: FixedAsset) => void;
-  onDelete: (assetId: string) => void;
+  onDelete: (id: string) => void;
   onGenerateQR: (asset: FixedAsset) => void;
-  onBook: () => void;
+  onBook: (booking?: any) => void;
   onOpenMaintenance: (asset: FixedAsset) => void;
   bookings: any[];
+  onDeleteBooking: (bookingId: string) => void;
 }
 
 export function AssetTabs({
@@ -32,33 +32,36 @@ export function AssetTabs({
   onBook,
   onOpenMaintenance,
   bookings,
+  onDeleteBooking
 }: AssetTabsProps) {
+  const filteredAssets = assets.filter(
+    (asset) =>
+      (asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        asset.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (typeFilter === "All" || asset.type === typeFilter)
+  );
+
   return (
-    <Tabs defaultValue="inventory" className="space-y-4">
+    <Tabs defaultValue="inventory">
       <TabsList>
         <TabsTrigger value="inventory">Assets Inventory</TabsTrigger>
-        <TabsTrigger value="bookings">Booking Schedule</TabsTrigger>
+        <TabsTrigger value="schedule">Booking Schedule</TabsTrigger>
         <TabsTrigger value="fleet">Fleet Maintenance</TabsTrigger>
       </TabsList>
       <TabsContent value="inventory">
         <AssetList
-          assets={assets}
+          assets={filteredAssets}
           isLoading={isLoading}
-          searchTerm={searchTerm}
-          typeFilter={typeFilter}
           onEdit={onEdit}
           onDelete={onDelete}
           onGenerateQR={onGenerateQR}
         />
       </TabsContent>
-      <TabsContent value="bookings">
-        <BookingSchedule bookings={bookings} onBook={onBook} />
+      <TabsContent value="schedule">
+        <BookingSchedule bookings={bookings} onBook={onBook} onDeleteBooking={onDeleteBooking} />
       </TabsContent>
       <TabsContent value="fleet">
-        <FleetMaintenance
-          assets={assets}
-          onOpenMaintenance={onOpenMaintenance}
-        />
+        <FleetMaintenance assets={assets} onOpenMaintenance={onOpenMaintenance} />
       </TabsContent>
     </Tabs>
   );

@@ -1,12 +1,13 @@
 
 "use client";
 
-import { FixedAsset } from "@/lib/types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from 'react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Truck, Wrench, AlertTriangle } from "lucide-react";
-import { isBefore } from "date-fns";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Wrench } from "lucide-react";
+import { FixedAsset } from "@/lib/types";
+import { MaintenanceHistory } from './maintenance-history';
 
 interface FleetMaintenanceProps {
   assets: FixedAsset[];
@@ -14,66 +15,48 @@ interface FleetMaintenanceProps {
 }
 
 export function FleetMaintenance({ assets, onOpenMaintenance }: FleetMaintenanceProps) {
-  const vehicles = assets.filter((a) => a.type === "Vehicle");
+    const vehicles = assets.filter(a => a.type === 'Vehicle');
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
-  if (vehicles.length === 0) {
     return (
-      <div className="col-span-full text-center text-muted-foreground py-12">
-        No vehicles registered in fleet.
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {vehicles.map((vehicle) => (
-        <Card key={vehicle.assetId} className="border-l-4 border-l-blue-500">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5" /> {vehicle.name}
-            </CardTitle>
-            <CardDescription>
-              Plate: {vehicle.plateNumber || "N/A"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
-                <Badge
-                  variant={
-                    vehicle.status === "Available" ? "secondary" : "destructive"
-                  }
-                >
-                  {vehicle.status}
-                </Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">
-                  Next Maintenance
-                </span>
-                <span className="font-medium flex items-center gap-1">
-                  {vehicle.nextMaintenanceDue
-                    ? new Date(vehicle.nextMaintenanceDue).toLocaleDateString()
-                    : "Not Scheduled"}
-                  {vehicle.nextMaintenanceDue &&
-                    isBefore(new Date(vehicle.nextMaintenanceDue), new Date()) && (
-                      <AlertTriangle className="h-3 w-3 text-destructive" />
-                    )}
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full mt-2"
-                onClick={() => onOpenMaintenance(vehicle)}
-              >
-                <Wrench className="mr-2 h-3 w-3" /> Update Status / Maintenance
-              </Button>
-            </div>
-          </CardContent>
+        <Card>
+            <CardHeader>
+                <CardTitle>Fleet Maintenance</CardTitle>
+                <CardDescription>Track and manage maintenance schedules for all barangay vehicles.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <Accordion type="single" collapsible onValueChange={setSelectedVehicleId}>
+                    {vehicles.map(vehicle => (
+                        <AccordionItem key={vehicle.assetId} value={vehicle.assetId}>
+                            <AccordionTrigger>
+                                <div className="flex justify-between items-center w-full pr-4">
+                                    <div className="text-left">
+                                        <p className="font-medium">{vehicle.name} ({vehicle.plateNumber})</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            Next Due: {vehicle.nextMaintenanceDue ? new Date(vehicle.nextMaintenanceDue).toLocaleDateString() : 'Not set'} 
+                                            <span className={`ml-2 inline-block h-2 w-2 rounded-full ${vehicle.status === 'Available' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                                        </p>
+                                    </div>
+                                    <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onOpenMaintenance(vehicle); }}>
+                                        <Wrench className="h-4 w-4 mr-2" />
+                                        Log Service
+                                    </Button>
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                {selectedVehicleId === vehicle.assetId && (
+                                   <MaintenanceHistory assetId={vehicle.assetId} />
+                                )}
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
+                 {vehicles.length === 0 && (
+                    <div className="text-center py-10">
+                        <p className="text-muted-foreground">No vehicles found in the asset inventory.</p>
+                    </div>
+                )}
+            </CardContent>
         </Card>
-      ))}
-    </div>
-  );
+    );
 }
