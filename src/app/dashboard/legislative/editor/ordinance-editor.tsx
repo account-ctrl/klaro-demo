@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
@@ -15,6 +15,7 @@ import {
   Table as TableIcon, Undo, Redo 
 } from 'lucide-react'
 import { Toggle } from "@/components/ui/toggle"
+import { useEffect } from 'react'
 
 const MenuBar = ({ editor }: { editor: any }) => {
   if (!editor) {
@@ -128,7 +129,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
   )
 }
 
-export default function OrdinanceEditor({ content, onChange }: { content?: string, onChange?: (html: string) => void }) {
+export default function OrdinanceEditor({ content, onChange, onEditorReady }: { content?: string, onChange?: (html: string) => void, onEditorReady?: (editor: Editor) => void }) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -143,12 +144,12 @@ export default function OrdinanceEditor({ content, onChange }: { content?: strin
       TableCell,
     ],
     content: content || `
-      <h1>Republic of the Philippines</h1>
-      <h2>Barangay San Isidro</h2>
-      <h3>OFFICE OF THE SANGGUNIANG BARANGAY</h3>
+      <h1 style="text-align: center">Republic of the Philippines</h1>
+      <h2 style="text-align: center">Barangay San Isidro</h2>
+      <h3 style="text-align: center">OFFICE OF THE SANGGUNIANG BARANGAY</h3>
       <hr>
-      <p><strong>ORDINANCE NO. ____ SERIES OF 20__</strong></p>
-      <p><strong>AN ORDINANCE [TITLE HERE]</strong></p>
+      <p style="text-align: center"><strong>ORDINANCE NO. ____ SERIES OF 20__</strong></p>
+      <p style="text-align: center"><strong>AN ORDINANCE [TITLE HERE]</strong></p>
       <p><strong>WHEREAS</strong>, [Reason 1];</p>
       <p><strong>WHEREAS</strong>, [Reason 2];</p>
       <p><strong>NOW THEREFORE</strong>, be it ordained by the Sangguniang Barangay of San Isidro that:</p>
@@ -163,15 +164,22 @@ export default function OrdinanceEditor({ content, onChange }: { content?: strin
     immediatelyRender: false,
     editorProps: {
         attributes: {
-            class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[500px] p-4 bg-white dark:bg-zinc-950 shadow-sm border rounded-b-md',
+            class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[500px] p-8 bg-white dark:bg-zinc-950 shadow-sm border rounded-b-md my-4',
         },
     },
   })
 
+  // Expose editor instance to parent
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor)
+    }
+  }, [editor, onEditorReady])
+
   return (
     <div className="border rounded-md shadow-sm bg-background flex flex-col h-full">
       <MenuBar editor={editor} />
-      <div className="flex-1 overflow-y-auto bg-muted/10">
+      <div className="flex-1 overflow-y-auto bg-muted/10 p-4">
          <EditorContent editor={editor} className="min-h-full" />
       </div>
     </div>

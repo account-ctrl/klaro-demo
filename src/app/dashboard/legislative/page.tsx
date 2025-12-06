@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOrdinances, useLegislativeRef, BARANGAY_ID } from '@/hooks/use-legislative';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useFirestore } from '@/firebase';
 import { serverTimestamp, doc } from 'firebase/firestore';
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid, ArrowLeft, FileDown, ChevronDown, ChevronUp } from 'lucide-react';
+import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid, ArrowLeft, FileDown, ChevronDown, ChevronUp, Eye, EyeOff, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Ordinance, WithId } from '@/lib/types';
@@ -32,6 +32,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { caseTypes } from '../blotter/case-types';
 import OrdinanceEditor from './editor/ordinance-editor';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Editor } from '@tiptap/react';
+import { DraftTools } from './editor/draft-tools';
 
 type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'> & {
     relatedViolation?: string;
@@ -67,6 +69,8 @@ export default function LegislativePage() {
     const [isDraftMode, setIsDraftMode] = useState(false);
     const [draftContent, setDraftContent] = useState('');
     const [isDraftMetadataOpen, setIsDraftMetadataOpen] = useState(true); 
+    const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
+    const [isPreviewMode, setIsPreviewMode] = useState(false); // Toggle between Form+Editor vs Print Preview
 
     const handleOpenAdd = () => {
         setFormData(initialFormValues);
@@ -78,7 +82,6 @@ export default function LegislativePage() {
     const handleOpenEdit = (ordinance: WithId<Ordinance> & { relatedViolation?: string }) => {
         const id = ordinance.ordinanceId || ordinance.id;
         
-        // Load all form data
         const loadedData = {
             ordinanceNumber: ordinance.ordinanceNumber || '',
             title: ordinance.title,
@@ -94,7 +97,6 @@ export default function LegislativePage() {
         setFormData(loadedData);
         setCurrentOrdinanceId(id);
 
-        // Logic to open Editor if Draft, otherwise Sheet
         if (ordinance.status === 'Draft') {
             setDraftContent(loadedData.contentHtml);
             setIsDraftMode(true);
@@ -136,11 +138,10 @@ export default function LegislativePage() {
         const dataToSave = {
             ...formData,
             penaltyAmount: Number(formData.penaltyAmount) || 0,
-            status: 'Active' as const, // Publishing makes it Active
+            status: 'Active' as const, 
         };
 
         if (isEditMode && currentOrdinanceId && firestore) {
-            // Update existing (Draft or Active)
             const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
             setDocumentNonBlocking(docRef, dataToSave, { merge: true });
             
@@ -149,7 +150,6 @@ export default function LegislativePage() {
                 description: "The ordinance has been successfully updated and published."
             });
         } else if (ordinancesRef) {
-            // Create New
             addDocumentNonBlocking(ordinancesRef, {
                 ...dataToSave,
                 createdAt: serverTimestamp()
@@ -175,17 +175,13 @@ export default function LegislativePage() {
             status: 'Draft' as const,
             ordinanceNumber: formData.ordinanceNumber || 'DRAFT-' + Date.now().toString().slice(-6), 
             penaltyAmount: Number(formData.penaltyAmount) || 0,
-            // Preserve existing creation timestamp if updating, handled by merge if doc exists
-            // But for addDocument, it's new.
         };
 
         if (currentOrdinanceId && firestore) {
-             // Update Existing Draft
              const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
              setDocumentNonBlocking(docRef, draftData, { merge: true });
              toast({ title: "Draft Updated", description: "Your draft has been updated." });
         } else {
-             // Create New Draft
              addDocumentNonBlocking(ordinancesRef, {
                  ...draftData,
                  createdAt: serverTimestamp()
@@ -226,108 +222,124 @@ export default function LegislativePage() {
                         <Button variant="ghost" size="icon" onClick={() => setIsDraftMode(false)}>
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight">Draft Ordinance</h1>
-                            <p className="text-muted-foreground">Compose and format your ordinance document.</p>
+                        <div className="flex-1 mr-4">
+                             <div className="flex items-center gap-2">
+                                 <h1 className="text-xl font-bold tracking-tight truncate">
+                                     {formData.title || 'Drafting: Untitled Ordinance'}
+                                 </h1>
+                                 <Badge variant="outline">
+                                     {formData.ordinanceNumber || 'No Number'}
+                                 </Badge>
+                             </div>
+                            <p className="text-sm text-muted-foreground">
+                                {isPreviewMode ? 'Review Mode' : 'Drafting Mode'}
+                            </p>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setIsDraftMode(false)}>Cancel</Button>
-                        <Button onClick={handleSaveDraft}>Save Draft</Button>
+                    <div className="flex gap-2 items-center">
+                        {/* Mode Switch */}
+                        <Button 
+                            variant={isPreviewMode ? 'default' : 'outline'} 
+                            size="sm"
+                            onClick={() => setIsPreviewMode(!isPreviewMode)}
+                        >
+                            {isPreviewMode ? <EyeOff className="mr-2 h-4 w-4"/> : <Eye className="mr-2 h-4 w-4"/>}
+                            {isPreviewMode ? 'Edit' : 'Preview'}
+                        </Button>
+
+                        <Button variant="outline" size="sm" onClick={handleSaveDraft}>Save Draft</Button>
+                        
+                        {/* Submit for Approval Stub */}
+                         <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => {
+                             toast({ title: "Submitted", description: "Ordinance submitted for review (Stub)." });
+                             handleSaveDraft();
+                         }}>
+                            <Send className="mr-2 h-4 w-4"/> Submit
+                        </Button>
                     </div>
                 </div>
                 
-                {/* Collapsible Metadata Fields for Draft */}
-                <Collapsible open={isDraftMetadataOpen} onOpenChange={setIsDraftMetadataOpen} className="border rounded-md bg-muted/30">
-                     <div className="flex items-center justify-between px-4 py-2">
-                        <h3 className="text-sm font-semibold">Ordinance Details</h3>
-                        <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                {isDraftMetadataOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                            </Button>
-                        </CollapsibleTrigger>
-                    </div>
-                    <CollapsibleContent className="px-4 pb-4 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="draft-ordNo">Ordinance No.</Label>
-                                <Input 
-                                    id="draft-ordNo"
-                                    value={formData.ordinanceNumber} 
-                                    onChange={e => setFormData({...formData, ordinanceNumber: e.target.value})} 
-                                    placeholder="e.g., Ord-2024-001" 
-                                />
-                            </div>
-                             <div className="space-y-2">
-                                <Label htmlFor="draft-category">Category</Label>
-                                <Select 
-                                    onValueChange={(val) => setFormData({...formData, category: val as any})} 
-                                    value={formData.category}
-                                >
-                                    <SelectTrigger id="draft-category"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="General">General</SelectItem>
-                                        <SelectItem value="Curfew">Curfew</SelectItem>
-                                        <SelectItem value="Noise">Noise Control</SelectItem>
-                                        <SelectItem value="Sanitation">Sanitation/Waste</SelectItem>
-                                        <SelectItem value="Traffic">Traffic/Parking</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="draft-title">Title</Label>
-                            <Input 
-                                id="draft-title"
-                                value={formData.title} 
-                                onChange={e => setFormData({...formData, title: e.target.value})} 
-                                placeholder="Title of the ordinance"
-                            />
-                        </div>
-                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="draft-penalty">Penalty Amount (₱)</Label>
-                                <Input 
-                                    id="draft-penalty"
-                                    type="number" 
-                                    value={formData.penaltyAmount} 
-                                    onChange={e => setFormData({...formData, penaltyAmount: parseFloat(e.target.value) || 0})} 
-                                    min={0}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="draft-date">Date Enacted</Label>
-                                <Input 
-                                    id="draft-date"
-                                    type="date" 
-                                    value={formData.dateEnacted} 
-                                    onChange={e => setFormData({...formData, dateEnacted: e.target.value})} 
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="draft-relatedViolation">Related Blotter Violation (Optional)</Label>
-                            <Select 
-                                onValueChange={(val) => setFormData({...formData, relatedViolation: val === 'none' ? '' : val})} 
-                                value={formData.relatedViolation || 'none'}
-                            >
-                                <SelectTrigger id="draft-relatedViolation"><SelectValue placeholder="Select related violation..." /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">-- None --</SelectItem>
-                                    {Object.entries(caseTypes).map(([group, types]) => (
-                                        <SelectGroup key={group}>
-                                            <SelectLabel className="capitalize">{group}</SelectLabel>
-                                            {types.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                        </SelectGroup>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </CollapsibleContent>
-                </Collapsible>
+                {/* Layout */}
+                <div className="flex-1 min-h-0 flex gap-4">
+                     {/* Left Column: Editor / Preview */}
+                     <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                        {!isPreviewMode && (
+                            <Collapsible open={isDraftMetadataOpen} onOpenChange={setIsDraftMetadataOpen} className="border rounded-md bg-muted/30 flex-shrink-0">
+                                <div className="flex items-center justify-between px-4 py-2">
+                                    <h3 className="text-sm font-semibold">Ordinance Details</h3>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                            {isDraftMetadataOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </div>
+                                <CollapsibleContent className="px-4 pb-4 space-y-4">
+                                    {/* Metadata Inputs (Same as before) */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="draft-ordNo">Ordinance No.</Label>
+                                            <Input 
+                                                id="draft-ordNo"
+                                                value={formData.ordinanceNumber} 
+                                                onChange={e => setFormData({...formData, ordinanceNumber: e.target.value})} 
+                                                placeholder="e.g., Ord-2024-001" 
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="draft-category">Category</Label>
+                                            <Select 
+                                                onValueChange={(val) => setFormData({...formData, category: val as any})} 
+                                                value={formData.category}
+                                            >
+                                                <SelectTrigger id="draft-category"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="General">General</SelectItem>
+                                                    <SelectItem value="Curfew">Curfew</SelectItem>
+                                                    <SelectItem value="Noise">Noise Control</SelectItem>
+                                                    <SelectItem value="Sanitation">Sanitation/Waste</SelectItem>
+                                                    <SelectItem value="Traffic">Traffic/Parking</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="draft-title">Title</Label>
+                                        <Input 
+                                            id="draft-title"
+                                            value={formData.title} 
+                                            onChange={e => setFormData({...formData, title: e.target.value})} 
+                                            placeholder="Title of the ordinance"
+                                        />
+                                    </div>
+                                     {/* ... other fields could go here if space allows ... */}
+                                </CollapsibleContent>
+                            </Collapsible>
+                        )}
 
-                <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
-                    <OrdinanceEditor onChange={(html) => setDraftContent(html)} content={draftContent} />
+                        <div className="flex-1 border rounded-md overflow-hidden bg-background shadow-sm">
+                            {isPreviewMode ? (
+                                <ScrollArea className="h-full p-8">
+                                    <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto">
+                                        {/* Render HTML safely? Assuming trusted content or sanitize in real app */}
+                                        <div dangerouslySetInnerHTML={{ __html: draftContent }} />
+                                    </div>
+                                </ScrollArea>
+                            ) : (
+                                <OrdinanceEditor 
+                                    onChange={(html) => setDraftContent(html)} 
+                                    content={draftContent} 
+                                    onEditorReady={setEditorInstance}
+                                />
+                            )}
+                        </div>
+                     </div>
+
+                     {/* Right Column: Draft Tools (Only in Edit Mode) */}
+                     {!isPreviewMode && (
+                         <div className="w-80 flex-shrink-0 border-l pl-4 hidden xl:block">
+                             <DraftTools editor={editorInstance} />
+                         </div>
+                     )}
                 </div>
             </div>
         )
