@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid } from 'lucide-react';
+import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Ordinance, WithId } from '@/lib/types';
@@ -30,6 +30,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { caseTypes } from '../blotter/case-types';
+import OrdinanceEditor from './editor/ordinance-editor';
 
 type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'> & {
     relatedViolation?: string;
@@ -59,6 +60,7 @@ export default function LegislativePage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [isDraftMode, setIsDraftMode] = useState(false);
 
     const handleOpenAdd = () => {
         setFormData(initialFormValues);
@@ -143,6 +145,34 @@ export default function LegislativePage() {
         return matchesSearch && matchesCategory;
     });
 
+    if (isDraftMode) {
+        return (
+            <div className="space-y-4 h-[calc(100vh-6rem)] flex flex-col">
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <Button variant="ghost" size="icon" onClick={() => setIsDraftMode(false)}>
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight">Draft Ordinance</h1>
+                            <p className="text-muted-foreground">Compose and format your ordinance document.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setIsDraftMode(false)}>Cancel</Button>
+                        <Button onClick={() => {
+                            toast({ title: "Draft Saved", description: "This is a UI demo for the editor." });
+                            setIsDraftMode(false);
+                        }}>Save Draft</Button>
+                    </div>
+                </div>
+                <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
+                    <OrdinanceEditor />
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -150,9 +180,14 @@ export default function LegislativePage() {
                     <h1 className="text-2xl font-bold tracking-tight">Legislative & Ordinances</h1>
                     <p className="text-muted-foreground">Manage barangay ordinances, resolutions, and penalties.</p>
                 </div>
-                <Button onClick={handleOpenAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                    <Plus className="mr-2 h-4 w-4"/> New Ordinance
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsDraftMode(true)}>
+                        <FileText className="mr-2 h-4 w-4"/> Draft Ordinance
+                    </Button>
+                    <Button onClick={handleOpenAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                        <Plus className="mr-2 h-4 w-4"/> New Ordinance
+                    </Button>
+                </div>
             </div>
 
             {/* Toolbar */}
