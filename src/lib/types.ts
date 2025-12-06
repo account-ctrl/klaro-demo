@@ -424,6 +424,13 @@ export type AssetBooking = {
   status: 'Pending' | 'Approved' | 'Returned' | 'Overdue' | 'Rejected';
   approvedBy?: string; // User ID
   createdAt: Timestamp;
+  
+  // Logistics & Accountability
+  destination?: string; // For vehicles
+  driverId?: string; // For vehicles
+  driverName?: string;
+  startOdometer?: number;
+  endOdometer?: number;
 };
 
 // Deprecated old types. To be removed after full refactoring.
