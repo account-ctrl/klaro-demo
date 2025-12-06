@@ -87,7 +87,7 @@ export default function AssetsPage() {
         setIsAssetSheetOpen(true);
     };
 
-    const handleSaveAsset = () => {
+    const handleSaveAsset = async () => {
         if (!assetForm.name) {
             toast({ title: "Validation Error", description: "Asset name is required.", variant: "destructive" });
             return;
@@ -98,18 +98,23 @@ export default function AssetsPage() {
             purchaseDate: assetForm.purchaseDate || new Date().toISOString(),
         };
 
-        if (isEditMode && currentAssetId && firestore) {
-             const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${currentAssetId}`);
-             setDocumentNonBlocking(docRef, dataToSave, { merge: true });
-             toast({ title: "Asset Updated", description: `${assetForm.name} updated successfully.` });
-        } else if (assetsRef) {
-             addDocumentNonBlocking(assetsRef, {
-                 ...dataToSave,
-                 createdAt: serverTimestamp()
-             });
-             toast({ title: "Asset Added", description: `${assetForm.name} added to inventory.` });
+        try {
+            if (isEditMode && currentAssetId && firestore) {
+                 const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${currentAssetId}`);
+                 await setDocumentNonBlocking(docRef, dataToSave, { merge: true });
+                 toast({ title: "Asset Updated", description: `${assetForm.name} updated successfully.` });
+            } else if (assetsRef) {
+                 await addDocumentNonBlocking(assetsRef, {
+                     ...dataToSave,
+                     createdAt: serverTimestamp()
+                 });
+                 toast({ title: "Asset Added", description: `${assetForm.name} added to inventory.` });
+            }
+            setIsAssetSheetOpen(false);
+        } catch (error) {
+            console.error("Error saving asset:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to save asset." });
         }
-        setIsAssetSheetOpen(false);
     };
 
     const handleDeleteAsset = (id: string) => {
@@ -121,14 +126,29 @@ export default function AssetsPage() {
 
     // --- Booking Logic ---
 
-    const handleBookAsset = () => {
-        if (!bookingsRef || !newBooking.assetId) return;
+    const handleBookAsset = async () => {
+        if (!bookingsRef) {
+             console.error("Booking ref not available");
+             return;
+        }
+        if (!newBooking.assetId) {
+             toast({ variant: "destructive", title: "Missing Asset", description: "Please select an asset to book." });
+             return;
+        }
+        if (!newBooking.startDateTime || !newBooking.endDateTime) {
+             toast({ variant: "destructive", title: "Missing Dates", description: "Start and End times are required." });
+             return;
+        }
 
         const start = new Date(newBooking.startDateTime).getTime();
         const end = new Date(newBooking.endDateTime).getTime();
         
-        if (isNaN(start) || isNaN(end) || start >= end) {
-             toast({ variant: "destructive", title: "Invalid Time", description: "Please ensure end time is after start time." });
+        if (isNaN(start) || isNaN(end)) {
+             toast({ variant: "destructive", title: "Invalid Time", description: "Date format is invalid." });
+             return;
+        }
+        if (start >= end) {
+             toast({ variant: "destructive", title: "Invalid Time", description: "End time must be after start time." });
              return;
         }
         
@@ -146,20 +166,25 @@ export default function AssetsPage() {
 
         const selectedAsset = assets?.find(a => a.assetId === newBooking.assetId);
 
-        addDocumentNonBlocking(bookingsRef, {
-            assetId: newBooking.assetId,
-            assetName: selectedAsset?.name || 'Unknown Asset',
-            borrowerName: newBooking.borrowerName,
-            purpose: newBooking.purpose,
-            startDateTime: newBooking.startDateTime,
-            endDateTime: newBooking.endDateTime,
-            status: 'Approved',
-            createdAt: serverTimestamp()
-        });
+        try {
+            await addDocumentNonBlocking(bookingsRef, {
+                assetId: newBooking.assetId,
+                assetName: selectedAsset?.name || 'Unknown Asset',
+                borrowerName: newBooking.borrowerName,
+                purpose: newBooking.purpose,
+                startDateTime: newBooking.startDateTime,
+                endDateTime: newBooking.endDateTime,
+                status: 'Approved',
+                createdAt: serverTimestamp()
+            });
 
-        setIsBookSheetOpen(false);
-        setNewBooking({ assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
-        toast({ title: "Booking Confirmed", description: "Asset scheduled successfully." });
+            setIsBookSheetOpen(false);
+            setNewBooking({ assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
+            toast({ title: "Booking Confirmed", description: "Asset scheduled successfully." });
+        } catch (e) {
+            console.error("Booking failed", e);
+            toast({ variant: "destructive", title: "Booking Failed", description: "Could not save booking to database." });
+        }
     };
 
     // --- Maintenance Logic ---
