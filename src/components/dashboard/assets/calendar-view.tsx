@@ -7,13 +7,13 @@ import { Calendar } from "lucide-react";
 import { BookingCalendar } from "./booking-calendar";
 import { UpcomingBookings } from "./upcoming-bookings";
 
-interface BookingScheduleProps {
+interface CalendarViewProps {
   bookings: any[];
   onBook: (booking?: any) => void;
-  onDeleteBooking: (bookingId: string) => void;
+  onDelete: (bookingId: string) => void;
 }
 
-export function BookingSchedule({ bookings, onBook, onDeleteBooking }: BookingScheduleProps) {
+export function CalendarView({ bookings, onBook, onDelete }: CalendarViewProps) {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const handleEditBooking = (booking: any) => {
@@ -33,7 +33,7 @@ export function BookingSchedule({ bookings, onBook, onDeleteBooking }: BookingSc
                 bookings={bookings} 
                 selectedDate={selectedDate} 
                 onEdit={handleEditBooking}
-                onDelete={onDeleteBooking}
+                onDelete={onDelete}
             />
         </div>
     </div>
