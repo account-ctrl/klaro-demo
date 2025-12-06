@@ -4,7 +4,9 @@
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Ordinance } from '@/lib/types';
-import { BARANGAY_ID } from './use-barangay-data';
+import { BARANGAY_ID as IMPORTED_BARANGAY_ID } from './use-barangay-data';
+
+export const BARANGAY_ID = IMPORTED_BARANGAY_ID;
 
 // --- REFS ---
 
