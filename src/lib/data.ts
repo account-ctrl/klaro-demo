@@ -123,3 +123,21 @@ export const expenseCategories = [
 
 // Deprecated. Data now comes from firestore.
 export const officialData: any[] = [];
+
+export const LOCATION_OPTIONS = [
+  "Barangay Hall Storage Room",
+  "Health Center",
+  "Multi-Purpose Court",
+  "Day Care Center",
+  "Security Outpost",
+  "Treasurer's Office",
+  "Session Hall"
+];
+
+export const OFFICIAL_ROSTER = [
+    { id: "off1", name: "Juan Dela Cruz (Kapitan)" },
+    { id: "off2", name: "Maria Clara (Treasurer)" },
+    { id: "off3", name: "Jose Rizal (Secretary)" },
+    { id: "off4", name: "Andres Bonifacio (Tanod Chief)" },
+    { id: "off5", name: "Emilio Aguinaldo (Kagawad)" },
+];
