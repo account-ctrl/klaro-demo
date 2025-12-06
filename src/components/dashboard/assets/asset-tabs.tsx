@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./asset-columns";
 import { FixedAsset, AssetBooking } from "@/lib/types";
@@ -12,12 +12,16 @@ import { FleetMaintenance } from './fleet-maintenance';
 import { AssetList as AssetGrid } from './asset-list';
 import { Button } from "@/components/ui/button";
 import { LayoutGrid, List } from 'lucide-react';
+import { AssetFilters } from './asset-filters';
 
 interface AssetTabsProps {
     assets: FixedAsset[];
     isLoading: boolean;
     searchTerm: string;
+    setSearchTerm: (term: string) => void;
     typeFilter: string;
+    setTypeFilter: (filter: string) => void;
+    onAdd: () => void;
     onEdit: (asset: FixedAsset) => void;
     onDelete: (id: string) => void;
     onGenerateQR: (asset: FixedAsset) => void;
@@ -70,8 +74,20 @@ export function AssetTabs(props: AssetTabsProps) {
             </div>
             
             <TabsContent value="inventory" className="space-y-4">
-                 <div className="flex items-center justify-end">
-                    <div className="flex items-center space-x-2 bg-muted/50 p-1 rounded-md border">
+                 <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                    {/* Filters - Now inside the tab */}
+                    <div className="flex-1 w-full">
+                         <AssetFilters 
+                            searchTerm={props.searchTerm} 
+                            setSearchTerm={props.setSearchTerm} 
+                            typeFilter={props.typeFilter} 
+                            setTypeFilter={props.setTypeFilter} 
+                            onAdd={props.onAdd} 
+                        />
+                    </div>
+                    
+                    {/* View Toggle */}
+                    <div className="flex items-center space-x-2 bg-muted/50 p-1 rounded-md border self-end md:self-center">
                         <Button 
                             variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
                             size="sm" 

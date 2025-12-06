@@ -7,7 +7,6 @@ import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocki
 import { serverTimestamp, doc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { FixedAsset, MaintenanceLog } from '@/lib/types';
-import { AssetFilters } from '@/components/dashboard/assets/asset-filters';
 import { AssetTabs } from '@/components/dashboard/assets/asset-tabs';
 import { AssetModals, initialAssetForm } from '@/components/dashboard/assets/asset-modals';
 
@@ -295,19 +294,16 @@ export default function AssetsPage() {
                 </div>
             </div>
 
-            <AssetFilters 
-                searchTerm={searchTerm} 
-                setSearchTerm={setSearchTerm} 
-                typeFilter={typeFilter} 
-                setTypeFilter={setTypeFilter} 
-                onAdd={handleOpenAddAsset} 
-            />
+            {/* AssetFilters removed from here */}
 
             <AssetTabs 
                 assets={assets || []} 
                 isLoading={isLoadingAssets} 
                 searchTerm={searchTerm} 
+                setSearchTerm={setSearchTerm} 
                 typeFilter={typeFilter} 
+                setTypeFilter={setTypeFilter} 
+                onAdd={handleOpenAddAsset} 
                 onEdit={handleOpenEditAsset} 
                 onDelete={handleDeleteAsset} 
                 onGenerateQR={handleGenerateQR} 

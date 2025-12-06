@@ -1,27 +1,33 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useInventoryItems, useInventoryBatches, useEHealthRef } from '@/hooks/use-ehealth';
 import { MedicineItem, MedicineBatch } from '@/lib/ehealth-types';
-import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { addDocumentNonBlocking, updateDocumentNonBlocking, useFirestore } from '@/firebase';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Package, AlertTriangle, History } from 'lucide-react';
+import { Plus, Package, AlertTriangle, History, Search, Filter, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, doc, increment } from 'firebase/firestore';
+import { BARANGAY_ID } from '@/hooks/use-barangay-data'; 
 
 export default function InventoryPage() {
-    const { data: items } = useInventoryItems();
+    const firestore = useFirestore();
+    const { data: items, isLoading } = useInventoryItems();
     const { toast } = useToast();
     const itemsRef = useEHealthRef('ehealth_inventory_items');
     const batchesRef = useEHealthRef('ehealth_inventory_batches');
+
+    // State for Search & Filter
+    const [searchTerm, setSearchTerm] = useState('');
+    const [showLowStockOnly, setShowLowStockOnly] = useState(false);
 
     // State for Add Item Dialog
     const [isAddItemOpen, setIsAddItemOpen] = useState(false);
@@ -31,6 +37,16 @@ export default function InventoryPage() {
     const [isAddBatchOpen, setIsAddBatchOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<MedicineItem | null>(null);
     const [newBatch, setNewBatch] = useState({ batchNumber: '', expiryDate: '', quantity: '0' });
+
+    const filteredItems = useMemo(() => {
+        if (!items) return [];
+        return items.filter(item => {
+            const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+            // Note: filtering by low stock relies on item.totalStock being accurate.
+            const matchesLowStock = showLowStockOnly ? (item.totalStock || 0) <= item.reorderPoint : true;
+            return matchesSearch && matchesLowStock;
+        });
+    }, [items, searchTerm, showLowStockOnly]);
 
     const handleAddItem = () => {
         if (!itemsRef) return;
@@ -45,59 +61,59 @@ export default function InventoryPage() {
         toast({ title: "Item Added", description: `${newItem.name} added to master inventory.` });
     };
 
-    const handleAddBatch = () => {
-        if (!batchesRef || !selectedItem || !itemsRef) return;
+    const handleAddBatch = async () => {
+        if (!batchesRef || !selectedItem || !itemsRef || !firestore) return;
         const qty = parseInt(newBatch.quantity);
         
-        // 1. Add Batch
-        addDocumentNonBlocking(batchesRef, {
-            itemId: selectedItem.itemId,
-            itemName: selectedItem.name,
-            batchNumber: newBatch.batchNumber,
-            expiryDate: newBatch.expiryDate,
-            quantity: qty,
-            status: 'Active',
-            createdAt: serverTimestamp()
-        });
+        try {
+            // 1. Add Batch
+            await addDocumentNonBlocking(batchesRef, {
+                itemId: selectedItem.itemId,
+                itemName: selectedItem.name,
+                batchNumber: newBatch.batchNumber,
+                expiryDate: newBatch.expiryDate,
+                quantity: qty,
+                status: 'Active',
+                createdAt: serverTimestamp()
+            });
 
-        // 2. Update Total Stock
-        // Note: In a real app, use a cloud function or transaction for safety. 
-        // Here we do a simplified optimistic update or rely on re-fetch.
-        // We can't easily do atomic increment on the hook level without doc ref, 
-        // but we can assume the item data is fresh enough for this demo.
-        // Better: updateDocumentNonBlocking with increment
-        // updateDocumentNonBlocking(doc(itemsRef, selectedItem.itemId), { totalStock: increment(qty) }); 
-        // *We need the doc ref, which we don't have exposed easily here without re-querying.*
-        // *Workaround for demo: Just add.*
-        
-        // Actually, let's just skip the atomic increment for now and rely on a recalculation logic or just display batch sums if critical.
-        // But for the requirement "total_stock (computed)", best to try to update it.
-        // We'll skip updating parent for now to keep it simple and safe from client-side race conditions. 
-        // The display can sum up batches if needed, or we assume a backend trigger exists.
-        
-        setIsAddBatchOpen(false);
-        setNewBatch({ batchNumber: '', expiryDate: '', quantity: '0' });
-        toast({ title: "Batch Added", description: `Stock added for ${selectedItem.name}.` });
+            // 2. Update Parent Total Stock using atomic increment
+            const itemDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/ehealth_inventory_items/${selectedItem.itemId}`);
+            await updateDocumentNonBlocking(itemDocRef, {
+                totalStock: increment(qty)
+            });
+
+            setIsAddBatchOpen(false);
+            setNewBatch({ batchNumber: '', expiryDate: '', quantity: '0' });
+            toast({ title: "Batch Added", description: `Stock added for ${selectedItem.name}.` });
+        } catch (error) {
+            console.error("Error adding batch:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to update stock." });
+        }
     };
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Medicine Inventory</h1>
-                    <p className="text-muted-foreground">Manage master list and stock batches (FEFO).</p>
+                    <p className="text-muted-foreground">Manage pharmaceutical stocks and monitor expiration dates.</p>
                 </div>
                 <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-                    <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Add New Item</Button></DialogTrigger>
+                    <DialogTrigger asChild>
+                        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                            <Plus className="mr-2 h-4 w-4" /> Add Master Item
+                        </Button>
+                    </DialogTrigger>
                     <DialogContent>
-                        <DialogHeader><DialogTitle>Add Master Item</DialogTitle></DialogHeader>
+                        <DialogHeader><DialogTitle>Add New Medicine</DialogTitle></DialogHeader>
                         <div className="space-y-4 py-4">
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2"><Label>Generic Name</Label><Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} /></div>
+                                <div className="space-y-2"><Label>Generic Name</Label><Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="e.g. Paracetamol" /></div>
                                 <div className="space-y-2"><Label>Dosage</Label><Input value={newItem.dosage} onChange={e => setNewItem({...newItem, dosage: e.target.value})} placeholder="500mg" /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2"><Label>Unit</Label><Input value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} placeholder="Tablet" /></div>
+                                <div className="space-y-2"><Label>Unit</Label><Input value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} placeholder="Tablet/Syrup" /></div>
                                 <div className="space-y-2"><Label>Reorder Point</Label><Input type="number" value={newItem.reorderPoint} onChange={e => setNewItem({...newItem, reorderPoint: e.target.value})} /></div>
                             </div>
                         </div>
@@ -106,40 +122,90 @@ export default function InventoryPage() {
                 </Dialog>
             </div>
 
-            <div className="grid gap-6">
-                {items?.map(item => (
-                    <Card key={item.itemId}>
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                        {item.name} 
-                                        <Badge variant="outline">{item.dosage}</Badge>
-                                    </CardTitle>
-                                    <CardDescription>{item.unit} • Reorder at {item.reorderPoint}</CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Dialog open={isAddBatchOpen && selectedItem?.itemId === item.itemId} onOpenChange={(open) => { setIsAddBatchOpen(open); if(open) setSelectedItem(item); }}>
-                                        <DialogTrigger asChild><Button variant="secondary" size="sm"><Package className="mr-2 h-4 w-4"/> Add Stock</Button></DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader><DialogTitle>Add Batch: {item.name}</DialogTitle></DialogHeader>
-                                            <div className="space-y-4 py-4">
-                                                <div className="space-y-2"><Label>Batch Number</Label><Input value={newBatch.batchNumber} onChange={e => setNewBatch({...newBatch, batchNumber: e.target.value})} /></div>
-                                                <div className="space-y-2"><Label>Expiry Date</Label><Input type="date" value={newBatch.expiryDate} onChange={e => setNewBatch({...newBatch, expiryDate: e.target.value})} /></div>
-                                                <div className="space-y-2"><Label>Quantity</Label><Input type="number" value={newBatch.quantity} onChange={e => setNewBatch({...newBatch, quantity: e.target.value})} /></div>
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4 items-center bg-muted/40 p-4 rounded-lg border">
+                <div className="relative w-full sm:w-[300px]">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search medicines..." 
+                        className="pl-9 bg-background"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button 
+                        variant={showLowStockOnly ? "secondary" : "outline"} 
+                        size="sm"
+                        onClick={() => setShowLowStockOnly(!showLowStockOnly)}
+                        className={showLowStockOnly ? "bg-red-100 text-red-700 hover:bg-red-200 border-red-200" : ""}
+                    >
+                        <AlertCircle className="mr-2 h-4 w-4" />
+                        Low Stock Alerts
+                    </Button>
+                </div>
+            </div>
+
+            {/* Items Grid */}
+            {isLoading ? (
+                <div className="text-center py-10">Loading inventory...</div>
+            ) : filteredItems.length === 0 ? (
+                <div className="text-center py-16 border-2 border-dashed rounded-lg bg-muted/10">
+                    <p className="text-muted-foreground">No medicines found matching your filters.</p>
+                </div>
+            ) : (
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    {filteredItems.map(item => {
+                        const isLowStock = (item.totalStock || 0) <= item.reorderPoint;
+                        return (
+                            <Card key={item.itemId} className={`flex flex-col ${isLowStock ? 'border-red-200 shadow-sm' : ''}`}>
+                                <CardHeader className="pb-3">
+                                    <div className="flex justify-between items-start">
+                                        <div className="space-y-1">
+                                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                                {item.name}
+                                                {isLowStock && <Badge variant="destructive" className="text-[10px] h-5">Low Stock</Badge>}
+                                            </CardTitle>
+                                            <div className="flex gap-2">
+                                                <Badge variant="outline">{item.dosage}</Badge>
+                                                <Badge variant="secondary" className="font-normal">{item.unit}</Badge>
                                             </div>
-                                            <DialogFooter><Button onClick={handleAddBatch}>Save Batch</Button></DialogFooter>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-2xl font-bold">{item.totalStock || 0}</div>
+                                            <div className="text-xs text-muted-foreground">Total Qty</div>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="flex-grow">
+                                    <div className="text-xs text-muted-foreground mb-4">
+                                        Reorder Point: <span className="font-medium text-foreground">{item.reorderPoint}</span>
+                                    </div>
+                                    <BatchList itemId={item.itemId} />
+                                </CardContent>
+                                <CardFooter className="pt-4 border-t bg-muted/20">
+                                    <Dialog open={isAddBatchOpen && selectedItem?.itemId === item.itemId} onOpenChange={(open) => { setIsAddBatchOpen(open); if(open) setSelectedItem(item); }}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="outline" size="sm" className="w-full">
+                                                <Plus className="mr-2 h-3 w-3"/> Receive New Batch
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader><DialogTitle>Receive Batch: {item.name}</DialogTitle></DialogHeader>
+                                            <div className="space-y-4 py-4">
+                                                <div className="space-y-2"><Label>Batch Number / Lot No.</Label><Input value={newBatch.batchNumber} onChange={e => setNewBatch({...newBatch, batchNumber: e.target.value})} placeholder="e.g. B-2023-001" /></div>
+                                                <div className="space-y-2"><Label>Expiry Date</Label><Input type="date" value={newBatch.expiryDate} onChange={e => setNewBatch({...newBatch, expiryDate: e.target.value})} /></div>
+                                                <div className="space-y-2"><Label>Quantity Received</Label><Input type="number" value={newBatch.quantity} onChange={e => setNewBatch({...newBatch, quantity: e.target.value})} /></div>
+                                            </div>
+                                            <DialogFooter><Button onClick={handleAddBatch}>Confirm Receipt</Button></DialogFooter>
                                         </DialogContent>
                                     </Dialog>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <BatchList itemId={item.itemId} />
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+                                </CardFooter>
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
@@ -147,43 +213,44 @@ export default function InventoryPage() {
 function BatchList({ itemId }: { itemId: string }) {
     const { data: batches } = useInventoryBatches(itemId);
     
-    if (!batches || batches.length === 0) return <div className="text-sm text-muted-foreground">No stock history.</div>;
+    // Only show active batches or recently expired/depleted? 
+    // For density, maybe just show the next expiring batch or top 3.
+    const activeBatches = batches?.filter(b => b.quantity > 0 || new Date(b.expiryDate) > new Date()) || [];
+    
+    if (activeBatches.length === 0) return <div className="text-xs text-muted-foreground italic py-2">No active batches.</div>;
 
-    const totalStock = batches.reduce((acc, b) => b.status === 'Active' ? acc + b.quantity : acc, 0);
+    // Sort by expiry (soonest first)
+    const sortedBatches = [...activeBatches].sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()).slice(0, 3);
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-2 mb-2">
-                <Badge variant="secondary" className="text-sm">Total Stock: {totalStock}</Badge>
-            </div>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Batch #</TableHead>
-                        <TableHead>Expiry</TableHead>
-                        <TableHead>Qty</TableHead>
-                        <TableHead>Status</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {batches.map(batch => {
-                        const isExpiringSoon = new Date(batch.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && new Date(batch.expiryDate) > new Date();
-                        const isExpired = new Date(batch.expiryDate) < new Date();
-                        return (
-                            <TableRow key={batch.batchId}>
-                                <TableCell>{batch.batchNumber}</TableCell>
-                                <TableCell className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground font-normal">Active Batches (FEFO)</Label>
+            <div className="space-y-1">
+                {sortedBatches.map(batch => {
+                    const isExpiringSoon = new Date(batch.expiryDate) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) && new Date(batch.expiryDate) > new Date(); // 90 days warning
+                    const isExpired = new Date(batch.expiryDate) < new Date();
+                    return (
+                        <div key={batch.batchId} className="flex justify-between items-center text-xs p-1.5 rounded-md bg-background border">
+                            <div className="flex items-center gap-2">
+                                <span className="font-mono text-muted-foreground">{batch.batchNumber}</span>
+                                {isExpiringSoon && <AlertTriangle className="h-3 w-3 text-orange-500" />}
+                                {isExpired && <AlertCircle className="h-3 w-3 text-red-500" />}
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className={`${isExpiringSoon ? 'text-orange-600 font-medium' : ''} ${isExpired ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
                                     {batch.expiryDate}
-                                    {isExpiringSoon && <Badge variant="destructive" className="text-[10px]">Expiring Soon</Badge>}
-                                    {isExpired && <Badge variant="destructive" className="text-[10px]">Expired</Badge>}
-                                </TableCell>
-                                <TableCell>{batch.quantity}</TableCell>
-                                <TableCell><Badge variant={batch.quantity > 0 && !isExpired ? 'default' : 'secondary'}>{isExpired ? 'Expired' : (batch.quantity > 0 ? 'Active' : 'Depleted')}</Badge></TableCell>
-                            </TableRow>
-                        )
-                    })}
-                </TableBody>
-            </Table>
+                                </span>
+                                <Badge variant="secondary" className="h-5 px-1.5 min-w-[30px] justify-center">{batch.quantity}</Badge>
+                            </div>
+                        </div>
+                    )
+                })}
+                {activeBatches.length > 3 && (
+                    <div className="text-center text-[10px] text-muted-foreground pt-1">
+                        + {activeBatches.length - 3} more batches
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

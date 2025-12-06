@@ -1,162 +1,142 @@
 
-'use client';
-import React, { useMemo, useState } from 'react';
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, query, orderBy, doc } from 'firebase/firestore';
-import type { ScheduleEvent } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { List, Calendar, MoreVertical, Edit, Trash2 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { EditEvent } from './event-actions';
-import { useToast } from '@/hooks/use-toast';
+"use client";
 
+import { MapPin, Users, Clock, Plus, Calendar as CalendarIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { format, isSameDay, addDays } from "date-fns";
 
-const BARANGAY_ID = 'barangay_san_isidro';
+// Assuming event type based on provided context, refining it for this view
+interface SchedulerEvent {
+  id: string;
+  title: string;
+  description?: string;
+  start: Date;
+  end: Date;
+  category: 'Hearing' | 'Session' | 'Event' | 'Facility' | 'Health' | 'Blotter' | 'Public';
+  location?: string;
+  attendees?: number;
+}
 
-const categoryColors: { [key in ScheduleEvent['category']]: string } = {
-    'Blotter': 'bg-red-100 text-red-800 border-red-200',
-    'Health': 'bg-green-100 text-green-800 border-green-200',
-    'Session': 'bg-violet-100 text-violet-800 border-violet-200',
-    'Rental': 'bg-orange-100 text-orange-800 border-orange-200',
-    'Public': 'bg-blue-100 text-blue-800 border-blue-200',
-};
+interface ActivitiesListProps {
+  date: Date | undefined;
+  events: SchedulerEvent[];
+  onAddEvent: () => void;
+}
 
-export function ActivitiesList() {
-    const firestore = useFirestore();
-    const { toast } = useToast();
-    const [sortBy, setSortBy] = useState<'date' | 'category'>('date');
-    const [isEditModalOpen, setEditModalOpen] = useState(false);
-    const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
+function AgendaCard({ event }: { event: SchedulerEvent }) {
+  const categoryColors: Record<string, string> = {
+    Hearing: "bg-red-100 text-red-700 border-red-200",
+    Blotter: "bg-red-100 text-red-700 border-red-200",
+    Session: "bg-blue-100 text-blue-700 border-blue-200",
+    Event: "bg-green-100 text-green-700 border-green-200",
+    Public: "bg-green-100 text-green-700 border-green-200",
+    Facility: "bg-purple-100 text-purple-700 border-purple-200",
+    Health: "bg-teal-100 text-teal-700 border-teal-200",
+  };
 
-    const eventsCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        const baseRef = collection(firestore, `/barangays/${BARANGAY_ID}/schedule_events`);
-        if (sortBy === 'date') {
-            return query(baseRef, orderBy('start', 'asc'));
-        }
-        return query(baseRef, orderBy('category', 'asc'), orderBy('start', 'asc'));
-    }, [firestore, sortBy]);
+  const colorClass = categoryColors[event.category] || "bg-slate-100 text-slate-700 border-slate-200";
 
-    const { data: scheduleEvents, isLoading } = useCollection<ScheduleEvent>(eventsCollectionRef);
-
-    const handleEditClick = (event: ScheduleEvent) => {
-        setSelectedEvent(event);
-        setEditModalOpen(true);
-    };
-
-    const handleEditEvent = (data: ScheduleEvent) => {
-        if (!firestore || !data.eventId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/schedule_events/${data.eventId}`);
-        const { eventId, ...dataToUpdate } = data;
-        updateDocumentNonBlocking(docRef, dataToUpdate);
-        toast({ title: "Event Updated", description: `"${data.title}" has been updated.`});
-        setEditModalOpen(false);
-    };
-
-    const handleDeleteEvent = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/schedule_events/${id}`);
-        deleteDocumentNonBlocking(docRef);
-        toast({ variant: 'destructive', title: "Event Deleted" });
-        setEditModalOpen(false);
-    };
-
-    const groupedEvents = useMemo(() => {
-        if (!scheduleEvents) return {};
-        if (sortBy === 'date') {
-             return scheduleEvents.reduce((acc, event) => {
-                const dateKey = format(new Date(event.start), 'MMMM d, yyyy');
-                if (!acc[dateKey]) {
-                    acc[dateKey] = [];
-                }
-                acc[dateKey].push(event);
-                return acc;
-            }, {} as Record<string, ScheduleEvent[]>);
-        } else { // Sort by category
-            return scheduleEvents.reduce((acc, event) => {
-                const categoryKey = event.category;
-                if (!acc[categoryKey]) {
-                    acc[categoryKey] = [];
-                }
-                acc[categoryKey].push(event);
-                return acc;
-            }, {} as Record<string, ScheduleEvent[]>);
-        }
-    }, [scheduleEvents, sortBy]);
-
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-end gap-2">
-                <Button variant={sortBy === 'date' ? 'secondary' : 'ghost'} size="sm" onClick={() => setSortBy('date')}>
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Sort by Date
-                </Button>
-                <Button variant={sortBy === 'category' ? 'secondary' : 'ghost'} size="sm" onClick={() => setSortBy('category')}>
-                    <List className="mr-2 h-4 w-4" />
-                    Sort by Category
-                </Button>
-            </div>
-            <ScrollArea className="h-[calc(100vh-22rem)] pr-4">
-                <div className="space-y-6">
-                    {isLoading && [...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-                    {!isLoading && Object.keys(groupedEvents).length === 0 && (
-                        <div className="text-center text-muted-foreground pt-16">
-                            <p>No upcoming activities scheduled.</p>
-                        </div>
-                    )}
-                    {!isLoading && Object.entries(groupedEvents).map(([groupTitle, events]) => (
-                        <div key={groupTitle}>
-                            <h4 className="font-semibold text-sm text-muted-foreground mb-2">{groupTitle}</h4>
-                            <div className="space-y-2">
-                                {events.map(event => (
-                                    <div key={event.eventId} className="p-3 border rounded-lg flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium">{event.title}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {format(new Date(event.start), 'h:mm a')} - {format(new Date(event.end), 'h:mm a')}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Badge className={`${categoryColors[event.category]} font-medium`}>{event.category}</Badge>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem onSelect={() => handleEditClick(event)}>
-                                                        <Edit className="mr-2 h-4 w-4" />
-                                                        <span>Edit</span>
-                                                    </DropdownMenuItem>
-                                                     <DropdownMenuItem onSelect={() => handleDeleteEvent(event.eventId)} className="text-destructive">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        <span>Delete</span>
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </ScrollArea>
-
-            {isEditModalOpen && selectedEvent && (
-                <EditEvent
-                    isOpen={isEditModalOpen}
-                    onClose={() => { setEditModalOpen(false); setSelectedEvent(null); }}
-                    onEdit={handleEditEvent}
-                    onDelete={handleDeleteEvent}
-                    record={selectedEvent}
-                />
-            )}
+  return (
+    <Card className={`flex flex-col gap-3 p-4 border-l-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${colorClass.replace('bg-', 'border-l-')}`}>
+      {/* Header: Time & Status */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2 text-slate-600 font-medium text-sm">
+          <Clock className="w-4 h-4" />
+          <span>
+            {format(event.start, 'h:mm a')} - {format(event.end, 'h:mm a')}
+          </span>
         </div>
-    );
+        <Badge variant="outline" className={`${colorClass} border`}>
+          {event.category.toUpperCase()}
+        </Badge>
+      </div>
+
+      {/* Title */}
+      <div>
+        <h4 className="font-bold text-slate-900 text-lg leading-tight">
+          {event.title}
+        </h4>
+        {event.description && (
+          <p className="text-sm text-slate-500 mt-1 line-clamp-2">
+            {event.description}
+          </p>
+        )}
+      </div>
+
+      {/* Footer: Location & Attendees */}
+      <div className="flex items-center gap-4 text-xs text-slate-500 mt-2 pt-3 border-t border-slate-100">
+        <div className="flex items-center gap-1">
+          <MapPin className="w-3 h-3" />
+          {event.location || "Barangay Hall"}
+        </div>
+        {event.attendees && (
+            <div className="flex items-center gap-1">
+            <Users className="w-3 h-3" />
+            {event.attendees} Attendees
+            </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+export function ActivitiesList({ date, events, onAddEvent }: ActivitiesListProps) {
+  const selectedDate = date || new Date();
+  
+  // Filter logic:
+  // If a specific date is selected (clicked), show events for that date.
+  // If no specific selection interaction (default), ideally show "Next 7 Days" but based on prop usually just current day or selected day.
+  // We'll stick to strict day filtering for the "Agenda" feel.
+  
+  const filteredEvents = events.filter(event => 
+    isSameDay(event.start, selectedDate)
+  );
+
+  return (
+    <Card className="h-full border-none shadow-none md:border md:shadow-sm flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b">
+        <div>
+            <CardTitle className="text-xl font-bold">
+                Agenda
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+                {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+            </p>
+        </div>
+        <Button size="sm" onClick={onAddEvent} className="h-9 gap-1 shadow-sm">
+            <Plus className="h-4 w-4" />
+            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Schedule Activity
+            </span>
+        </Button>
+      </CardHeader>
+      
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {filteredEvents.length > 0 ? (
+          <div className="space-y-3">
+            {filteredEvents.map(event => (
+              <AgendaCard key={event.id} event={event} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-[300px] text-center space-y-4 rounded-lg border-2 border-dashed bg-slate-50/50">
+             <div className="p-4 bg-white rounded-full shadow-sm ring-1 ring-slate-100">
+                <CalendarIcon className="h-8 w-8 text-slate-400" />
+             </div>
+             <div className="space-y-1 max-w-[250px]">
+                <h3 className="font-semibold text-slate-900">Clear schedule ahead!</h3>
+                <p className="text-sm text-slate-500">
+                    Use this time to plan the next Session or book a facility for the community.
+                </p>
+             </div>
+             <Button variant="outline" onClick={onAddEvent} className="mt-2">
+                Plan an Event
+             </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
 }

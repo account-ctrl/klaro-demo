@@ -22,19 +22,22 @@ export function CalendarView({ bookings, onBook, onDelete }: CalendarViewProps) 
 
   return (
     <div className="space-y-4">
-        <div className="flex justify-end">
-            <Button onClick={() => onBook()}>
-              <Calendar className="mr-2 h-4 w-4" /> Book Asset
-            </Button>
-        </div>
-        <div className="grid md:grid-cols-2 gap-6">
-            <BookingCalendar bookings={bookings} onDateSelect={setSelectedDate} />
-            <UpcomingBookings 
-                bookings={bookings} 
-                selectedDate={selectedDate} 
-                onEdit={handleEditBooking}
-                onDelete={onDelete}
-            />
+        {/* Removed redundant top button as it's now in the agenda card header */}
+        
+        {/* Changed layout to grid-cols-[auto_1fr] to shrink the calendar column */}
+        <div className="grid md:grid-cols-[auto_1fr] gap-6 items-start h-[600px]">
+            <div className="flex justify-center md:justify-start h-full">
+               <BookingCalendar bookings={bookings} onDateSelect={setSelectedDate} />
+            </div>
+            <div className="h-full">
+                <UpcomingBookings 
+                    bookings={bookings} 
+                    selectedDate={selectedDate} 
+                    onEdit={handleEditBooking}
+                    onDelete={onDelete}
+                    onAdd={() => onBook()} // Pass the open booking modal function
+                />
+            </div>
         </div>
     </div>
   );

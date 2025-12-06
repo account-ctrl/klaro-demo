@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Wrench } from "lucide-react";
 import { FixedAsset } from "@/lib/types";
 import { MaintenanceHistory } from './maintenance-history';
@@ -20,11 +20,7 @@ export function FleetMaintenance({ assets, onOpenMaintenance }: FleetMaintenance
 
     return (
         <Card>
-            <CardHeader>
-                <CardTitle>Fleet Maintenance</CardTitle>
-                <CardDescription>Track and manage maintenance schedules for all barangay vehicles.</CardDescription>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
                  <Accordion type="single" collapsible onValueChange={setSelectedVehicleId}>
                     {vehicles.map(vehicle => (
                         <AccordionItem key={vehicle.assetId} value={vehicle.assetId}>
