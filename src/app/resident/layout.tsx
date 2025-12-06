@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/logo";
 import { useEffect, useState } from "react";
-import { FirebaseClientProvider, useUser, useAuth } from "@/firebase";
+import { useUser, useAuth } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { signOut } from "firebase/auth";
 import { LogOut, Settings, User, Menu, Search, HelpCircle, Bell, X } from "lucide-react";
@@ -215,8 +215,6 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
 
 export default function ResidentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <FirebaseClientProvider>
       <InnerLayout>{children}</InnerLayout>
-    </FirebaseClientProvider>
   )
 }
