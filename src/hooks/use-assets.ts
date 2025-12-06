@@ -2,7 +2,7 @@
 
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
-import { FixedAsset, AssetBooking } from '@/lib/types';
+import { FixedAsset, AssetBooking, MaintenanceLog } from '@/lib/types';
 import { BARANGAY_ID as IMPORTED_BARANGAY_ID } from './use-barangay-data';
 import { useMemo } from 'react';
 
@@ -55,6 +55,30 @@ export function useAssetBookings() {
             ...item,
             bookingId: item.id
         })) as AssetBooking[];
+    }, [data]);
+
+    return { data: mappedData, isLoading, error };
+}
+
+export function useMaintenanceLogs(vehicleId?: string) {
+    const ref = useAssetsRef('maintenance_logs');
+    
+    const q = useMemo(() => {
+        if (!ref) return null;
+        if (vehicleId) {
+             return query(ref, where('vehicleId', '==', vehicleId), orderBy('serviceDate', 'desc'));
+        }
+        return query(ref, orderBy('serviceDate', 'desc'));
+    }, [ref, vehicleId]);
+
+    const { data, isLoading, error } = useCollection<Omit<MaintenanceLog, 'logId'>>(q);
+
+    const mappedData = useMemo(() => {
+        if (!data) return null;
+        return data.map(item => ({
+            ...item,
+            logId: item.id
+        })) as MaintenanceLog[];
     }, [data]);
 
     return { data: mappedData, isLoading, error };

@@ -433,6 +433,18 @@ export type AssetBooking = {
   endOdometer?: number;
 };
 
+export type MaintenanceLog = {
+    logId: string;
+    vehicleId: string; // FK to FixedAsset
+    serviceType: string; // e.g., "Change Oil", "Tire Replacement"
+    cost: number;
+    mechanicNotes?: string;
+    receiptUrl?: string;
+    serviceDate: string; // ISO Date string
+    odometerReading?: number;
+    createdAt: Timestamp;
+};
+
 // Deprecated old types. To be removed after full refactoring.
 export type Blotter = BlotterCase;
 export type Document = CertificateRequest;
