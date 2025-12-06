@@ -3,11 +3,11 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Table from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableCell from '@tiptap/extension-table-cell'
-import TableHeader from '@tiptap/extension-table-header'
-import TextAlign from '@tiptap/extension-text-align'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TextAlign } from '@tiptap/extension-text-align'
 import { Button } from "@/components/ui/button"
 import { 
   Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, 
@@ -160,6 +160,7 @@ export default function OrdinanceEditor({ content, onChange }: { content?: strin
     onUpdate: ({ editor }) => {
         onChange?.(editor.getHTML())
     },
+    immediatelyRender: false,
     editorProps: {
         attributes: {
             class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[500px] p-4 bg-white dark:bg-zinc-950 shadow-sm border rounded-b-md',

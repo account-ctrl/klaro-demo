@@ -378,12 +378,13 @@ export type Ordinance = {
     ordinanceId: string;
     ordinanceNumber: string; // e.g., "Ord-2024-001"
     title: string;
-    description: string;
+    description: string; // Storing content here as per plan, or use new field
+    contentHtml?: string; // Additive: Rich text content
     category: 'Curfew' | 'Noise' | 'Sanitation' | 'Traffic' | 'General';
     penaltyAmount: number;
     pdfUrl?: string; // Link to storage
     dateEnacted: string; // ISO Date string
-    status: 'Active' | 'Repealed' | 'Pending';
+    status: 'Active' | 'Repealed' | 'Pending' | 'Draft'; // Added Draft
     createdAt: Timestamp;
     relatedViolation?: string;
 };

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid, ArrowLeft } from 'lucide-react';
+import { Scale, Plus, FileText, Download, Gavel, Trash2, PenLine, Search, Filter, List, LayoutGrid, ArrowLeft, FileDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Ordinance, WithId } from '@/lib/types';
@@ -31,6 +31,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { caseTypes } from '../blotter/case-types';
 import OrdinanceEditor from './editor/ordinance-editor';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'> & {
     relatedViolation?: string;
@@ -40,6 +41,7 @@ const initialFormValues: OrdinanceFormValues = {
     ordinanceNumber: '',
     title: '',
     description: '',
+    contentHtml: '',
     category: 'General',
     penaltyAmount: 0,
     pdfUrl: '',
@@ -60,7 +62,11 @@ export default function LegislativePage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    
+    // Draft Mode States
     const [isDraftMode, setIsDraftMode] = useState(false);
+    const [draftContent, setDraftContent] = useState('');
+    const [isDraftMetadataOpen, setIsDraftMetadataOpen] = useState(true); 
 
     const handleOpenAdd = () => {
         setFormData(initialFormValues);
@@ -72,19 +78,49 @@ export default function LegislativePage() {
     const handleOpenEdit = (ordinance: WithId<Ordinance> & { relatedViolation?: string }) => {
         const id = ordinance.ordinanceId || ordinance.id;
         
-        setFormData({
-            ordinanceNumber: ordinance.ordinanceNumber,
+        // Load all form data
+        const loadedData = {
+            ordinanceNumber: ordinance.ordinanceNumber || '',
             title: ordinance.title,
-            description: ordinance.description,
+            description: ordinance.description || '',
+            contentHtml: ordinance.contentHtml || '',
             category: ordinance.category,
-            penaltyAmount: ordinance.penaltyAmount,
+            penaltyAmount: ordinance.penaltyAmount || 0,
             pdfUrl: ordinance.pdfUrl || '',
-            dateEnacted: ordinance.dateEnacted,
+            dateEnacted: ordinance.dateEnacted || '',
             relatedViolation: ordinance.relatedViolation || ''
-        });
+        };
+
+        setFormData(loadedData);
         setCurrentOrdinanceId(id);
-        setIsEditMode(true);
-        setIsSheetOpen(true);
+
+        // Logic to open Editor if Draft, otherwise Sheet
+        if (ordinance.status === 'Draft') {
+            setDraftContent(loadedData.contentHtml);
+            setIsDraftMode(true);
+        } else {
+            setIsEditMode(true);
+            setIsSheetOpen(true);
+        }
+    };
+
+    const handleSelectDraft = (draftId: string) => {
+        const draft = ordinances?.find(o => (o.ordinanceId || (o as any).id) === draftId);
+        if (draft) {
+            setFormData({
+                ordinanceNumber: draft.ordinanceNumber || '',
+                title: draft.title,
+                description: draft.description || '',
+                contentHtml: draft.contentHtml || '',
+                category: draft.category,
+                penaltyAmount: draft.penaltyAmount || 0,
+                pdfUrl: draft.pdfUrl || '',
+                dateEnacted: draft.dateEnacted || '',
+                relatedViolation: draft.relatedViolation || ''
+            });
+            setCurrentOrdinanceId(draft.ordinanceId || (draft as any).id);
+            setIsEditMode(true); 
+        }
     };
 
     const handleSubmit = () => {
@@ -100,33 +136,68 @@ export default function LegislativePage() {
         const dataToSave = {
             ...formData,
             penaltyAmount: Number(formData.penaltyAmount) || 0,
+            status: 'Active' as const, // Publishing makes it Active
         };
 
         if (isEditMode && currentOrdinanceId && firestore) {
-            // Edit Mode
+            // Update existing (Draft or Active)
             const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
             setDocumentNonBlocking(docRef, dataToSave, { merge: true });
             
             toast({
-                title: "Ordinance Updated",
-                description: "The ordinance has been successfully updated."
+                title: "Ordinance Published",
+                description: "The ordinance has been successfully updated and published."
             });
         } else if (ordinancesRef) {
-            // Create Mode
+            // Create New
             addDocumentNonBlocking(ordinancesRef, {
                 ...dataToSave,
-                status: 'Active',
                 createdAt: serverTimestamp()
             });
 
             toast({
-                title: "Ordinance Created",
+                title: "Ordinance Published",
                 description: "New ordinance has been added to the records."
             });
         }
 
         setIsSheetOpen(false);
     };
+    
+    const handleSaveDraft = () => {
+        if (!ordinancesRef) return;
+        
+        const draftData = {
+            ...formData,
+            title: formData.title || 'Untitled Draft',
+            description: formData.description || 'Drafted content via Editor',
+            contentHtml: draftContent,
+            status: 'Draft' as const,
+            ordinanceNumber: formData.ordinanceNumber || 'DRAFT-' + Date.now().toString().slice(-6), 
+            penaltyAmount: Number(formData.penaltyAmount) || 0,
+            // Preserve existing creation timestamp if updating, handled by merge if doc exists
+            // But for addDocument, it's new.
+        };
+
+        if (currentOrdinanceId && firestore) {
+             // Update Existing Draft
+             const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
+             setDocumentNonBlocking(docRef, draftData, { merge: true });
+             toast({ title: "Draft Updated", description: "Your draft has been updated." });
+        } else {
+             // Create New Draft
+             addDocumentNonBlocking(ordinancesRef, {
+                 ...draftData,
+                 createdAt: serverTimestamp()
+             });
+             toast({ title: "Draft Saved", description: "Your draft has been saved to the list." });
+        }
+        
+        setIsDraftMode(false);
+        setFormData(initialFormValues);
+        setDraftContent('');
+        setCurrentOrdinanceId(null);
+    }
 
     const handleDelete = (id: string) => {
         if (!firestore) return;
@@ -144,12 +215,14 @@ export default function LegislativePage() {
         const matchesCategory = categoryFilter === 'All' || ord.category === categoryFilter;
         return matchesSearch && matchesCategory;
     });
+    
+    const availableDrafts = ordinances?.filter(o => o.status === 'Draft') || [];
 
     if (isDraftMode) {
         return (
             <div className="space-y-4 h-[calc(100vh-6rem)] flex flex-col">
                 <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-1">
                         <Button variant="ghost" size="icon" onClick={() => setIsDraftMode(false)}>
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
@@ -160,14 +233,101 @@ export default function LegislativePage() {
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => setIsDraftMode(false)}>Cancel</Button>
-                        <Button onClick={() => {
-                            toast({ title: "Draft Saved", description: "This is a UI demo for the editor." });
-                            setIsDraftMode(false);
-                        }}>Save Draft</Button>
+                        <Button onClick={handleSaveDraft}>Save Draft</Button>
                     </div>
                 </div>
+                
+                {/* Collapsible Metadata Fields for Draft */}
+                <Collapsible open={isDraftMetadataOpen} onOpenChange={setIsDraftMetadataOpen} className="border rounded-md bg-muted/30">
+                     <div className="flex items-center justify-between px-4 py-2">
+                        <h3 className="text-sm font-semibold">Ordinance Details</h3>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                {isDraftMetadataOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </Button>
+                        </CollapsibleTrigger>
+                    </div>
+                    <CollapsibleContent className="px-4 pb-4 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="draft-ordNo">Ordinance No.</Label>
+                                <Input 
+                                    id="draft-ordNo"
+                                    value={formData.ordinanceNumber} 
+                                    onChange={e => setFormData({...formData, ordinanceNumber: e.target.value})} 
+                                    placeholder="e.g., Ord-2024-001" 
+                                />
+                            </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="draft-category">Category</Label>
+                                <Select 
+                                    onValueChange={(val) => setFormData({...formData, category: val as any})} 
+                                    value={formData.category}
+                                >
+                                    <SelectTrigger id="draft-category"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="General">General</SelectItem>
+                                        <SelectItem value="Curfew">Curfew</SelectItem>
+                                        <SelectItem value="Noise">Noise Control</SelectItem>
+                                        <SelectItem value="Sanitation">Sanitation/Waste</SelectItem>
+                                        <SelectItem value="Traffic">Traffic/Parking</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="draft-title">Title</Label>
+                            <Input 
+                                id="draft-title"
+                                value={formData.title} 
+                                onChange={e => setFormData({...formData, title: e.target.value})} 
+                                placeholder="Title of the ordinance"
+                            />
+                        </div>
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="draft-penalty">Penalty Amount (₱)</Label>
+                                <Input 
+                                    id="draft-penalty"
+                                    type="number" 
+                                    value={formData.penaltyAmount} 
+                                    onChange={e => setFormData({...formData, penaltyAmount: parseFloat(e.target.value) || 0})} 
+                                    min={0}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="draft-date">Date Enacted</Label>
+                                <Input 
+                                    id="draft-date"
+                                    type="date" 
+                                    value={formData.dateEnacted} 
+                                    onChange={e => setFormData({...formData, dateEnacted: e.target.value})} 
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="draft-relatedViolation">Related Blotter Violation (Optional)</Label>
+                            <Select 
+                                onValueChange={(val) => setFormData({...formData, relatedViolation: val === 'none' ? '' : val})} 
+                                value={formData.relatedViolation || 'none'}
+                            >
+                                <SelectTrigger id="draft-relatedViolation"><SelectValue placeholder="Select related violation..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">-- None --</SelectItem>
+                                    {Object.entries(caseTypes).map(([group, types]) => (
+                                        <SelectGroup key={group}>
+                                            <SelectLabel className="capitalize">{group}</SelectLabel>
+                                            {types.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                        </SelectGroup>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </CollapsibleContent>
+                </Collapsible>
+
                 <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
-                    <OrdinanceEditor />
+                    <OrdinanceEditor onChange={(html) => setDraftContent(html)} content={draftContent} />
                 </div>
             </div>
         )
@@ -181,11 +341,16 @@ export default function LegislativePage() {
                     <p className="text-muted-foreground">Manage barangay ordinances, resolutions, and penalties.</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setIsDraftMode(true)}>
+                    <Button variant="outline" onClick={() => {
+                        setFormData(initialFormValues); 
+                        setDraftContent('');
+                        setCurrentOrdinanceId(null);
+                        setIsDraftMode(true);
+                    }}>
                         <FileText className="mr-2 h-4 w-4"/> Draft Ordinance
                     </Button>
                     <Button onClick={handleOpenAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                        <Plus className="mr-2 h-4 w-4"/> New Ordinance
+                        <Plus className="mr-2 h-4 w-4"/> Publish Ordinance
                     </Button>
                 </div>
             </div>
@@ -258,7 +423,7 @@ export default function LegislativePage() {
                                     <CardHeader className="pb-3">
                                         <div className="flex justify-between items-start">
                                             <Badge variant="outline" className="font-mono">{ord.ordinanceNumber}</Badge>
-                                            <Badge variant={ord.status === 'Active' ? 'default' : 'secondary'} className={ord.status === 'Active' ? 'bg-green-600 hover:bg-green-700' : ''}>
+                                            <Badge variant={ord.status === 'Active' ? 'default' : (ord.status === 'Draft' ? 'outline' : 'secondary')} className={ord.status === 'Active' ? 'bg-green-600 hover:bg-green-700' : (ord.status === 'Draft' ? 'border-dashed border-foreground/50' : '')}>
                                                 {ord.status}
                                             </Badge>
                                         </div>
@@ -329,7 +494,7 @@ export default function LegislativePage() {
                                             <TableCell>₱ {ord.penaltyAmount?.toLocaleString()}</TableCell>
                                             <TableCell>{ord.dateEnacted ? format(new Date(ord.dateEnacted), 'MMM d, yyyy') : '-'}</TableCell>
                                             <TableCell>
-                                                <Badge variant={ord.status === 'Active' ? 'default' : 'secondary'} className={ord.status === 'Active' ? 'bg-green-600' : ''}>
+                                                <Badge variant={ord.status === 'Active' ? 'default' : (ord.status === 'Draft' ? 'outline' : 'secondary')} className={ord.status === 'Active' ? 'bg-green-600' : (ord.status === 'Draft' ? 'border-dashed' : '')}>
                                                     {ord.status}
                                                 </Badge>
                                             </TableCell>
@@ -361,12 +526,44 @@ export default function LegislativePage() {
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                 <SheetContent className="sm:max-w-xl overflow-y-auto">
                     <SheetHeader>
-                        <SheetTitle>{isEditMode ? 'Edit Ordinance' : 'Add New Ordinance'}</SheetTitle>
+                        <SheetTitle>{isEditMode ? 'Edit Ordinance' : 'Publish Ordinance'}</SheetTitle>
                         <SheetDescription>
-                            {isEditMode ? 'Update the details of the existing ordinance.' : 'Fill in the details to create a new barangay ordinance.'}
+                            {isEditMode ? 'Update the details of the existing ordinance.' : 'Fill in the details to publish a new barangay ordinance.'}
                         </SheetDescription>
                     </SheetHeader>
                     <div className="space-y-6 py-6">
+                        
+                        {/* Pull Down Drafts */}
+                        {!isEditMode && availableDrafts.length > 0 && (
+                             <div className="space-y-2 p-3 bg-muted/50 border border-dashed rounded-md">
+                                <Label className="text-muted-foreground flex items-center gap-2"><FileDown className="h-4 w-4"/> Load from Draft</Label>
+                                <Select onValueChange={handleSelectDraft}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a draft to publish..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableDrafts.map((draft: WithId<Ordinance>) => {
+                                            const draftId = draft.id || draft.ordinanceId;
+                                            return (
+                                                <SelectItem key={draftId} value={draftId}>
+                                                    {draft.title} ({draft.ordinanceNumber})
+                                                </SelectItem>
+                                            );
+                                        })}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        
+                        {/* Create Draft Option */}
+                        {!isEditMode && (
+                            <div className="text-center">
+                                <Button variant="link" size="sm" onClick={() => { setIsSheetOpen(false); setFormData(initialFormValues); setIsDraftMode(true); }}>
+                                    Need to write a draft first? Open Editor
+                                </Button>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="ordNo">Ordinance No. <span className="text-destructive">*</span></Label>
@@ -467,7 +664,7 @@ export default function LegislativePage() {
                     </div>
                     <SheetFooter>
                         <Button variant="outline" onClick={() => setIsSheetOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSubmit}>{isEditMode ? 'Update' : 'Create'}</Button>
+                        <Button onClick={handleSubmit}>{isEditMode ? 'Update' : 'Publish'}</Button>
                     </SheetFooter>
                 </SheetContent>
             </Sheet>
