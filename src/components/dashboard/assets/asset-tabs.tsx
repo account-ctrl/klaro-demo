@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -9,6 +9,9 @@ import { columns } from "./asset-columns";
 import { FixedAsset, AssetBooking } from "@/lib/types";
 import { CalendarView } from './calendar-view';
 import { FleetMaintenance } from './fleet-maintenance';
+import { AssetList as AssetGrid } from './asset-list';
+import { Button } from "@/components/ui/button";
+import { LayoutGrid, List } from 'lucide-react';
 
 interface AssetTabsProps {
     assets: FixedAsset[];
@@ -24,14 +27,14 @@ interface AssetTabsProps {
     onDeleteBooking: (id: string) => void;
 }
 
-function AssetList({ assets, typeFilter, searchTerm, onEdit, onDelete, onGenerateQR, onBook, onOpenMaintenance }: any) {
+function AssetTable({ assets, typeFilter, searchTerm, onEdit, onDelete, onGenerateQR, onBook, onOpenMaintenance }: any) {
     const filteredAssets = useMemo(() => {
         if (!assets) return [];
         return assets
             .filter(asset => typeFilter === 'All' || asset.type === typeFilter)
             .filter(asset => {
                 const term = searchTerm.toLowerCase();
-                // Defensive filtering: check if properties exist before calling toLowerCase()
+                // Defensive filtering
                 return (
                     (asset.name && asset.name.toLowerCase().includes(term)) ||
                     (asset.serialNumber && asset.serialNumber.toLowerCase().includes(term)) ||
@@ -48,45 +51,71 @@ function AssetList({ assets, typeFilter, searchTerm, onEdit, onDelete, onGenerat
             data={filteredAssets} 
             filterColumn='name'
             filterPlaceholder='Search by name, S/N, custodian...'
-            search={searchTerm} // This seems redundant if filtering is manual?
+            search={searchTerm} 
         />
     );
 }
 
 export function AssetTabs(props: AssetTabsProps) {
+    const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
     return (
-        <Tabs defaultValue="all">
-            <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="all">All Assets</TabsTrigger>
-                <TabsTrigger value="inventory">Inventory</TabsTrigger>
-                <TabsTrigger value="calendar">Booking Calendar</TabsTrigger>
-                <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-            </TabsList>
-            <TabsContent value="all">
+        <Tabs defaultValue="inventory" className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between space-y-2 sm:space-y-0 pb-2">
+                <TabsList className="grid w-full sm:w-auto grid-cols-3">
+                    <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                    <TabsTrigger value="calendar">Bookings</TabsTrigger>
+                    <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+                </TabsList>
+            </div>
+            
+            <TabsContent value="inventory" className="space-y-4">
+                 <div className="flex items-center justify-end">
+                    <div className="flex items-center space-x-2 bg-muted/50 p-1 rounded-md border">
+                        <Button 
+                            variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => setViewMode('table')}
+                            title="List View"
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => setViewMode('grid')}
+                            title="Grid View"
+                        >
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                    </div>
+                 </div>
+
                  <Card>
-                    <CardHeader>
-                        <CardTitle>All Assets</CardTitle>
-                        <CardDescription>A complete list of all barangay-owned assets and equipment.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                       <AssetList {...props} />
+                    <CardContent className="p-6">
+                       {viewMode === 'table' ? (
+                           <AssetTable {...props} />
+                       ) : (
+                           <AssetGrid 
+                                assets={props.assets}
+                                isLoading={props.isLoading}
+                                searchTerm={props.searchTerm}
+                                typeFilter={props.typeFilter}
+                                onEdit={props.onEdit}
+                                onDelete={props.onDelete}
+                                onGenerateQR={props.onGenerateQR}
+                           />
+                       )}
                     </CardContent>
                 </Card>
             </TabsContent>
-             <TabsContent value="inventory">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Inventory View</CardTitle>
-                        <CardDescription>Detailed list of all assets.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                       <AssetList {...props} />
-                    </CardContent>
-                </Card>
-            </TabsContent>
+            
             <TabsContent value="calendar">
                 <CalendarView bookings={props.bookings} onBook={props.onBook} onDelete={props.onDeleteBooking} />
             </TabsContent>
+            
             <TabsContent value="maintenance">
                 <FleetMaintenance assets={props.assets} onOpenMaintenance={props.onOpenMaintenance} />
             </TabsContent>

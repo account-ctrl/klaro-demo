@@ -37,13 +37,16 @@ export function FleetMaintenance({ assets, onOpenMaintenance }: FleetMaintenance
                                             <span className={`ml-2 inline-block h-2 w-2 rounded-full ${vehicle.status === 'Available' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
                                         </p>
                                     </div>
-                                    <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onOpenMaintenance(vehicle); }}>
-                                        <Wrench className="h-4 w-4 mr-2" />
-                                        Log Service
-                                    </Button>
+                                    {/* Button moved out to prevent hydration error (button inside button) */}
                                 </div>
                             </AccordionTrigger>
                             <AccordionContent>
+                                <div className="mb-4 flex justify-end">
+                                     <Button size="sm" onClick={() => onOpenMaintenance(vehicle)}>
+                                        <Wrench className="h-4 w-4 mr-2" />
+                                        Log New Service
+                                    </Button>
+                                </div>
                                 {selectedVehicleId === vehicle.assetId && (
                                    <MaintenanceHistory assetId={vehicle.assetId} />
                                 )}
