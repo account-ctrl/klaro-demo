@@ -17,6 +17,7 @@ import { Plus, Package, AlertTriangle, History, Search, Filter, AlertCircle } fr
 import { format } from 'date-fns';
 import { serverTimestamp, doc, increment } from 'firebase/firestore';
 import { BARANGAY_ID } from '@/hooks/use-barangay-data'; 
+import { WithId } from '@/firebase/firestore/use-collection';
 
 export default function InventoryPage() {
     const firestore = useFirestore();
@@ -35,7 +36,8 @@ export default function InventoryPage() {
 
     // State for Add Batch Dialog
     const [isAddBatchOpen, setIsAddBatchOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<MedicineItem | null>(null);
+    // Note: selectedItem now uses the WithId wrapper type implicitly from the hook data
+    const [selectedItem, setSelectedItem] = useState<WithId<MedicineItem> | null>(null);
     const [newBatch, setNewBatch] = useState({ batchNumber: '', expiryDate: '', quantity: '0' });
 
     const filteredItems = useMemo(() => {
@@ -65,10 +67,18 @@ export default function InventoryPage() {
         if (!batchesRef || !selectedItem || !itemsRef || !firestore) return;
         const qty = parseInt(newBatch.quantity);
         
+        // Use 'id' from useCollection, fallback to 'itemId' if defined, though 'id' is preferred
+        const itemId = selectedItem.id; 
+
+        if (!itemId) {
+             toast({ variant: "destructive", title: "Error", description: "Item ID is missing." });
+             return;
+        }
+
         try {
             // 1. Add Batch
             await addDocumentNonBlocking(batchesRef, {
-                itemId: selectedItem.itemId,
+                itemId: itemId, 
                 itemName: selectedItem.name,
                 batchNumber: newBatch.batchNumber,
                 expiryDate: newBatch.expiryDate,
@@ -78,7 +88,7 @@ export default function InventoryPage() {
             });
 
             // 2. Update Parent Total Stock using atomic increment
-            const itemDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/ehealth_inventory_items/${selectedItem.itemId}`);
+            const itemDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/ehealth_inventory_items/${itemId}`);
             await updateDocumentNonBlocking(itemDocRef, {
                 totalStock: increment(qty)
             });
@@ -157,8 +167,11 @@ export default function InventoryPage() {
                 <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                     {filteredItems.map(item => {
                         const isLowStock = (item.totalStock || 0) <= item.reorderPoint;
+                        // Use item.id (from useCollection) for the key and references
+                        const itemId = item.id;
+
                         return (
-                            <Card key={item.itemId} className={`flex flex-col ${isLowStock ? 'border-red-200 shadow-sm' : ''}`}>
+                            <Card key={itemId} className={`flex flex-col ${isLowStock ? 'border-red-200 shadow-sm' : ''}`}>
                                 <CardHeader className="pb-3">
                                     <div className="flex justify-between items-start">
                                         <div className="space-y-1">
@@ -181,10 +194,10 @@ export default function InventoryPage() {
                                     <div className="text-xs text-muted-foreground mb-4">
                                         Reorder Point: <span className="font-medium text-foreground">{item.reorderPoint}</span>
                                     </div>
-                                    <BatchList itemId={item.itemId} />
+                                    <BatchList itemId={itemId} />
                                 </CardContent>
                                 <CardFooter className="pt-4 border-t bg-muted/20">
-                                    <Dialog open={isAddBatchOpen && selectedItem?.itemId === item.itemId} onOpenChange={(open) => { setIsAddBatchOpen(open); if(open) setSelectedItem(item); }}>
+                                    <Dialog open={isAddBatchOpen && selectedItem?.id === itemId} onOpenChange={(open) => { setIsAddBatchOpen(open); if(open) setSelectedItem(item); }}>
                                         <DialogTrigger asChild>
                                             <Button variant="outline" size="sm" className="w-full">
                                                 <Plus className="mr-2 h-3 w-3"/> Receive New Batch
@@ -230,7 +243,7 @@ function BatchList({ itemId }: { itemId: string }) {
                     const isExpiringSoon = new Date(batch.expiryDate) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) && new Date(batch.expiryDate) > new Date(); // 90 days warning
                     const isExpired = new Date(batch.expiryDate) < new Date();
                     return (
-                        <div key={batch.batchId} className="flex justify-between items-center text-xs p-1.5 rounded-md bg-background border">
+                        <div key={batch.id || batch.batchId} className="flex justify-between items-center text-xs p-1.5 rounded-md bg-background border">
                             <div className="flex items-center gap-2">
                                 <span className="font-mono text-muted-foreground">{batch.batchNumber}</span>
                                 {isExpiringSoon && <AlertTriangle className="h-3 w-3 text-orange-500" />}

@@ -55,19 +55,22 @@ export default function DispensingPage() {
     }, [residents, searchTerm]);
 
     const activeResident = useMemo(() => residents?.find(r => r.residentId === selectedResident), [residents, selectedResident]);
-    const activeItem = useMemo(() => items?.find(i => i.itemId === selectedItem), [items, selectedItem]);
+    // Use .id here because useCollection injects it
+    const activeItem = useMemo(() => items?.find(i => i.id === selectedItem), [items, selectedItem]);
 
     const addToCart = () => {
         setError(null);
         if (!activeItem || !allBatches) return;
 
         // Check if already in cart
-        if (cart.some(i => i.itemId === activeItem.itemId)) {
+        // activeItem.id is the document ID, which matches batch.itemId
+        if (cart.some(i => i.itemId === activeItem.id)) {
             setError("Item is already in the cart.");
             return;
         }
 
-        const itemBatches = allBatches.filter(b => b.itemId === activeItem.itemId);
+        // Match batches where batch.itemId equals the item's doc ID
+        const itemBatches = allBatches.filter(b => b.itemId === activeItem.id);
         const qty = parseInt(quantity);
 
         if (qty <= 0) {
@@ -78,7 +81,7 @@ export default function DispensingPage() {
         try {
             const allocation = getFefoAllocation(itemBatches, qty);
             setCart([...cart, {
-                itemId: activeItem.itemId,
+                itemId: activeItem.id, // Store doc ID as itemId
                 name: activeItem.name,
                 dosage: activeItem.dosage,
                 quantity: qty,
@@ -111,7 +114,7 @@ export default function DispensingPage() {
                         residentName: `${activeResident.firstName} ${activeResident.lastName}`,
                         itemId: item.itemId,
                         itemName: item.name,
-                        batchId: alloc.batch.batchId,
+                        batchId: alloc.batch.id || alloc.batch.batchId, // Ensure we have the batch doc ID
                         batchNumber: alloc.batch.batchNumber,
                         quantity: alloc.deduct,
                         dispensedByUserId: user.uid,
@@ -120,11 +123,11 @@ export default function DispensingPage() {
                     });
 
                     // 2. Update Batch Quantity
-                    const batchDocRef = doc(firestore, batchesRef.path, alloc.batch.batchId);
+                    // Use alloc.batch.id if available from useCollection
+                    const batchId = alloc.batch.id || alloc.batch.batchId;
+                    const batchDocRef = doc(firestore, batchesRef.path, batchId);
                     await updateDocumentNonBlocking(batchDocRef, {
                         quantity: increment(-alloc.deduct),
-                        // status update (depleted) would need a read or condition, simplified here:
-                        // Real app should check if new qty is 0. 
                     });
                 }
                 
@@ -227,7 +230,8 @@ export default function DispensingPage() {
                                         <SelectTrigger><SelectValue placeholder="Choose medicine..." /></SelectTrigger>
                                         <SelectContent>
                                             {items?.map(i => (
-                                                <SelectItem key={i.itemId} value={i.itemId} disabled={!i.totalStock || i.totalStock <= 0}>
+                                                // Use i.id here as the key and value
+                                                <SelectItem key={i.id} value={i.id} disabled={!i.totalStock || i.totalStock <= 0}>
                                                     {i.name} ({i.dosage}) - Stock: {i.totalStock || 0}
                                                 </SelectItem>
                                             ))}

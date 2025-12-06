@@ -18,6 +18,8 @@ import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { doc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Separator } from '@/components/ui/separator';
+import { WithId } from '@/firebase/firestore/use-collection';
+import { Resident } from '@/lib/types';
 
 export default function PatientRecordsPage() {
     const { data: residents } = useResidents();
@@ -32,7 +34,8 @@ export default function PatientRecordsPage() {
         ).slice(0, 15);
     }, [residents, searchTerm]);
 
-    const selectedResident = useMemo(() => residents?.find(r => r.residentId === selectedResidentId), [residents, selectedResidentId]);
+    // Use r.id for robust selection
+    const selectedResident = useMemo(() => residents?.find(r => r.id === selectedResidentId), [residents, selectedResidentId]);
 
     return (
         <div className="space-y-6 h-[calc(100vh-10rem)] flex flex-col">
@@ -53,9 +56,9 @@ export default function PatientRecordsPage() {
                     <CardContent className="flex-grow overflow-y-auto p-0">
                         {filteredResidents.map(r => (
                             <div 
-                                key={r.residentId}
-                                className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors flex justify-between items-center ${selectedResidentId === r.residentId ? 'bg-primary/5 border-l-4 border-l-primary' : ''}`}
-                                onClick={() => setSelectedResidentId(r.residentId)}
+                                key={r.id} // Use .id from useCollection
+                                className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors flex justify-between items-center ${selectedResidentId === r.id ? 'bg-primary/5 border-l-4 border-l-primary' : ''}`}
+                                onClick={() => setSelectedResidentId(r.id)} // Use .id
                             >
                                 <div>
                                     <p className="font-semibold text-sm">{r.firstName} {r.lastName}</p>
@@ -88,14 +91,17 @@ export default function PatientRecordsPage() {
     );
 }
 
-function PatientDetailView({ resident }: { resident: any }) {
+function PatientDetailView({ resident }: { resident: WithId<Resident> }) {
     const { data: profiles } = useHealthProfiles();
     const { data: logs } = useDispensingLogs();
     const firestore = useFirestore();
     const profilesRef = useEHealthRef('ehealth_profiles');
 
-    const profile = useMemo(() => profiles?.find(p => p.residentId === resident.residentId), [profiles, resident]);
-    const patientLogs = useMemo(() => logs?.filter(l => l.residentId === resident.residentId).sort((a,b) => b.dateDispensed?.toMillis() - a.dateDispensed?.toMillis()), [logs, resident]);
+    // Match profile using resident.id
+    const profile = useMemo(() => profiles?.find(p => p.residentId === resident.id), [profiles, resident]);
+    
+    // Match logs using resident.id
+    const patientLogs = useMemo(() => logs?.filter(l => l.residentId === resident.id).sort((a,b) => b.dateDispensed?.toMillis() - a.dateDispensed?.toMillis()), [logs, resident]);
 
     // Edit State
     const [isEditing, setIsEditing] = useState(false);
@@ -115,7 +121,7 @@ function PatientDetailView({ resident }: { resident: any }) {
         if (!firestore || !profilesRef) return;
         
         const data = {
-            residentId: resident.residentId,
+            residentId: resident.id, // Use resident.id
             allergies: editForm.allergies.split(',').map(s => s.trim()).filter(Boolean),
             conditions: editForm.conditions.split(',').map(s => s.trim()).filter(Boolean),
             notes: editForm.notes,
