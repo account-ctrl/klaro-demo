@@ -394,7 +394,7 @@ export type FixedAsset = {
   assetId: string;
   name: string; // e.g., "Barangay Patrol 01"
   type: 'Vehicle' | 'Equipment' | 'Facility' | 'Furniture';
-  status: 'Available' | 'In Use' | 'Maintenance' | 'Decommissioned' | 'Damaged' | 'Deployed';
+  status: 'Available' | 'In Use' | 'Maintenance' | 'Decommissioned' | 'Damaged' | 'Deployed' | 'Under Repair' | 'Condemned';
   purchaseDate: string; // ISO Date string
   serialNumber?: string;
   
