@@ -397,7 +397,8 @@ export type FixedAsset = {
   status: 'Available' | 'In Use' | 'Maintenance' | 'Decommissioned' | 'Damaged' | 'Deployed' | 'Under Repair' | 'Condemned';
   purchaseDate: string; // ISO Date string
   serialNumber?: string;
-  
+  photoUrl?: string; // Added as per requirements
+
   // Location and Custodian
   location?: string; // e.g., "Barangay Hall Storage", "Health Center"
   custodianId?: string; // Link to User or Resident
