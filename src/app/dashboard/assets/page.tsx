@@ -149,11 +149,16 @@ export default function AssetsPage() {
         }
     };
 
-    const handleDeleteAsset = (id: string) => {
+    const handleDeleteAsset = async (id: string) => {
         if (!firestore) return;
         const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${id}`);
-        deleteDocumentNonBlocking(docRef);
-        toast({ title: "Asset Deleted", description: "The asset has been removed from inventory." });
+        try {
+            await deleteDocumentNonBlocking(docRef);
+            toast({ title: "Asset Deleted", description: "The asset has been removed from inventory." });
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete asset." });
+        }
     };
 
     const handleGenerateQR = (asset: FixedAsset) => {
