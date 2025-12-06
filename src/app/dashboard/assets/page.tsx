@@ -31,7 +31,19 @@ export default function AssetsPage() {
     // Form States
     const [assetForm, setAssetForm] = useState(initialAssetForm);
     const [newBooking, setNewBooking] = useState({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
-    const [maintenanceForm, setMaintenanceForm] = useState<Partial<MaintenanceLog>>({ assetId: '', serviceType: '', description: '', servicedBy: '', partsUsed: '', cost: 0, serviceDate: '', nextMaintenanceDue: '' });
+    
+    // Fix: Extend the type to include nextMaintenanceDue which is an Asset property, not a Log property
+    const [maintenanceForm, setMaintenanceForm] = useState<Partial<MaintenanceLog> & { nextMaintenanceDue?: string }>({ 
+        assetId: '', 
+        serviceType: '', 
+        description: '', 
+        servicedBy: '', 
+        partsUsed: '', 
+        cost: 0, 
+        serviceDate: '', 
+        nextMaintenanceDue: '' 
+    });
+    
     const [isEditBooking, setIsEditBooking] = useState(false);
 
     // Search/Filter States
@@ -240,8 +252,11 @@ export default function AssetsPage() {
         if (!maintenanceRef || !maintenanceForm.assetId) return;
 
         try {
+            // Split the form data: log data vs asset update data
+            const { nextMaintenanceDue, ...logData } = maintenanceForm;
+
             await addDocumentNonBlocking(maintenanceRef, { 
-                ...maintenanceForm,
+                ...logData,
                 createdAt: serverTimestamp() 
             });
 
@@ -249,8 +264,8 @@ export default function AssetsPage() {
             if (firestore) {
                 const assetDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${maintenanceForm.assetId}`);
                 await setDocumentNonBlocking(assetDocRef, { 
-                    nextMaintenanceDue: maintenanceForm.nextMaintenanceDue,
-                    status: 'Maintenance' // Or based on a form field
+                    nextMaintenanceDue: nextMaintenanceDue,
+                    status: 'Maintenance' // Or based on a form field if we added one
                 }, { merge: true });
             }
             
