@@ -67,7 +67,7 @@ export function FinancialsTable() {
     deleteDocumentNonBlocking(docRef);
   };
   
-  const columns = React.useMemo(() => getFinancialsColumns(handleEdit, handleDelete, residents ?? []), [residents]);
+  const columns = React.useMemo(() => getFinancialsColumns(handleEdit, handleDelete, residents ?? [], incomeCategories, expenseCategories), [residents]);
   const isLoading = isLoadingFins || isLoadingResidents;
 
   return (

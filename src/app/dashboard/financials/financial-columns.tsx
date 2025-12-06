@@ -21,9 +21,11 @@ type FinancialsTableActionsProps = {
   onEdit: (record: FinancialTransaction) => void;
   onDelete: (id: string) => void;
   residents: Resident[];
+  incomeCategories: any[];
+  expenseCategories: any[];
 }
 
-function FinancialsTableActions({ record, onEdit, onDelete, residents }: FinancialsTableActionsProps) {
+function FinancialsTableActions({ record, onEdit, onDelete, residents, incomeCategories, expenseCategories }: FinancialsTableActionsProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -50,7 +52,7 @@ const formatCurrency = (amount: number) => {
 }
 
 
-export const getFinancialsColumns = (onEdit: (record: FinancialTransaction) => void, onDelete: (id: string) => void, residents: Resident[]): ColumnDef<FinancialTransaction>[] => [
+export const getFinancialsColumns = (onEdit: (record: FinancialTransaction) => void, onDelete: (id: string) => void, residents: Resident[], incomeCategories: any[], expenseCategories: any[]): ColumnDef<FinancialTransaction>[] => [
   {
     accessorKey: "transactionType",
     header: "Type",
@@ -103,7 +105,7 @@ export const getFinancialsColumns = (onEdit: (record: FinancialTransaction) => v
     id: "actions",
     cell: ({ row }) => {
       const record = row.original;
-      return <FinancialsTableActions record={record} onEdit={onEdit} onDelete={onDelete} residents={residents} />
+      return <FinancialsTableActions record={record} onEdit={onEdit} onDelete={onDelete} residents={residents} incomeCategories={incomeCategories} expenseCategories={expenseCategories} />
     },
   },
 ];

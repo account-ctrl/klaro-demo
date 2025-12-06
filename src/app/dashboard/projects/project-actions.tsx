@@ -38,14 +38,7 @@ import type { Project, Purok } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
-// Mock data, in a real app this would come from props or a hook
-const puroks: Pick<Purok, 'purokId' | 'name'>[] = [
-    { purokId: 'purok-1', name: 'Purok 1' },
-    { purokId: 'purok-2', name: 'Purok 2' },
-    { purokId: 'purok-3', name: 'Purok 3' },
-    { purokId: 'purok-4', name: 'Purok 4' },
-];
+import { usePuroks } from '@/hooks/use-barangay-data';
 
 const appropriationYears = [new Date().getFullYear() + 1, new Date().getFullYear(), new Date().getFullYear() - 1];
 
@@ -58,6 +51,8 @@ type ProjectFormProps = {
 };
 
 function ProjectForm({ record, onSave, onClose }: ProjectFormProps) {
+  const { data: puroks, isLoading: isLoadingPuroks } = usePuroks();
+
   const [formData, setFormData] = useState<Omit<Project, 'projectId'>>({
     projectName: record?.projectName ?? '',
     description: record?.description ?? '',
@@ -136,7 +131,15 @@ function ProjectForm({ record, onSave, onClose }: ProjectFormProps) {
                             <Select onValueChange={(v) => handleSelectChange('purokId', v)} value={formData.purokId}>
                                 <SelectTrigger><SelectValue placeholder="Select Purok" /></SelectTrigger>
                                 <SelectContent>
-                                    {puroks.map(p => <SelectItem key={p.purokId} value={p.purokId}>{p.name}</SelectItem>)}
+                                    {isLoadingPuroks ? (
+                                        <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                    ) : (
+                                        puroks?.map(p => (
+                                            <SelectItem key={p.purokId} value={p.purokId}>
+                                                {p.name}
+                                            </SelectItem>
+                                        ))
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
