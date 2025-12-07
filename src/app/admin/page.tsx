@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2, Copy, ExternalLink, Loader2, Monitor } from "lucide-react";
 import Link from 'next/link';
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
@@ -499,8 +499,8 @@ export default function AdminDashboardPage() {
                              <div className="flex gap-2">
                                 <Button variant="ghost" onClick={() => setSelectedTenant(null)}>Close</Button>
                                 <Button asChild className="bg-slate-900 text-white">
-                                    <Link href={`/dashboard?tenantId=${selectedTenant.id}`}>
-                                        <FileText className="mr-2 h-4 w-4" /> Enter Vault
+                                    <Link href={`/admin/tenants/${selectedTenant.id}`}>
+                                        <Monitor className="mr-2 h-4 w-4" /> Manage Node
                                     </Link>
                                 </Button>
                              </div>

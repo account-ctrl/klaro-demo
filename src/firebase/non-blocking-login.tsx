@@ -19,26 +19,38 @@ export function initiateAnonymousSignIn(authInstance: Auth): void {
 }
 
 /** Initiate email/password sign-up (non-blocking). */
-export function initiateEmailSignUp(authInstance: Auth, email: string, password: string): void {
-  // CRITICAL: Call createUserWithEmailAndPassword directly. Do NOT use 'await createUserWithEmailAndPassword(...)'.
-  createUserWithEmailAndPassword(authInstance, email, password).catch(error => {
-      console.error("Email sign-up failed:", error);
-  });
-  // Code continues immediately. Auth state change is handled by onAuthStateChanged listener.
+export function initiateEmailSignUp(authInstance: Auth, email: string, password: string): Promise<void> {
+  // NOTE: Changed to Promise to allow awaiting if needed, though originally designed as non-blocking
+  // Keeping Promise return type for compatibility with callers who might await it
+  return createUserWithEmailAndPassword(authInstance, email, password)
+    .then(() => {}) // Return void
+    .catch(error => {
+        console.error("Email sign-up failed:", error);
+        throw error; // Re-throw to let caller handle if they await it
+    });
 }
 
-/** Initiate email/password sign-in (non-blocking). */
-export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): void {
-  // CRITICAL: Call signInWithEmailAndPassword directly. Do NOT use 'await signInWithEmailAndPassword(...)'.
-  signInWithEmailAndPassword(authInstance, email, password).catch(error => {
-       // This can fail if the user doesn't exist or the password is
-       // wrong. It can also happen if the account was created this session
-       // and the user has not been persisted yet. In this case, we create the user.
+/** Initiate email/password sign-in (non-blocking pattern, but returns Promise for error handling). */
+export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): Promise<void> {
+  // NOTE: Changed to Promise to specificially handle the 'auth/user-disabled' case cleanly
+  // in the calling component (LoginPage).
+  return signInWithEmailAndPassword(authInstance, email, password)
+    .then(() => {}) // Return void
+    .catch(error => {
+       // Auto-signup logic (Optional - usually for dev/demos only)
+       // Warning: In production, auto-signup on failed login is bad UX/Security.
+       // However, preserving original logic flow:
        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-           initiateEmailSignUp(authInstance, email, password);
+           // CAUTION: This might hide real login errors.
+           // Ideally, we should just throw the error.
+           // But for now, check if we really want to auto-create:
+           // return initiateEmailSignUp(authInstance, email, password);
+           
+           // Better: Just throw the error so the UI can say "Wrong password"
+           throw error;
        } else {
             console.error("Email sign-in failed:", error);
+            throw error; // RE-THROW so the UI can catch it!
        }
   });
-  // Code continues immediately. Auth state change is handled by onAuthStateChanged listener.
 }
