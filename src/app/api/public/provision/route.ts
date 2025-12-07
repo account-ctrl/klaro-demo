@@ -75,9 +75,9 @@ export async function POST(req: Request) {
             await adminAuth.setCustomUserClaims(adminUid, {
                 tenantPath: vaultPath,
                 tenantId: tenantSlug,
-                role: 'captain' // or 'admin'
+                role: 'admin' // UPDATED: Changed from 'captain' to 'admin'
             });
-            console.log(`[PROVISION] Claims set for ${adminUid}`);
+            console.log(`[PROVISION] Claims set for ${adminUid} with role: admin`);
 
         } catch (e: any) {
             console.error(`[PROVISION] User creation failed: ${e.message}`);
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
                 email: adminProfile.email,
                 fullName: adminProfile.name,
                 position: 'Punong Barangay (Captain)', // Using standard title
-                role: 'captain',
+                role: 'admin', // UPDATED: Changed from 'captain' to 'admin'
                 systemRole: 'Admin',
                 tenantPath: vaultPath,
                 tenantId: tenantSlug,
