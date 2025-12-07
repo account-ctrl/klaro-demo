@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -38,14 +39,13 @@ import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
-
-const BARANGAY_ID = 'barangay_san_isidro';
-
+import { useTenant } from '@/providers/tenant-provider';
 
 export function AnnouncementsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
   
   // Filter States
   const [filterQuery, setFilterQuery] = useState('');
@@ -60,9 +60,10 @@ export function AnnouncementsTable() {
 
 
   const announcementsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/announcements`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/announcements`);
+  }, [firestore, tenantPath]);
 
 
   const { data: announcements, isLoading: isLoadingAnnouncements } = useCollection<Announcement>(announcementsCollectionRef);
@@ -86,8 +87,9 @@ export function AnnouncementsTable() {
   };
 
   const handleEdit = (updatedRecord: Announcement) => {
-    if (!firestore || !updatedRecord.announcementId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/announcements/${updatedRecord.announcementId}`);
+    if (!firestore || !updatedRecord.announcementId || !tenantPath) return;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/announcements/${updatedRecord.announcementId}`);
     
     const { announcementId, datePosted, ...dataToUpdate } = updatedRecord;
 
@@ -96,19 +98,21 @@ export function AnnouncementsTable() {
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/announcements/${id}`);
+    if (!firestore || !tenantPath) return;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/announcements/${id}`);
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Announcement Deleted' });
   };
 
   const handleLoadSamples = async () => {
-      if (!firestore || !user) return;
+      if (!firestore || !user || !tenantPath) return;
 
       try {
           const batch = writeBatch(firestore);
+          const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
           ANNOUNCEMENT_TEMPLATES.forEach((tpl) => {
-              const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/announcements`));
+              const newDocRef = doc(collection(firestore, `${safePath}/announcements`));
               batch.set(newDocRef, {
                   announcementId: newDocRef.id,
                   title: tpl.title,
@@ -126,7 +130,7 @@ export function AnnouncementsTable() {
       }
   };
 
-  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete), []);
+  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete), [tenantPath]);
 
   // Filter Logic
   const filteredData = announcements?.filter(item => {

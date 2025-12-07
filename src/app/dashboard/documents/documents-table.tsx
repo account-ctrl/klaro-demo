@@ -18,9 +18,9 @@ import {
   useResidents, 
   useDocumentTypes, 
   useFinancials, 
-  useBarangayRef, 
-  BARANGAY_ID 
+  useBarangayRef
 } from '@/hooks/use-barangay-data';
+import { useTenant } from '@/providers/tenant-provider';
 
 type CertificateRequestWithId = CertificateRequest & { id?: string };
 
@@ -28,6 +28,7 @@ export function DocumentsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
 
   // Data Fetching using new hooks
   const { data: documents, isLoading: isLoadingDocuments } = useDocuments();
@@ -80,8 +81,10 @@ export function DocumentsTable() {
 
   const handleEdit = (updatedRecord: CertificateRequestWithId) => {
     const recordId = updatedRecord.id || updatedRecord.requestId;
-    if (!firestore || !recordId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${recordId}`);
+    if (!firestore || !recordId || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/certificate_requests/${recordId}`);
     
     const selectedResident = residents?.find(r => r.residentId === updatedRecord.residentId);
     const selectedCertType = certificateTypes?.find(c => c.certTypeId === updatedRecord.certTypeId);
@@ -141,20 +144,24 @@ export function DocumentsTable() {
 
   const handlePrint = (recordToPrint: CertificateRequestWithId) => {
     const recordId = recordToPrint.id || recordToPrint.requestId;
-    if (!firestore || !recordId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${recordId}`);
+    if (!firestore || !recordId || !tenantPath) return;
+
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/certificate_requests/${recordId}`);
     
     updateDocumentNonBlocking(docRef, { status: 'Ready for Pickup' });
     toast({ title: 'Document Printed', description: 'Status updated to "Ready for Pickup".' });
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_requests/${id}`);
+    if (!firestore || !tenantPath) return;
+
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/certificate_requests/${id}`);
     deleteDocumentNonBlocking(docRef);
   };
   
-  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, handlePrint, residents ?? [], certificateTypes ?? []), [residents, certificateTypes]);
+  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, handlePrint, residents ?? [], certificateTypes ?? []), [residents, certificateTypes, tenantPath]);
 
   return (
     <DataTable

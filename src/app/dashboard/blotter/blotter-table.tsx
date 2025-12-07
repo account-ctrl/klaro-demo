@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -34,9 +35,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-
-const BARANGAY_ID = 'barangay_san_isidro';
-
+import { useTenant } from '@/providers/tenant-provider';
 
 const getStatusBadgeVariant = (status: BlotterCase['status']): 'default' | 'secondary' | 'outline' | 'destructive' => {
   switch (status) {
@@ -63,6 +62,7 @@ export function BlotterTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
   
   const [filterQuery, setFilterQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -78,25 +78,29 @@ export function BlotterTable() {
 
 
   const blottersCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    let baseQuery = query(collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`));
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    let baseQuery = query(collection(firestore, `${safePath}/blotter_cases`));
     return baseQuery;
-  }, [firestore]);
+  }, [firestore, tenantPath]);
 
   const residentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/residents`);
+  }, [firestore, tenantPath]);
 
   const facilitiesCollectionRef = useMemoFirebase(() => {
-    if(!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/facilities_resources`);
-  }, [firestore]);
+    if(!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/facilities_resources`);
+  }, [firestore, tenantPath]);
   
   const scheduleCollectionRef = useMemoFirebase(() => {
-    if(!firestore) return null;
-    return query(collection(firestore, `/barangays/${BARANGAY_ID}/schedule_events`), where('category', '==', 'Blotter'));
-  }, [firestore]);
+    if(!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return query(collection(firestore, `${safePath}/schedule_events`), where('category', '==', 'Blotter'));
+  }, [firestore, tenantPath]);
 
   const { data: records, isLoading: isLoadingBlotter } = useCollection<BlotterCase>(blottersCollectionRef);
   const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
@@ -113,11 +117,12 @@ export function BlotterTable() {
   }
 
   const handleAdd = async (newRecord: Partial<BlotterCase> & { scheduleHearing?: boolean, hearingStage?: string, hearingStart?: string, hearingEnd?: string, venueResourceId?: string, generateSummons?: boolean }) => {
-    if (!firestore || !blottersCollectionRef || !user || !residents) return;
+    if (!firestore || !blottersCollectionRef || !user || !residents || !tenantPath) return;
 
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
     const batch = writeBatch(firestore);
     const caseId = `CASE-${Date.now()}`;
-    const blotterDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`), caseId);
+    const blotterDocRef = doc(collection(firestore, `${safePath}/blotter_cases`), caseId);
     
     const docToAdd: Partial<BlotterCase> = {
       ...newRecord,
@@ -140,7 +145,7 @@ export function BlotterTable() {
     let newEvent: ScheduleEvent | null = null;
 
     if (newRecord.scheduleHearing && newRecord.hearingStart && newRecord.hearingEnd && newRecord.venueResourceId) {
-        const scheduleCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/schedule_events`);
+        const scheduleCollectionRef = collection(firestore, `${safePath}/schedule_events`);
         const eventId = `EVT-${Date.now()}`;
         const eventDocRef = doc(scheduleCollectionRef, eventId);
         
@@ -184,16 +189,20 @@ export function BlotterTable() {
   };
 
   const handleEdit = (updatedRecord: BlotterCase) => {
-    if (!firestore || !updatedRecord.caseId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/blotter_cases/${updatedRecord.caseId}`);
+    if (!firestore || !updatedRecord.caseId || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/blotter_cases/${updatedRecord.caseId}`);
     const { caseId, ...dataToUpdate } = updatedRecord;
     updateDocumentNonBlocking(docRef, dataToUpdate);
     toast({ title: 'Blotter Record Updated', description: `Case #${updatedRecord.caseId} has been updated.` });
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/blotter_cases/${id}`);
+    if (!firestore || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/blotter_cases/${id}`);
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Blotter Record Deleted', description: 'The record has been permanently deleted.' });
   };

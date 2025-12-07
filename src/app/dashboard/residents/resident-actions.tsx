@@ -98,7 +98,9 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
   // Fetch Puroks dynamically
   const puroksRef = useMemoFirebase(() => {
       if (!firestore || !tenantPath) return null;
-      return query(collection(firestore, `${tenantPath}/puroks`), orderBy('name'));
+      // Ensure path doesn't have double slash or missing slash issues, though Firestore is lenient
+      const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+      return query(collection(firestore, `${safePath}/puroks`), orderBy('name'));
   }, [firestore, tenantPath]);
 
   const { data: puroks } = useCollection<Purok>(puroksRef);
@@ -122,8 +124,11 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
         ...formData,
         householdId: formData.householdId === 'NO_HOUSEHOLD' ? undefined : formData.householdId,
     };
+    // Ensure we are passing ResidentWithId correctly if it's an edit
     if (record) {
-      onSave({ ...record, ...dataToSave });
+      // Cast the merged object as ResidentWithId to satisfy the type checker
+      const updatedRecord = { ...record, ...dataToSave } as ResidentWithId;
+      onSave(updatedRecord);
     } else {
       onSave(dataToSave);
     }
@@ -313,8 +318,9 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
 export function AddResident({ onAdd, households }: { onAdd: (data: ResidentFormValues) => void, households: Household[] }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: ResidentFormValues) => {
-    onAdd(data);
+  const handleSave = (data: ResidentFormValues | ResidentWithId) => {
+    // Cast to ResidentFormValues since this is AddResident and we expect new data
+    onAdd(data as ResidentFormValues);
     setOpen(false);
   };
 
@@ -354,8 +360,9 @@ export function EditResident({
 }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: ResidentWithId) => {
-    onEdit(data);
+  const handleSave = (data: ResidentFormValues | ResidentWithId) => {
+    // Cast to ResidentWithId because we are editing an existing record
+    onEdit(data as ResidentWithId);
     setOpen(false);
   };
 

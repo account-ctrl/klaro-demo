@@ -9,14 +9,16 @@ import { getColumns } from "./columns";
 import { DataTable } from "./data-table";
 import { ResidentFormValues } from "./resident-actions";
 import { useToast } from "@/hooks/use-toast";
-import { useResidents, useHouseholds, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { useResidents, useHouseholds, useBarangayRef } from '@/hooks/use-barangay-data';
 import { updateSystemStats } from "@/lib/trigger-simulation";
+import { useTenant } from '@/providers/tenant-provider';
 
 type ResidentWithId = Resident & { id?: string };
 
 export default function ResidentsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
 
   const { data: records, isLoading: isLoadingResidents } = useResidents();
   const { data: households, isLoading: isLoadingHouseholds } = useHouseholds();
@@ -47,9 +49,12 @@ export default function ResidentsPage() {
 
   const handleEdit = (updatedRecord: ResidentWithId) => {
     const recordId = updatedRecord.id || updatedRecord.residentId;
-    if (!firestore || !recordId) return;
+    if (!firestore || !recordId || !tenantPath) return;
     
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${recordId}`);
+    // Construct path dynamically using tenantPath
+    // Remove leading slash from tenantPath if present to be safe, though not strictly required
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/residents/${recordId}`);
     
     // Create a clean object with only the fields defined in the Resident type.
     const { residentId, id, ...dataToUpdate } = updatedRecord;
@@ -70,15 +75,18 @@ export default function ResidentsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${id}`);
+    if (!firestore || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/residents/${id}`);
+    
     deleteDocumentNonBlocking(docRef);
 
     // Simulate Cloud Function Trigger
     updateSystemStats({ population: -1 });
   };
   
-  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, households ?? []), [households]);
+  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, households ?? []), [households, tenantPath]); // Added tenantPath dependency
 
   return (
     <div className="space-y-6">

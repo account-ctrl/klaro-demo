@@ -5,7 +5,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { useHouseholds, useResidents, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { useHouseholds, useResidents, useBarangayRef } from '@/hooks/use-barangay-data';
 import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -31,6 +31,7 @@ import { MapPin, Search, Scan, Loader2, UserPlus, Save, X, Trash2, UserMinus } f
 import { useToast } from '@/hooks/use-toast';
 import pLimit from 'p-limit';
 import { HouseholdMembersSheet } from '../households/household-members-sheet';
+import { useTenant } from '@/providers/tenant-provider';
 
 // --- Custom Map Components ---
 // ... (BoxDrawer, MapUpdater, and Icons remain the same) ...
@@ -140,6 +141,7 @@ export default function MappedHouseholdsPage() {
     const { data: residents } = useResidents();
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { tenantPath } = useTenant();
     const householdsRef = useBarangayRef('households');
 
     // UI State
@@ -278,10 +280,11 @@ export default function MappedHouseholdsPage() {
     };
 
     const handleAssignResident = () => {
-        if (!firestore || !selectedHousehold || !residentToAssign) return;
+        if (!firestore || !selectedHousehold || !residentToAssign || !tenantPath) return;
         
         // Use selectedHousehold.id which is the document ID, NOT householdId field
-        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${selectedHousehold.id}`);
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const hDocRef = doc(firestore, `${safePath}/households/${selectedHousehold.id}`);
         const resident = residents?.find(r => r.residentId === residentToAssign);
         
         updateDocumentNonBlocking(hDocRef, {
@@ -296,8 +299,9 @@ export default function MappedHouseholdsPage() {
     };
 
     const handleUnassignResident = (id: string) => {
-        if (!firestore || !id) return;
-        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${id}`);
+        if (!firestore || !id || !tenantPath) return;
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const hDocRef = doc(firestore, `${safePath}/households/${id}`);
         
         updateDocumentNonBlocking(hDocRef, {
             household_head_id: null, // Use null instead of deleteField() for simplicity if types allow, or empty string
@@ -308,22 +312,24 @@ export default function MappedHouseholdsPage() {
     };
 
     const handleDelete = (id: string) => {
-        if (!firestore) return;
+        if (!firestore || !tenantPath) return;
         // Use the document ID 'id', not 'householdId'
-        const hDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${id}`);
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const hDocRef = doc(firestore, `${safePath}/households/${id}`);
         deleteDocumentNonBlocking(hDocRef);
         if (selectedHouseholdId === id) setSelectedHouseholdId(null); // This comparison might be tricky if state uses householdId field
         toast({ title: "Deleted", description: "Household removed." });
     };
 
     const handleDeleteAll = async () => {
-        if (!firestore || !households || isDeleting) return;
+        if (!firestore || !households || isDeleting || !tenantPath) return;
         
         setIsDeleting(true);
         try {
             const BATCH_SIZE = 400; 
             const chunks = [];
             const limit = pLimit(5); // Limit concurrent batch operations
+            const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
 
             for (let i = 0; i < households.length; i += BATCH_SIZE) {
                 chunks.push(households.slice(i, i + BATCH_SIZE));
@@ -333,7 +339,7 @@ export default function MappedHouseholdsPage() {
                 const batch = writeBatch(firestore);
                 chunk.forEach(h => {
                      if (h.id) { // Use document ID
-                        const ref = doc(firestore, `/barangays/${BARANGAY_ID}/households/${h.id}`);
+                        const ref = doc(firestore, `${safePath}/households/${h.id}`);
                         batch.delete(ref);
                      }
                 });

@@ -54,8 +54,7 @@ import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { usePuroks } from '@/hooks/use-barangay-data'; // Import usePuroks
-
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenant } from '@/providers/tenant-provider';
 
 
 export type HouseholdFormValues = Omit<Household, 'householdId' | 'createdAt' | 'name'>;
@@ -244,6 +243,8 @@ export function HouseholdForm({ record, onSave, onClose, residents }: HouseholdF
 
 function HouseholdMembers({ household, residents, onMemberChange }: { household: HouseholdWithId, residents: Resident[], onMemberChange: (residentId: string, householdId: string | null) => void }) {
     const firestore = useFirestore();
+    const { tenantPath } = useTenant();
+
     const membersQuery = useMemoFirebase(() => {
         // Prefer using doc ID (household.id) if available, but fallback to householdId if necessary.
         // Usually queries depend on the 'householdId' FIELD in the resident document matching the household.
@@ -251,9 +252,11 @@ function HouseholdMembers({ household, residents, onMemberChange }: { household:
         // WAIT: If the householdId FIELD is different from the household DOC ID, and we are fixing the delete/edit to use DOC ID...
         // ... then resident relationships might be broken if they point to the householdId field instead of DOC ID.
         // But let's assume residents point to the householdId FIELD.
-        if (!firestore || !household.householdId) return null;
-        return query(collection(firestore, `/barangays/${BARANGAY_ID}/residents`), where('householdId', '==', household.householdId));
-    }, [firestore, household.householdId]);
+        if (!firestore || !household.householdId || !tenantPath) return null;
+        
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return query(collection(firestore, `${safePath}/residents`), where('householdId', '==', household.householdId));
+    }, [firestore, household.householdId, tenantPath]);
 
     const { data: members, isLoading } = useCollection<Resident>(membersQuery);
     
@@ -310,8 +313,9 @@ function HouseholdMembers({ household, residents, onMemberChange }: { household:
 export function AddHousehold({ onAdd, residents }: { onAdd: (data: HouseholdFormValues) => void; residents: Resident[]; }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: HouseholdFormValues) => {
-    onAdd(data);
+  const handleSave = (data: HouseholdFormValues | HouseholdWithId) => {
+    // Cast to HouseholdFormValues for add
+    onAdd(data as HouseholdFormValues);
     setOpen(false);
   };
 
@@ -341,8 +345,9 @@ export function AddHousehold({ onAdd, residents }: { onAdd: (data: HouseholdForm
 export function EditHousehold({ record, onEdit, residents, onMemberChange }: { record: HouseholdWithId; onEdit: (data: HouseholdWithId) => void; residents: Resident[]; onMemberChange: (residentId: string, householdId: string | null) => void; }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: HouseholdWithId) => {
-    onEdit(data);
+  const handleSave = (data: HouseholdFormValues | HouseholdWithId) => {
+    // Cast to HouseholdWithId for edit
+    onEdit(data as HouseholdWithId);
     setOpen(false);
   };
 

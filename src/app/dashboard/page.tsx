@@ -35,10 +35,9 @@ import Image from 'next/image';
 
 import { HeroBanner } from './hero-banner';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useTenant } from '@/providers/tenant-provider';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
-
-const BARANGAY_ID = 'barangay_san_isidro';
 
 // Shared card styles for the "floating panel" look
 const cardStyle = "h-full w-full hover:shadow-lg transition-all duration-300 cursor-grab active:cursor-grabbing bg-white border-none shadow-sm rounded-xl overflow-hidden ring-1 ring-black/5";
@@ -223,18 +222,19 @@ function TodaysScheduleWidget({ events, isLoading }: { events: ScheduleEvent[], 
 export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState('');
   const firestore = useFirestore();
+  const { tenantPath } = useTenant();
 
   useEffect(() => {
     setCurrentDate(format(new Date(), 'eeee, MMM dd, yyyy'));
   }, []);
 
   // Data Fetching
-  const residentsCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/residents`) : null, [firestore]);
-  const documentsCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`) : null, [firestore]);
-  const financialsCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/financial_transactions`) : null, [firestore]);
-  const projectsCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/projects`) : null, [firestore]);
-  const blotterCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`) : null, [firestore]);
-  const emergencyCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`) : null, [firestore]);
+  const residentsCollectionRef = useMemoFirebase(() => (firestore && tenantPath) ? collection(firestore, `${tenantPath}/residents`) : null, [firestore, tenantPath]);
+  const documentsCollectionRef = useMemoFirebase(() => (firestore && tenantPath) ? collection(firestore, `${tenantPath}/certificate_requests`) : null, [firestore, tenantPath]);
+  const financialsCollectionRef = useMemoFirebase(() => (firestore && tenantPath) ? collection(firestore, `${tenantPath}/financial_transactions`) : null, [firestore, tenantPath]);
+  const projectsCollectionRef = useMemoFirebase(() => (firestore && tenantPath) ? collection(firestore, `${tenantPath}/projects`) : null, [firestore, tenantPath]);
+  const blotterCollectionRef = useMemoFirebase(() => (firestore && tenantPath) ? collection(firestore, `${tenantPath}/blotter_cases`) : null, [firestore, tenantPath]);
+  const emergencyCollectionRef = useMemoFirebase(() => (firestore && tenantPath) ? collection(firestore, `${tenantPath}/emergency_alerts`) : null, [firestore, tenantPath]);
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -242,15 +242,15 @@ export default function DashboardPage() {
   todayEnd.setHours(23, 59, 59, 999);
   
   const scheduleQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !tenantPath) return null;
     return query(
-      collection(firestore, `/barangays/${BARANGAY_ID}/schedule_events`),
+      collection(firestore, `${tenantPath}/schedule_events`),
       where('start', '>=', Timestamp.fromDate(todayStart)),
       where('start', '<=', Timestamp.fromDate(todayEnd)),
       orderBy('start', 'asc'),
       limit(5)
     );
-  }, [firestore]);
+  }, [firestore, tenantPath]);
 
 
   const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);

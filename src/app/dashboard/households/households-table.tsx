@@ -13,7 +13,7 @@ import { getColumns } from './columns';
 import { DataTable } from './data-table';
 import { HouseholdFormValues, AddHousehold } from './household-actions';
 import { useToast } from '@/hooks/use-toast';
-import { useHouseholds, useResidents, useBarangayRef, usePuroks, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { useHouseholds, useResidents, useBarangayRef, usePuroks } from '@/hooks/use-barangay-data';
 import { Button } from '@/components/ui/button';
 import { Trash2, SlidersHorizontal, Search, Columns } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -50,6 +50,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTenant } from '@/providers/tenant-provider';
 
 type HouseholdWithId = Household & { id?: string };
 
@@ -57,6 +58,7 @@ export function HouseholdsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
 
   const { data: households, isLoading: isLoadingHouseholds } = useHouseholds();
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
@@ -102,8 +104,10 @@ export function HouseholdsTable() {
 
   const handleEdit = (updatedRecord: HouseholdWithId) => {
     const recordId = updatedRecord.id || updatedRecord.householdId;
-    if (!firestore || !recordId || !residents) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${recordId}`);
+    if (!firestore || !recordId || !residents || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/households/${recordId}`);
     
     const head = residents.find(r => r.residentId === updatedRecord.household_head_id);
      if (!head) {
@@ -123,21 +127,25 @@ export function HouseholdsTable() {
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${id}`);
+    if (!firestore || !tenantPath) return;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/households/${id}`);
+    
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Household Deleted' });
   };
 
   const handleDeleteAll = async () => {
-      if (!firestore || !households || households.length === 0) return;
+      if (!firestore || !households || households.length === 0 || !tenantPath) return;
 
       try {
           const batch = writeBatch(firestore);
+          const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+
           households.forEach(h => {
                const docId = (h as any).id || h.householdId;
                if(docId) {
-                   const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/households/${docId}`);
+                   const docRef = doc(firestore, `${safePath}/households/${docId}`);
                    batch.delete(docRef);
                }
           });
@@ -150,12 +158,13 @@ export function HouseholdsTable() {
   }
   
    const handleMemberChange = (residentId: string, householdId: string | null) => {
-    if (!firestore || !residentId) return;
+    if (!firestore || !residentId || !tenantPath) return;
     
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
     const resident = residents?.find(r => r.residentId === residentId);
     const residentDocId = (resident as any)?.id || residentId;
     
-    const residentDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${residentDocId}`);
+    const residentDocRef = doc(firestore, `${safePath}/residents/${residentDocId}`);
     updateDocumentNonBlocking(residentDocRef, { householdId: householdId });
     toast({
       title: householdId ? "Member Added" : "Member Removed",
@@ -168,7 +177,7 @@ export function HouseholdsTable() {
       setIsSheetOpen(true);
   }
 
-  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, residents ?? [], handleMemberChange), [residents]);
+  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, residents ?? [], handleMemberChange), [residents, tenantPath]);
 
   const filteredData = households?.filter(item => {
       const matchesSearch = filterQuery === '' || 

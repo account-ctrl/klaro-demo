@@ -115,7 +115,7 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   // Helper to format tenant ID for display (e.g., "brgy-san-isidro" -> "San Isidro")
-  const tenantDisplayName = tenantId 
+  const tenantDisplayName = tenantId
     ? tenantId.split('-').slice(2).join(' ').replace(/\b\w/g, l => l.toUpperCase()) 
     : 'Unknown Tenant';
   

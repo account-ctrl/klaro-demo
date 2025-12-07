@@ -15,24 +15,25 @@ import { DataTable } from "./data-table";
 import { AddTransaction, FinancialFormValues } from "./financial-actions";
 import { useToast } from "@/hooks/use-toast";
 import { incomeCategories, expenseCategories } from "@/lib/data";
-
-const BARANGAY_ID = 'barangay_san_isidro';
-
+import { useTenant } from '@/providers/tenant-provider';
 
 export function FinancialsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
 
   const financialsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/financial_transactions`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/financial_transactions`);
+  }, [firestore, tenantPath]);
 
   const residentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/residents`);
+  }, [firestore, tenantPath]);
 
   const { data: records, isLoading: isLoadingFins } = useCollection<FinancialTransaction>(financialsCollectionRef);
   const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
@@ -54,20 +55,25 @@ export function FinancialsTable() {
   };
 
   const handleEdit = (updatedRecord: FinancialTransaction) => {
-    if (!firestore || !updatedRecord.transactionId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/financial_transactions/${updatedRecord.transactionId}`);
+    if (!firestore || !updatedRecord.transactionId || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/financial_transactions/${updatedRecord.transactionId}`);
+    
     const { transactionId, ...dataToUpdate } = updatedRecord;
     updateDocumentNonBlocking(docRef, { ...dataToUpdate });
     toast({ title: "Transaction Updated", description: "The financial record has been updated." });
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/financial_transactions/${id}`);
+    if (!firestore || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/financial_transactions/${id}`);
     deleteDocumentNonBlocking(docRef);
   };
   
-  const columns = React.useMemo(() => getFinancialsColumns(handleEdit, handleDelete, residents ?? [], incomeCategories, expenseCategories), [residents]);
+  const columns = React.useMemo(() => getFinancialsColumns(handleEdit, handleDelete, residents ?? [], incomeCategories, expenseCategories), [residents, tenantPath]);
   const isLoading = isLoadingFins || isLoadingResidents;
 
   return (

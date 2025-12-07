@@ -10,8 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Megaphone, Gavel, FileText, User as UserIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenant } from '@/providers/tenant-provider';
 
 const ICONS: { [key: string]: React.ReactNode } = {
     announcement: <Megaphone className="h-5 w-5" />,
@@ -50,11 +49,32 @@ const ActivityItem = ({ activity, user }: { activity: UnifiedActivity, user?: Us
 
 export function ActivityFeed() {
     const firestore = useFirestore();
+    const { tenantPath } = useTenant();
 
     // Fetch last 5 of each type
-    const announcementsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, `/barangays/${BARANGAY_ID}/announcements`), orderBy('datePosted', 'desc'), limit(5)) : null, [firestore]);
-    const blotterQuery = useMemoFirebase(() => firestore ? query(collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`), orderBy('dateReported', 'desc'), limit(5)) : null, [firestore]);
-    const requestsQuery = useMemoFirebase(() => firestore ? query(collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`), orderBy('dateRequested', 'desc'), limit(5)) : null, [firestore]);
+    const announcementsQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantPath) return null;
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return query(collection(firestore, `${safePath}/announcements`), orderBy('datePosted', 'desc'), limit(5));
+    }, [firestore, tenantPath]);
+
+    const blotterQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantPath) return null;
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return query(collection(firestore, `${safePath}/blotter_cases`), orderBy('dateReported', 'desc'), limit(5));
+    }, [firestore, tenantPath]);
+    
+    const requestsQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantPath) return null;
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return query(collection(firestore, `${safePath}/certificate_requests`), orderBy('dateRequested', 'desc'), limit(5));
+    }, [firestore, tenantPath]);
+
+    // Users are global? or per tenant? Assuming global for now as per original code, or maybe they are scoped?
+    // If users are scoped to tenant, we should use tenant path. But original code used `/users`.
+    // Let's stick to `/users` for now unless we know for sure they are migrated.
+    // Ideally user profiles should be fetched from `users` collection in root or tenant.
+    // Based on `useOfficials` in `use-barangay-data.ts`, it uses root `/users`.
     const usersQuery = useMemoFirebase(() => firestore ? query(collection(firestore, `/users`)) : null, [firestore]);
 
     const { data: announcements, isLoading: loadingAnnouncements } = useCollection<Announcement>(announcementsQuery);
