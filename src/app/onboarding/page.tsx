@@ -4,12 +4,12 @@ import React, { useState, useTransition, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
@@ -121,6 +121,7 @@ export default function OnboardingPage() {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const firestore = useFirestore();
 
   // State to hold collected data across steps
@@ -146,6 +147,22 @@ export default function OnboardingPage() {
     resolver: zodResolver(profileSchema),
     defaultValues: { barangayName: '', city: '', province: '' },
   });
+
+  // Effect to pre-fill from URL
+  useEffect(() => {
+      const province = searchParams.get('province');
+      const city = searchParams.get('city');
+      const barangay = searchParams.get('barangay');
+
+      if (province && city && barangay) {
+          profileForm.reset({
+              province: decodeURIComponent(province),
+              city: decodeURIComponent(city),
+              barangayName: decodeURIComponent(barangay)
+          });
+          // Optional: Auto-advance if you trust the link, but let user review first
+      }
+  }, [searchParams, profileForm]);
 
   const officialsForm = useForm<OfficialsFormValues>({
     resolver: zodResolver(officialsSchema),
