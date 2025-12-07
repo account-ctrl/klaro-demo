@@ -23,14 +23,7 @@ export function AssetList({
   onDelete,
   onGenerateQR,
 }: AssetListProps) {
-  const filteredAssets = assets.filter((asset) => {
-    const matchesSearch = asset.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesType = typeFilter === "All" || asset.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
-
+  
   if (isLoading) {
     return (
       <div className="col-span-full text-center py-10 text-muted-foreground">
@@ -39,10 +32,22 @@ export function AssetList({
     );
   }
 
+  const filteredAssets = (assets || [])
+    .filter(asset => asset && asset.assetId)
+    .filter((asset) => {
+        const matchesSearch = asset.name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+        const matchesType = typeFilter === "All" || asset.type === typeFilter;
+        return matchesSearch && matchesType;
+    });
+
+
   if (filteredAssets.length === 0) {
     return (
       <div className="col-span-full text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/20">
-        No assets found.
+        <p>No assets found.</p>
+        <p className="text-sm text-muted-foreground">Try adjusting your search or filters.</p>
       </div>
     );
   }
@@ -51,7 +56,7 @@ export function AssetList({
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {filteredAssets.map((asset) => (
         <AssetCard
-          key={asset.assetId}
+          key={asset.assetId} // React key for list rendering
           asset={asset}
           onEdit={onEdit}
           onDelete={onDelete}

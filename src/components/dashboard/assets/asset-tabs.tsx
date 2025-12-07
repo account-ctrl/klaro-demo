@@ -33,12 +33,13 @@ interface AssetTabsProps {
 
 function AssetTable({ assets, typeFilter, searchTerm, onEdit, onDelete, onGenerateQR, onBook, onOpenMaintenance }: any) {
     const filteredAssets = useMemo(() => {
+        // Defensive filtering to ensure assets are valid before processing
         if (!assets) return [];
         return assets
+            .filter(asset => asset && asset.assetId) // Ensure asset and assetId are valid
             .filter(asset => typeFilter === 'All' || asset.type === typeFilter)
             .filter(asset => {
                 const term = searchTerm.toLowerCase();
-                // Defensive filtering
                 return (
                     (asset.name && asset.name.toLowerCase().includes(term)) ||
                     (asset.serialNumber && asset.serialNumber.toLowerCase().includes(term)) ||
