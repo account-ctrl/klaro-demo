@@ -232,13 +232,20 @@ export default function OnboardingPage() {
             if (index === 2) { 
                 // CALL PUBLIC PROVISION API
                 try {
+                    const captain = officialsData.officials.find(o => o.role === 'Captain');
+
                     const res = await fetch('/api/public/provision', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             province: profileData.province,
                             city: profileData.city,
-                            barangay: profileData.barangayName
+                            barangay: profileData.barangayName,
+                            adminProfile: captain ? {
+                                name: captain.name,
+                                email: captain.email,
+                                password: captain.password
+                            } : undefined
                         })
                     });
                     
@@ -260,61 +267,17 @@ export default function OnboardingPage() {
             }
 
             if (index === 5) {
-                // Create Officials Docs
-                for (const official of officialsData.officials) {
-                    if (official.email && official.password && official.role === 'Captain') {
-                         try {
-                            // Create actual authentication user for the Captain
-                             if (auth) {
-                                 // Note: initiateEmailSignUp signs the user in automatically
-                                 await initiateEmailSignUp(auth, official.email, official.password);
-                                 
-                                 // After sign up, assign the tenant claims immediately
-                                 if (auth.currentUser) {
-                                     // Sync claims
-                                     const tenantSlug = `${profileData.city}-${profileData.barangayName}`
-                                        .toLowerCase().replace(/[\s\.]+/g, '-').replace(/[^\w-]+/g, '');
-
-                                     const syncRes = await fetch('/api/admin/assign-tenant', {
-                                         method: 'POST',
-                                         headers: { 'Content-Type': 'application/json' },
-                                         body: JSON.stringify({ 
-                                             userId: auth.currentUser.uid,
-                                             tenantSlug: tenantSlug
-                                         })
-                                     });
-                                     
-                                     if (syncRes.ok) {
-                                         // Force token refresh to pick up claims
-                                         await auth.currentUser.getIdToken(true);
-                                         setLogs(prev => [...prev, ">> AUTH: Secure session established."]);
-                                     } else {
-                                         console.error("Claim Sync Failed", await syncRes.json());
-                                     }
-                                 }
-                             }
-                         } catch (error) {
-                             console.error("Error creating user:", error);
-                             setLogs(prev => [...prev, "ERROR: Failed to create user account (Email might be taken)."]);
-                         }
-                    } else {
-                        // Create non-login records for other officials
-                        const userId = `user-${Math.random().toString(36).substr(2, 9)}`;
-                        const userRef = doc(firestore, 'users', userId);
-                        
-                        const tenantSlug = `${profileData.city}-${profileData.barangayName}`
-                            .toLowerCase().replace(/[\s\.]+/g, '-').replace(/[^\w-]+/g, '');
-
-                        setDoc(userRef, {
-                            userId: userId,
-                            fullName: official.name,
-                            position: official.role,
-                            tenantId: tenantSlug, 
-                            systemRole: official.role === 'Captain' ? 'Admin' : 'Encoder',
-                            email: official.email || `${official.name.toLowerCase().replace(/\s/g, '.')}@klarogov.ph`,
-                            status: 'Active',
-                            createdAt: serverTimestamp()
-                        }, { merge: true }).catch(console.error);
+                // Client-side authentication sign-in
+                const captain = officialsData.officials.find(o => o.role === 'Captain');
+                if (captain?.email && captain?.password && auth) {
+                    try {
+                        // Sign in the user on the client side so they are logged in when redirected
+                        await initiateEmailSignUp(auth, captain.email, captain.password);
+                        setLogs(prev => [...prev, ">> AUTH: Client session established."]);
+                    } catch (error) {
+                         console.error("Client Auth Error:", error);
+                         // Don't fail the whole flow if client login fails, they can login manually later
+                         setLogs(prev => [...prev, ">> NOTICE: Automatic login failed, please login manually."]);
                     }
                 }
             }
@@ -322,14 +285,7 @@ export default function OnboardingPage() {
             if (index === sequence.length - 1) {
                 // Finalize
                 setTimeout(() => {
-                     // In a real app, sign the user in. Here we redirect to their new dashboard.
-                     // We pass the tenantId for context if needed, but the dashboard currently hardcodes San Isidro.
-                     // The requirement "make sure status and everything is not being mocked" implies the Admin Dashboard
-                     // should see this.
                      toast({ title: "Commissioning Successful", description: "Your barangay node is live." });
-                     
-                     // Force hard reload or just push? 
-                     // Push is fine if TenantProvider re-renders on auth change (which it does)
                      window.location.href = '/dashboard'; 
                 }, 1500);
             }
