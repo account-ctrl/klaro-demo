@@ -16,13 +16,17 @@ import { useRouter } from "next/navigation";
 import { UserCog, Loader2, LockKeyhole } from "lucide-react";
 import { useAuth, initiateAnonymousSignIn, FirebaseClientProvider } from '@/firebase';
 
-// Force re-render comment to fix hydration mismatch v2
 function SuperAdminLoginCard() {
     const router = useRouter();
     const auth = useAuth();
     const [isPending, startTransition] = React.useTransition();
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleSuperAdminLogin = (e: React.FormEvent) => {
         e.preventDefault();
@@ -55,53 +59,59 @@ function SuperAdminLoginCard() {
                 <CardDescription className="text-slate-400">Restricted Access Level 5</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
-                <form onSubmit={handleSuperAdminLogin} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="email" className="text-slate-300">Identity Token</Label>
-                        <div className="relative">
-                            <UserCog className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input 
-                                id="email" 
-                                type="text" 
-                                placeholder="sys_admin_root" 
-                                required 
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="bg-slate-950 border-slate-800 text-white pl-9 focus-visible:ring-amber-500"
-                                suppressHydrationWarning
-                            />
+                {!mounted ? (
+                    <div className="flex justify-center py-10">
+                        <Loader2 className="animate-spin h-8 w-8 text-amber-500" />
+                    </div>
+                ) : (
+                    <form onSubmit={handleSuperAdminLogin} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-slate-300">Identity Token</Label>
+                            <div className="relative">
+                                <UserCog className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                                <Input 
+                                    id="email" 
+                                    type="text" 
+                                    placeholder="sys_admin_root" 
+                                    required 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="bg-slate-950 border-slate-800 text-white pl-9 focus-visible:ring-amber-500"
+                                    suppressHydrationWarning
+                                />
+                            </div>
                         </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="password" className="text-slate-300">Security Key</Label>
-                        <div className="relative">
-                            <LockKeyhole className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input 
-                                id="password" 
-                                type="password" 
-                                placeholder="••••••••••••"
-                                required 
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="bg-slate-950 border-slate-800 text-white pl-9 focus-visible:ring-amber-500"
-                                suppressHydrationWarning
-                            />
+                        <div className="space-y-2">
+                            <Label htmlFor="password" className="text-slate-300">Security Key</Label>
+                            <div className="relative">
+                                <LockKeyhole className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                                <Input 
+                                    id="password" 
+                                    type="password" 
+                                    placeholder="••••••••••••"
+                                    required 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="bg-slate-950 border-slate-800 text-white pl-9 focus-visible:ring-amber-500"
+                                    suppressHydrationWarning
+                                />
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div className="pt-2">
-                        <Button 
-                            type="submit" 
-                            size="lg" 
-                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold" 
-                            disabled={isPending}
-                            suppressHydrationWarning
-                        >
-                            {isPending ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : null}
-                            {isPending ? 'Authenticating Secure Session...' : 'Initialize Command Center'}
-                        </Button>
-                    </div>
-                </form>
+                        
+                        <div className="pt-2">
+                            <Button 
+                                type="submit" 
+                                size="lg" 
+                                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold" 
+                                disabled={isPending}
+                                suppressHydrationWarning
+                            >
+                                {isPending ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : null}
+                                {isPending ? 'Authenticating Secure Session...' : 'Initialize Command Center'}
+                            </Button>
+                        </div>
+                    </form>
+                )}
                 
                 <div className="text-center">
                     <p className="text-xs text-slate-600 font-mono">
