@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "certificate_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "residentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateRequested",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "barangays",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
