@@ -1,155 +1,191 @@
+
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { toPng } from 'html-to-image';
+import QRCode from 'react-qr-code';
+import { 
+  Download, 
+  ArrowRight, 
+  CheckCircle2, 
+  ShieldCheck,
+  Share2,
+  Award,
+  Loader2
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Download, ArrowRight, ShieldCheck, Award } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
 
 interface SuccessStepProps {
   tenantData: {
     barangayName: string;
-    slug: string;
-    adminEmail: string;
-    adminName: string;
     city: string;
     province: string;
+    adminName: string;
+    adminEmail: string;
+    tenantId: string;
   };
-  onComplete?: () => void;
+  onComplete: () => void;
 }
 
-export function SuccessStep({ tenantData, onComplete }: SuccessStepProps) {
+export default function SuccessStep({ tenantData, onComplete }: SuccessStepProps) {
   const certificateRef = useRef<HTMLDivElement>(null);
+  const [serialKey, setSerialKey] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { toast } = useToast();
 
-  const handleDownloadCertificate = async () => {
+  useEffect(() => {
+    // Generate a random serial key on mount
+    const randomString = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const timestamp = Date.now().toString().substring(9);
+    setSerialKey(`KGOV-${randomString}-${timestamp}`);
+  }, []);
+
+  const handleDownload = async () => {
     if (certificateRef.current === null) {
       return;
     }
 
+    setIsDownloading(true);
     try {
-      const dataUrl = await toPng(certificateRef.current, { cacheBust: true, });
+      const dataUrl = await toPng(certificateRef.current, { cacheBust: true, pixelRatio: 3 });
       const link = document.createElement('a');
-      link.download = `certificate-of-commissioning-${tenantData.slug}.png`;
+      link.download = `Certificate-Commissioning-${tenantData.tenantId}.png`;
       link.href = dataUrl;
       link.click();
+      toast({ title: "Certificate Downloaded", description: "The digital copy has been saved to your device." });
     } catch (err) {
-      console.error('Could not download certificate', err);
+      console.error(err);
+      toast({ variant: "destructive", title: "Download Failed", description: "Could not generate image. Please try again." });
+    } finally {
+      setIsDownloading(false);
     }
-  };
-
-  const handleEnterCommandCenter = () => {
-    // Determine Environment
-    const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
-    const protocol = window.location.protocol;
-    
-    // Construct Subdomain URL
-    // Note: In Cloud Workstations or preview envs, subdomains might not work directly. 
-    // We fallback to a query param or path approach if in a special env, but following the prompt requirements:
-    
-    let redirectUrl = '';
-    
-    if (isLocal) {
-        redirectUrl = `${protocol}//${tenantData.slug}.localhost:3000/login?email=${encodeURIComponent(tenantData.adminEmail)}`;
-    } else {
-        // Production
-        redirectUrl = `https://${tenantData.slug}.klarogov.com/login?email=${encodeURIComponent(tenantData.adminEmail)}`;
-    }
-
-    // Since this is a demo environment where wildcards might not be set up, 
-    // we might want a fallback to just /dashboard if onComplete is not passed.
-    // However, fulfilling the prompt requirement:
-    window.location.href = redirectUrl;
-    
-    if (onComplete) onComplete();
   };
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-8 animate-in fade-in zoom-in duration-700">
+    <div className="flex flex-col items-center justify-center p-4 min-h-[80vh] w-full animate-in fade-in zoom-in duration-700">
       
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center justify-center p-3 bg-amber-500/10 rounded-full mb-4 ring-1 ring-amber-500/20">
-            <Award className="h-8 w-8 text-amber-500" />
+      {/* HEADER SECTION */}
+      <div className="text-center space-y-4 mb-8 max-w-2xl">
+        <div className="mx-auto bg-yellow-500/10 w-16 h-16 rounded-full flex items-center justify-center mb-6 ring-4 ring-yellow-500/20">
+            <Award className="h-8 w-8 text-yellow-500" />
         </div>
-        <h1 className="text-4xl font-serif font-bold text-white tracking-tight">
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white font-serif">
           Mabuhay, {tenantData.barangayName}!
         </h1>
-        <p className="text-zinc-400 max-w-md mx-auto">
-          Your digital vault has been successfully provisioned and secured on the KlaroGov network.
+        <p className="text-lg text-zinc-400">
+          Your digital fortress is commissioned. A new era of transparent and efficient governance begins today.
         </p>
       </div>
 
-      {/* Certificate Card (The logic to be captured) */}
-      <div className="relative group">
-          <div ref={certificateRef} className="w-[600px] bg-white text-slate-900 p-8 rounded-lg shadow-2xl border-[8px] border-double border-slate-200 relative overflow-hidden">
-             {/* Certificate Background Pattern */}
-             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
-                  style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-             </div>
-             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 via-amber-500 to-red-600"></div>
+      {/* CERTIFICATE DISPLAY */}
+      <div className="relative group perspective-1000 mb-10 w-full max-w-3xl">
+        <div 
+            ref={certificateRef}
+            className="bg-[#fdfbf7] text-slate-900 p-8 md:p-12 rounded-lg shadow-2xl border-[16px] border-double border-[#1e293b] relative overflow-hidden"
+            style={{ 
+                backgroundImage: 'url("https://www.transparenttextures.com/patterns/cream-paper.png")',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+            }}
+        >
+            {/* Watermark / Background Seal */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+                <ShieldCheck className="w-96 h-96 text-slate-900" />
+            </div>
 
-             <div className="text-center space-y-6 py-6 border border-slate-300 h-full flex flex-col justify-center items-center">
-                 {/* Seal */}
-                 <div className="relative h-24 w-24 mx-auto mb-2">
-                     <Image src="/KlaroGov Logo.png" alt="Official Seal" fill className="object-contain opacity-80 grayscale" />
-                 </div>
+            {/* Corner Ornaments */}
+            <div className="absolute top-4 left-4 w-16 h-16 border-t-4 border-l-4 border-yellow-600 rounded-tl-3xl opacity-50"></div>
+            <div className="absolute top-4 right-4 w-16 h-16 border-t-4 border-r-4 border-yellow-600 rounded-tr-3xl opacity-50"></div>
+            <div className="absolute bottom-4 left-4 w-16 h-16 border-b-4 border-l-4 border-yellow-600 rounded-bl-3xl opacity-50"></div>
+            <div className="absolute bottom-4 right-4 w-16 h-16 border-b-4 border-r-4 border-yellow-600 rounded-br-3xl opacity-50"></div>
 
-                 <div className="space-y-1">
-                     <p className="uppercase tracking-[0.2em] text-xs font-semibold text-slate-500">Republic of the Philippines</p>
-                     <p className="uppercase tracking-[0.2em] text-xs font-semibold text-slate-500">KlaroGov Digital Registry</p>
-                 </div>
+            {/* Certificate Content */}
+            <div className="relative z-10 flex flex-col items-center text-center space-y-6">
+                <div className="uppercase tracking-[0.3em] text-xs font-semibold text-slate-500">Official Document</div>
+                
+                <h2 className="text-3xl md:text-4xl font-serif font-bold text-[#1e293b] border-b-2 border-yellow-500 pb-4 px-8">
+                    Certificate of Digital Commissioning
+                </h2>
 
-                 <h2 className="font-serif text-3xl font-bold text-slate-800 px-8 leading-tight">
-                     Certificate of Digital Commissioning
-                 </h2>
+                <p className="text-sm md:text-base text-slate-600 italic max-w-lg leading-relaxed font-serif">
+                    This document certifies that the local government unit identified below has successfully established its secure digital infrastructure within the KlaroGov National Network.
+                </p>
 
-                 <div className="px-12 text-sm text-slate-600 leading-relaxed">
-                     <p>This certifies that the Local Government Unit of</p>
-                     <p className="text-2xl font-serif font-bold text-blue-900 my-4 border-b border-slate-300 pb-2 inline-block min-w-[300px]">
-                         {tenantData.barangayName}
-                     </p>
-                     <p>
-                        located in {tenantData.city}, {tenantData.province}, has officially established its secure digital node on the KlaroGov Network.
-                     </p>
-                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-lg py-6">
+                    <div className="text-left space-y-1">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-400">Jurisdiction</p>
+                        <p className="font-bold text-lg text-[#1e293b]">{tenantData.barangayName}</p>
+                        <p className="text-sm text-slate-600">{tenantData.city}, {tenantData.province}</p>
+                    </div>
+                    <div className="text-left space-y-1">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-400">Authorized Custodian</p>
+                        <p className="font-bold text-lg text-[#1e293b]">{tenantData.adminName}</p>
+                        <p className="text-sm text-slate-600">{tenantData.adminEmail}</p>
+                    </div>
+                </div>
 
-                 <div className="grid grid-cols-2 gap-12 w-full px-16 mt-8 pt-4">
-                     <div className="text-center">
-                         <p className="font-serif font-bold text-slate-900">{tenantData.adminName}</p>
-                         <div className="border-t border-slate-400 mt-1 mx-4"></div>
-                         <p className="text-[10px] uppercase text-slate-500 mt-1">Authorized Custodian</p>
-                     </div>
-                     <div className="text-center">
-                         <p className="font-serif font-bold text-slate-900">{new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                         <div className="border-t border-slate-400 mt-1 mx-4"></div>
-                         <p className="text-[10px] uppercase text-slate-500 mt-1">Date of Commissioning</p>
-                     </div>
-                 </div>
+                <div className="flex flex-col md:flex-row items-center justify-between w-full border-t border-slate-200 pt-6 mt-4">
+                    <div className="text-left space-y-2 mb-4 md:mb-0">
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="border-yellow-600 text-yellow-700 bg-yellow-50 font-mono text-xs">
+                                OFFICIAL
+                            </Badge>
+                            <span className="text-xs text-slate-400 font-mono">ID: {tenantData.tenantId}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400">
+                            Commissioned on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                    </div>
 
-                 <div className="absolute bottom-4 right-4 text-[8px] text-slate-300 font-mono">
-                     ID: {tenantData.slug} • SECURE HASH: {Math.random().toString(36).substring(7).toUpperCase()}
-                 </div>
-             </div>
-          </div>
+                    <div className="flex items-center gap-4">
+                        <div className="text-right hidden md:block">
+                            <p className="text-[10px] uppercase text-slate-400 font-semibold mb-1">Digital Verification</p>
+                            <p className="text-xs font-mono text-slate-600 tracking-widest">{serialKey}</p>
+                        </div>
+                        <div className="bg-white p-2 rounded shadow-sm border border-slate-100">
+                            {serialKey && (
+                                <QRCode 
+                                    value={JSON.stringify({
+                                        key: serialKey,
+                                        tenant: tenantData.tenantId,
+                                        verifier: "https://klarogov.ph/verify"
+                                    })} 
+                                    size={64} 
+                                    level="M"
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {/* Hover Effect Hint */}
+        <div className="absolute -bottom-8 w-full text-center text-xs text-zinc-500 animate-pulse">
+            This certificate is a valid proof of system ownership.
+        </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-4 w-full max-w-md">
-         <Button 
+      {/* ACTION BUTTONS */}
+      <div className="flex flex-col sm:flex-row gap-4 mt-8 w-full max-w-md">
+        <Button 
             variant="outline" 
-            className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-            onClick={handleDownloadCertificate}
-         >
-             <Download className="mr-2 h-4 w-4" /> Download
-         </Button>
-         <Button 
-            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-900/20"
-            onClick={handleEnterCommandCenter}
-         >
-             Enter Command Center <ArrowRight className="ml-2 h-4 w-4" />
-         </Button>
+            className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white h-12"
+            onClick={handleDownload}
+            disabled={isDownloading}
+        >
+            {isDownloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            Save Copy
+        </Button>
+        <Button 
+            className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold h-12 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all hover:shadow-[0_0_25px_rgba(234,179,8,0.7)]"
+            onClick={onComplete}
+        >
+            Enter Command Center <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
       </div>
 
     </div>
