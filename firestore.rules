@@ -18,7 +18,12 @@ service cloud.firestore {
     // --- Global User Profiles (Optional, if used) ---
     match /users/{userId} {
       // Users can read/write their own profile. Super Admins can read/write all.
-      allow read, write: if (request.auth != null && request.auth.uid == userId) || isSuperAdmin();
+      // Important: Captains also need to Read/Write users in their tenant to add officials.
+      // We check if the target user has the same tenantId as the requester.
+      allow read: if (request.auth != null && request.auth.uid == userId) || isSuperAdmin() || (request.auth.token.tenantId == resource.data.tenantId);
+      allow write: if (request.auth != null && request.auth.uid == userId) || isSuperAdmin() || (request.auth.token.tenantId == resource.data.tenantId);
+      // Allow creation if assigning to own tenant
+      allow create: if request.auth != null && request.resource.data.tenantId == request.auth.token.tenantId;
     }
 
     // --- Logical Vault Structure ---
@@ -34,7 +39,7 @@ service cloud.firestore {
 
       // 1. Root Vault Document (e.g., .../barangays/brgy-genesis)
       allow read: if isTenantMember() || isSuperAdmin();
-      allow write: if isSuperAdmin(); // Only Super Admin (or Admin SDK) writes the root metadata
+      allow write: if isSuperAdmin() || isTenantMember(); // Allow Captains to update their own root profile (settings)
 
       // 2. All Subcollections within the Vault (Settings, Residents, Assets, etc.)
       // {document=**} is a recursive wildcard.

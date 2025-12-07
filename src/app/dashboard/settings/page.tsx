@@ -35,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import ProgramsList from './programs/programs-list';
 import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import { updateDoc } from 'firebase/firestore';
+import { getRegionName } from '@/lib/data/psgc'; // Use Region Utility
 
 const profileFormSchema = z.object({
   barangayName: z.string().min(1, "Barangay name is required"),
@@ -108,12 +109,20 @@ export default function SettingsPage() {
     // Hydrate forms when profile loads
     useEffect(() => {
         if (profile) {
+            // NOTE: The provisioning API logic puts data in `profile.settings` or `profile` root?
+            // The `api/admin/provision` puts basic data in `vault/settings/general`
+            // Let's ensure we map it correctly.
+            // Some old logic might put data in root of vault.
+            
+            // If Region is missing in settings, try to infer it if we have province code logic,
+            // or rely on what was saved during onboarding.
+            
             profileForm.reset({
-                barangayName: profile.name || "",
-                city: profile.city || "",
-                province: profile.province || "",
-                region: profile.region || "",
-                zipCode: profile.zipCode || "",
+                barangayName: profile.barangayName || profile.name || "",
+                city: profile.location?.city || profile.city || "",
+                province: profile.location?.province || profile.province || "",
+                region: profile.location?.region || profile.region || "", // Ensure this maps
+                zipCode: profile.location?.zipCode || profile.zipCode || "",
                 barangayHallAddress: profile.barangayHallAddress || "",
                 contactNumber: profile.contactNumber || "",
                 email: profile.email || "",
@@ -135,12 +144,19 @@ export default function SettingsPage() {
         if (!docRef) return;
         startProfileTransition(async () => {
             try {
+                // Update both root metadata and structured location for compatibility
                 await updateDoc(docRef, {
+                    barangayName: data.barangayName,
+                    'location.city': data.city,
+                    'location.province': data.province,
+                    'location.region': data.region,
+                    'location.zipCode': data.zipCode,
+                    // Legacy/Root fallbacks
                     name: data.barangayName,
                     city: data.city,
                     province: data.province,
                     region: data.region,
-                    zipCode: data.zipCode,
+                    // Other fields
                     barangayHallAddress: data.barangayHallAddress,
                     contactNumber: data.contactNumber,
                     email: data.email,
