@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     // NOTE: This is a public endpoint for the Onboarding Demo.
     // In production, this would require an Invite Code or Payment Verification.
     
-    const { province, city, barangay } = await req.json();
+    const { province, city, barangay, region } = await req.json();
 
     if (!province || !city || !barangay) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -45,11 +45,18 @@ export async function POST(req: Request) {
             name: barangay,
             city: city,
             province: province,
+            region: region || '', // Save region
             fullPath: vaultPath,
             status: 'Live',
             createdAt: Timestamp.now(),
             settings: {
                 allowGlobalSearch: false, 
+            },
+            location: {
+                region: region || '',
+                province: province,
+                city: city,
+                barangay: barangay
             }
         }, { merge: true });
 
@@ -59,6 +66,7 @@ export async function POST(req: Request) {
             province,
             city,
             barangay,
+            region: region || '',
             tenantId: tenantSlug
         }, { merge: true });
     });
