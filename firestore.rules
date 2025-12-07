@@ -3,16 +3,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // --- Helper Functions ---
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.role == 'super_admin';
+    }
+
     // --- Tenant Directory (Public Read for resolving paths, Write restricted) ---
     // Used by the client to look up "Where is bacoor-brgy-genesis located?"
     match /tenant_directory/{slug} {
       allow read: if true; 
-      allow write: if false; // Only Admin SDK can write
+      allow write: if isSuperAdmin(); // Allow Super Admins to manage directory via client if needed
     }
     
     // --- Global User Profiles (Optional, if used) ---
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Users can read/write their own profile. Super Admins can read/write all.
+      allow read, write: if (request.auth != null && request.auth.uid == userId) || isSuperAdmin();
     }
 
     // --- Logical Vault Structure ---
@@ -21,20 +27,19 @@ service cloud.firestore {
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
       // Helper: Validates that the user's custom claim 'tenantPath' strictly matches this document's path.
-      // The claim is set by the Admin SDK during provisioning/login.
       function isTenantMember() {
         return request.auth != null && 
                request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
       }
 
       // 1. Root Vault Document (e.g., .../barangays/brgy-genesis)
-      allow read: if isTenantMember();
-      allow write: if false; // Only Admin SDK (Provisioning) writes the root metadata
+      allow read: if isTenantMember() || isSuperAdmin();
+      allow write: if isSuperAdmin(); // Only Super Admin (or Admin SDK) writes the root metadata
 
       // 2. All Subcollections within the Vault (Settings, Residents, Assets, etc.)
       // {document=**} is a recursive wildcard.
       match /{document=**} {
-        allow read, write: if isTenantMember();
+        allow read, write: if isTenantMember() || isSuperAdmin();
       }
     }
 
@@ -47,9 +52,10 @@ service cloud.firestore {
     match /barangays/{barangayId}/certificate_requests/{document=**} { allow read, write: if true; }
     match /barangays/{barangayId}/ordinances/{document=**} { allow read, write: if true; }
     
-    // Default Fallback (Block everything else)
+    // Default Fallback
+    // Allow Super Admin to access any other collections (like 'system' or 'stats')
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isSuperAdmin();
     }
   }
 }
