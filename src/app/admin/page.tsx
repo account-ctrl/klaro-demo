@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,24 +8,87 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye } from "lucide-react";
 import Link from 'next/link';
 import { Progress } from "@/components/ui/progress";
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 
-// Mock Data - Owner/Big Data View
-const kpiData = [
-    { title: "Total Population Digitized", value: "8,245,102", trend: "+12.5k today", subtext: "Live global aggregate", icon: Users, color: "text-blue-500" },
-    { title: "Households Mapped", value: "2,100,500", trend: "+540 today", subtext: "GIS validated points", icon: MapIcon, color: "text-emerald-500" },
-    { title: "Active Barangays", value: "12,405", trend: "+45 this month", subtext: "SaaS Tenants", icon: ShieldCheck, color: "text-amber-500" },
-    { title: "Data Completeness", value: "85%", trend: "+2%", subtext: "High Quality Records", icon: Database, color: "text-purple-500" },
-];
-
-const tenants = [
-    { id: "cebu-luz", name: "Brgy. Luz", province: "Cebu", residents: "12,500", households: "3,200", lastActivity: "10 mins ago", status: "Live", quality: 92 },
-    { id: "ncr-pob", name: "Poblacion", province: "Makati", residents: "45,000", households: "11,500", lastActivity: "1 hour ago", status: "Live", quality: 88 },
-    { id: "dvo-mat", name: "Matina", province: "Davao", residents: "200", households: "50", lastActivity: "30 days ago", status: "Stale", quality: 45 },
-    { id: "ilo-lap", name: "Lapuz", province: "Iloilo", residents: "8,400", households: "2,100", lastActivity: "2 hours ago", status: "Live", quality: 78 },
-    { id: "cav-bac", name: "Bacoor West", province: "Cavite", residents: "15,200", households: "3,800", lastActivity: "5 mins ago", status: "Live", quality: 95 },
-];
+// Define the shape of our Firestore Barangay Document
+type Barangay = {
+    id: string; 
+    name: string;
+    city: string;
+    province: string;
+    status: 'Live' | 'Onboarding' | 'Untapped';
+    population: number;
+    households: number;
+    quality: number;
+    lastActivity: any; 
+    createdAt: any; 
+};
 
 export default function AdminDashboardPage() {
+  const firestore = useFirestore();
+
+  // Fetch Live Data
+  const barangaysQuery = useMemoFirebase(() => {
+      if (!firestore) return null;
+      return query(
+          collection(firestore, 'barangays'),
+          orderBy('createdAt', 'desc'),
+          limit(50) // Limit for dashboard view
+      );
+  }, [firestore]);
+
+  const { data: realBarangays, isLoading } = useCollection<Barangay>(barangaysQuery);
+
+  // Calculate Aggregates
+  const aggregates = useMemo(() => {
+      if (!realBarangays) return { population: 0, households: 0, active: 0, quality: 0 };
+      
+      return realBarangays.reduce((acc, curr) => ({
+          population: acc.population + (curr.population || 0),
+          households: acc.households + (curr.households || 0),
+          active: acc.active + (curr.status === 'Live' ? 1 : 0),
+          quality: acc.quality + (curr.quality || 0)
+      }), { population: 0, households: 0, active: 0, quality: 0 });
+  }, [realBarangays]);
+
+  const averageQuality = realBarangays?.length ? Math.round(aggregates.quality / realBarangays.length) : 0;
+
+  const kpiData = [
+    { 
+        title: "Total Population Digitized", 
+        value: aggregates.population.toLocaleString(), 
+        trend: "+Live", 
+        subtext: "Global aggregate", 
+        icon: Users, 
+        color: "text-blue-500" 
+    },
+    { 
+        title: "Households Mapped", 
+        value: aggregates.households.toLocaleString(), 
+        trend: "+Live", 
+        subtext: "GIS validated points", 
+        icon: MapIcon, 
+        color: "text-emerald-500" 
+    },
+    { 
+        title: "Active Barangays", 
+        value: aggregates.active.toLocaleString(), 
+        trend: realBarangays ? `of ${realBarangays.length} Provisioned` : "Loading...", 
+        subtext: "SaaS Tenants", 
+        icon: ShieldCheck, 
+        color: "text-amber-500" 
+    },
+    { 
+        title: "Data Completeness", 
+        value: `${averageQuality}%`, 
+        trend: "Avg", 
+        subtext: "High Quality Records", 
+        icon: Database, 
+        color: "text-purple-500" 
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
@@ -61,7 +124,7 @@ export default function AdminDashboardPage() {
                         <CardTitle className="text-lg text-white flex items-center gap-2">
                              <Layers className="h-5 w-5 text-amber-500" /> Population Density Heatmap
                         </CardTitle>
-                        <CardDescription className="text-slate-400">Real-time aggregation of 2.1M GIS household points.</CardDescription>
+                        <CardDescription className="text-slate-400">Real-time aggregation of {aggregates.households.toLocaleString()} GIS household points.</CardDescription>
                     </div>
                     <div className="flex gap-2">
                         <Badge variant="outline" className="border-slate-700 text-slate-300">Cluster View</Badge>
@@ -81,7 +144,7 @@ export default function AdminDashboardPage() {
                          <div className="text-center space-y-2">
                             <MapIcon className="h-16 w-16 text-slate-600 mx-auto" />
                             <p className="text-slate-500 text-sm">Interactive WebGL Map Component</p>
-                            <p className="text-xs text-slate-600 font-mono">Rendering 2.1M Points...</p>
+                            <p className="text-xs text-slate-600 font-mono">Rendering {aggregates.households > 0 ? aggregates.households : 'Zero'} Points...</p>
                          </div>
                     </div>
                  </div>
@@ -182,37 +245,51 @@ export default function AdminDashboardPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {tenants.map((tenant) => (
-                        <TableRow key={tenant.id} className="hover:bg-slate-50">
-                            <TableCell className="font-mono text-xs text-slate-500">{tenant.id}</TableCell>
-                            <TableCell className="font-medium text-slate-900">{tenant.name}</TableCell>
-                            <TableCell className="text-slate-600">{tenant.province}</TableCell>
-                            <TableCell className="font-medium">{tenant.residents}</TableCell>
-                            <TableCell className="text-slate-600">{tenant.households}</TableCell>
-                             <TableCell>
-                                <div className="flex items-center gap-2">
-                                    <Progress value={tenant.quality} className={`h-1.5 w-16 ${tenant.quality > 80 ? '[&>div]:bg-green-500' : tenant.quality > 50 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'}`} />
-                                    <span className="text-xs text-slate-500">{tenant.quality}%</span>
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-slate-500 text-xs">{tenant.lastActivity}</TableCell>
-                            <TableCell>
-                                <Badge variant="outline" className={`border-0 ${
-                                    tenant.status === 'Live' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-                                }`}>
-                                    <div className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
-                                        tenant.status === 'Live' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                                    }`} />
-                                    {tenant.status}
-                                </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group">
-                                    <Eye className="h-3.5 w-3.5 mr-1" /> Inspect
-                                </Button>
+                    {isLoading ? (
+                        <TableRow>
+                            <TableCell colSpan={9} className="h-24 text-center">Loading tenants...</TableCell>
+                        </TableRow>
+                    ) : realBarangays && realBarangays.length > 0 ? (
+                        realBarangays.map((tenant) => (
+                            <TableRow key={tenant.id} className="hover:bg-slate-50">
+                                <TableCell className="font-mono text-xs text-slate-500">{tenant.id}</TableCell>
+                                <TableCell className="font-medium text-slate-900">{tenant.name}</TableCell>
+                                <TableCell className="text-slate-600">{tenant.province}</TableCell>
+                                <TableCell className="font-medium">{tenant.population.toLocaleString()}</TableCell>
+                                <TableCell className="text-slate-600">{tenant.households.toLocaleString()}</TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        <Progress value={tenant.quality} className={`h-1.5 w-16 ${tenant.quality > 80 ? '[&>div]:bg-green-500' : tenant.quality > 50 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'}`} />
+                                        <span className="text-xs text-slate-500">{tenant.quality}%</span>
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-slate-500 text-xs">{tenant.lastActivity ? 'Active recently' : 'No activity'}</TableCell>
+                                <TableCell>
+                                    <Badge variant="outline" className={`border-0 ${
+                                        tenant.status === 'Live' ? 'bg-green-50 text-green-600' : 
+                                        tenant.status === 'Onboarding' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'
+                                    }`}>
+                                        <div className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
+                                            tenant.status === 'Live' ? 'bg-green-500 animate-pulse' : 
+                                            tenant.status === 'Onboarding' ? 'bg-blue-500' : 'bg-slate-400'
+                                        }`} />
+                                        {tenant.status}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group">
+                                        <Eye className="h-3.5 w-3.5 mr-1" /> Inspect
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                                No commissioned nodes found. Start onboarding in the "Commissioning" flow.
                             </TableCell>
                         </TableRow>
-                    ))}
+                    )}
                 </TableBody>
             </Table>
           </CardContent>
