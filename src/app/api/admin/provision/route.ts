@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase/admin'; 
 import { Timestamp } from 'firebase-admin/firestore';
+import { Paths, slugify } from '@/lib/firebase/paths';
 
 export async function POST(req: Request) {
   try {
@@ -11,15 +12,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const slugify = (text: string) => text.toLowerCase().replace(/[\s\.]+/g, '-').replace(/[^\w-]+/g, '');
-
-    const provinceSlug = slugify(province);
-    const citySlug = slugify(city);
-    const barangaySlug = slugify(barangayName);
-
-    // 1. Construct the Tenant Path
-    const vaultPath = `provinces/${provinceSlug}/cities/${citySlug}/barangays/${barangaySlug}`;
-    const tenantSlug = `${citySlug}-${barangaySlug}`;
+    // 1. Construct the Tenant Path using the Helper
+    const vaultPath = Paths.getVaultRoot(province, city, barangayName);
+    const tenantSlug = `${slugify(city)}-${slugify(barangayName)}`;
 
     // 2. Auth: Create User
     let uid;
@@ -48,10 +43,10 @@ export async function POST(req: Request) {
 
     // 4. Transactional Write
     await adminDb.runTransaction(async (t) => {
-        const directoryRef = adminDb.collection('tenant_directory').doc(tenantSlug);
+        const directoryRef = adminDb.doc(Paths.getDirectoryDocPath(tenantSlug));
         const tenantRef = adminDb.doc(vaultPath);
-        const settingsRef = adminDb.doc(`${vaultPath}/settings/general`);
-        const userProfileRef = adminDb.collection('users').doc(uid); // For client-side fallback
+        const settingsRef = adminDb.doc(Paths.getSettingsPath(vaultPath));
+        const userProfileRef = adminDb.collection('users').doc(uid); 
 
         // Step A: Directory
         t.set(directoryRef, {
