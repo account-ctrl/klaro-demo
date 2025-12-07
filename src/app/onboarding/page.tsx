@@ -267,11 +267,13 @@ export default function OnboardingPage() {
                 // CALL PUBLIC PROVISION API
                 try {
                     const captain = officialsData.officials.find(o => o.role === 'Captain');
+                    const inviteToken = searchParams.get('token'); // Get Invite Token
 
                     const res = await fetch('/api/public/provision', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            inviteToken, // Pass invite token to backend
                             province: profileData.province,
                             city: profileData.city,
                             barangay: profileData.barangayName,
