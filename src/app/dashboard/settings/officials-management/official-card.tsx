@@ -38,24 +38,29 @@ export function OfficialCard({
     committees,
     systemRoles,
  }: OfficialCardProps) {
+  
+  // Safe access for fullName
+  const displayName = official.fullName || "Unknown Official";
+  const initials = displayName.charAt(0).toUpperCase();
+  const displayEmail = official.email ? official.email.split('@')[0] : 'user';
 
   return (
     <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center gap-4">
         <Avatar className="h-16 w-16">
-          <AvatarImage src={`https://i.pravatar.cc/150?u=${official.userId}`} alt={official.fullName} />
-          <AvatarFallback>{official.fullName.charAt(0).toUpperCase()}</AvatarFallback>
+          <AvatarImage src={`https://i.pravatar.cc/150?u=${official.userId}`} alt={displayName} />
+          <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
         <div>
-          <CardTitle className="text-lg">{official.fullName}</CardTitle>
-          <CardDescription>@{official.email?.split('@')[0] || 'user'}</CardDescription>
+          <CardTitle className="text-lg">{displayName}</CardTitle>
+          <CardDescription>@{displayEmail}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 flex-grow">
         <div className="flex items-start gap-2">
             <Briefcase className="h-4 w-4 mt-1 text-muted-foreground" />
             <div>
-                <p className="text-sm font-semibold">{official.position}</p>
+                <p className="text-sm font-semibold">{official.position || 'No Position'}</p>
                 <p className="text-xs text-muted-foreground">Official Position</p>
             </div>
         </div>
@@ -80,7 +85,7 @@ export function OfficialCard({
         <div className="flex justify-between items-center w-full mb-4">
              <div className="flex items-center gap-2">
                  <CheckSquare className="h-4 w-4 text-muted-foreground" />
-                 <Badge variant={getSystemRoleBadgeVariant(official.systemRole)}>{official.systemRole}</Badge>
+                 <Badge variant={getSystemRoleBadgeVariant(official.systemRole || 'User')}>{official.systemRole || 'User'}</Badge>
             </div>
              <p className="text-xs text-muted-foreground">ID: ...{official.userId ? official.userId.slice(-6) : '???'}</p>
         </div>
@@ -92,7 +97,7 @@ export function OfficialCard({
                 committees={committees} 
                 systemRoles={systemRoles} 
             />
-            <DeleteOfficial recordId={official.userId} recordName={official.fullName} onDelete={onDelete} />
+            <DeleteOfficial recordId={official.userId} recordName={displayName} onDelete={onDelete} />
         </div>
       </CardFooter>
     </Card>

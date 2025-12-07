@@ -1,8 +1,16 @@
 
 'use client';
 
-import React, { useState } from 'react';
-import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { 
+    collection, 
+    doc, 
+    serverTimestamp, 
+    writeBatch, 
+    query, 
+    where, 
+    onSnapshot 
+} from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -42,46 +50,27 @@ export default function OfficialsList() {
     const { toast } = useToast();
     const { tenantPath, tenantId } = useTenantContext(); // SECURE CONTEXT
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
-
-    // FIX: Do NOT use '/users' (Global). Use the tenant-scoped collection.
-    // However, officials might need login access, so they are hybrid.
-    // PATTERN: 
-    // 1. Create a shadow profile in the tenant vault for UI listing (this component).
-    // 2. The actual Auth user is global, but mapped via 'tenantId'.
-    //
-    // For this "List" component, we should read from the Tenant Vault's 'officials' subcollection if it exists,
-    // OR filter the global 'users' collection by 'tenantId'.
-    //
-    // SaaS Best Practice: Store "Staff" in the tenant's own DB path for isolation, 
-    // and sync critical fields to the global 'users' collection for Auth.
-    //
-    // CURRENT IMPLEMENTATION (Global Query):
-    const officialsCollectionRef = useMemoFirebase(() => {
-        if (!firestore || !tenantId) return null;
-        // Query global users filtered by THIS tenant.
-        // This ensures Captains only see THEIR staff.
-        const usersRef = collection(firestore, 'users');
-        const q = import('firebase/firestore').then(({ query, where }) => 
-             query(usersRef, where('tenantId', '==', tenantId))
-        );
-        return q;
-    }, [firestore, tenantId]);
-
-    // Note: useCollection handles the promise from useMemoFirebase if customized, 
-    // but standard hook might expect a direct query. Let's fix the query construction.
+    
+    // We maintain local state for officials to allow flexible querying (e.g. searching/filtering later)
+    // and to handle the 'users' global collection pattern.
     const [officials, setOfficials] = useState<Official[]>([]);
     const [loading, setLoading] = useState(true);
 
-    React.useEffect(() => {
-        if(!firestore || !tenantId) return;
+    useEffect(() => {
+        if(!firestore || !tenantId) {
+            if (firestore && !tenantId) setLoading(false); // If firestore ready but no tenantId (unlikely in this view), stop loading.
+            return;
+        }
         
-        // Manual subscription to ensure complex query works
-        const { collection, query, where, onSnapshot } = require('firebase/firestore');
+        // Query global users filtered by THIS tenant.
         const q = query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
         
-        const unsubscribe = onSnapshot(q, (snapshot: any) => {
-            const data = snapshot.docs.map((doc: any) => ({ ...doc.data(), userId: doc.id })) as Official[];
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map((doc) => ({ ...doc.data(), userId: doc.id })) as Official[];
             setOfficials(data);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching officials:", error);
             setLoading(false);
         });
 
@@ -131,17 +120,7 @@ export default function OfficialsList() {
     const handleDelete = async (id: string, name: string) => {
         if (!firestore) return;
         
-        // Best Practice: Don't actually delete the user doc immediately if they have history.
-        // Soft delete (disable) is better for audit trails.
-        // But if we strictly want to remove them from the list:
-        
-        // 1. Call API to disable Auth (if they have a login)
-        // 2. Delete Firestore Doc
-        
         try {
-            // For now, simple doc delete (assuming cloud function cleans up auth)
-            // Or better: Update status to 'Inactive' / 'Deleted'
-            
             // OPTION A: Soft Delete (Recommended)
             // const docRef = doc(firestore, 'users', id);
             // updateDocumentNonBlocking(docRef, { status: 'Archived', tenantId: `${tenantId}_archived` });
@@ -166,8 +145,10 @@ export default function OfficialsList() {
 
         try {
             const batch = writeBatch(firestore);
+            const usersRef = collection(firestore, 'users');
+            
             sampleOfficials.forEach((official) => {
-                const newDocRef = doc(collection(firestore, 'users'));
+                const newDocRef = doc(usersRef);
                 batch.set(newDocRef, {
                     ...official,
                     userId: newDocRef.id,

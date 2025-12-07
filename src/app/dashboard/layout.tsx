@@ -99,10 +99,18 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
 
   const isEmergencyDashboard = pathname?.startsWith('/dashboard/emergency');
 
-  const handleLogout = async () => {
-    if(auth) {
-      await signOut(auth);
-      window.location.href = '/login'; // Hard reload to clear state
+  const handleLogout = async (e?: Event) => {
+    // e?.preventDefault(); // Optional: Prevent default if needed
+    try {
+        if(auth) {
+            await signOut(auth);
+        }
+        // Force redirect regardless of auth state to ensure user leaves the protected area
+        window.location.href = '/login';
+    } catch (error) {
+        console.error("Logout failed:", error);
+        // Fallback redirect
+        window.location.href = '/login';
     }
   };
 
@@ -202,7 +210,13 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
                         </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
+                    <DropdownMenuItem 
+                        onSelect={(e) => {
+                            e.preventDefault(); // Keep menu open briefly or prevent close race condition, but we redirect immediately
+                            handleLogout();
+                        }} 
+                        className="text-red-600 focus:text-red-600 cursor-pointer"
+                    >
                         <LogOut className="mr-2 h-4 w-4" />
                         <span>Sign out</span>
                     </DropdownMenuItem>

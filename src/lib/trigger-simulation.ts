@@ -1,11 +1,12 @@
 
-import { getFirestore, doc, runTransaction } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
 
 export async function updateSystemStats(updates: { population?: number, households?: number }) {
-    // Ensure Firebase is initialized
-    initializeFirebase();
-    const firestore = getFirestore();
+    // Ensure Firebase is initialized and get the same instance used elsewhere
+    const { firestore } = initializeFirebase();
+    
+    // const firestore = getFirestore(); // <-- Causing instance mismatch issues if multiple apps/contexts exist
     const statsRef = doc(firestore, 'system', 'stats');
     
     try {

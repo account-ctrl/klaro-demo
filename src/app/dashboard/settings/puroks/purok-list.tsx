@@ -1,8 +1,17 @@
 
 'use client';
 
-import React, { useState } from 'react';
-import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { 
+    collection, 
+    doc, 
+    serverTimestamp, 
+    writeBatch, 
+    query, 
+    where, 
+    onSnapshot,
+    DocumentData 
+} from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -44,34 +53,30 @@ export default function PurokList() {
 
     const puroksCollectionRef = useMemoFirebase(() => {
         if (!firestore || !tenantPath) return null;
-        return collection(firestore, `${tenantPath}/puroks`);
+        // Ensure path doesn't start with double slash if tenantPath has one
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return collection(firestore, `${safePath}/puroks`);
     }, [firestore, tenantPath]);
-    
-    // FIX: Removed the incorrect officialsQuery that was causing the crash.
-    // Instead, we will fetch officials manually if needed, or rely on a simpler pattern.
-    // The previous implementation tried to use 'useMemoFirebase' to return a promise of a query,
-    // but 'useCollection' expects a Query object directly, not a Promise.
-    
-    // For now, let's just fetch the collection reference, and filter in client or use a simpler query.
-    // Given we need 'where' clause which requires importing query/where from firebase/firestore...
-    // The safest way in this 'use client' file without top-level imports clashing is:
     
     const [officials, setOfficials] = useState<Official[]>([]);
     const [isLoadingOfficials, setIsLoadingOfficials] = useState(true);
 
-    React.useEffect(() => {
-        if(!firestore || !tenantId) return;
+    useEffect(() => {
+        if(!firestore || !tenantId) {
+            setIsLoadingOfficials(false); // Stop loading if requirements aren't met
+            return;
+        }
         
-        // Dynamic import to avoid SSR issues if any, but mostly to keep logic contained.
-        // Actually, since we already import 'collection' at top level, we can import 'query' and 'where' too.
-        // It is cleaner to do it standard way.
-        
-        const { query, where, onSnapshot } = require('firebase/firestore');
+        // Fetch officials (users) associated with this tenant
+        // Assuming 'users' collection is at root and has 'tenantId' field
         const q = query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
         
-        const unsubscribe = onSnapshot(q, (snapshot: any) => {
-            const data = snapshot.docs.map((doc: any) => ({ ...doc.data(), userId: doc.id })) as Official[];
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map((doc) => ({ ...doc.data(), userId: doc.id })) as Official[];
             setOfficials(data);
+            setIsLoadingOfficials(false);
+        }, (error) => {
+            console.error("Error fetching officials:", error);
             setIsLoadingOfficials(false);
         });
 
@@ -96,7 +101,8 @@ export default function PurokList() {
 
     const handleEdit = (updatedPurok: Purok) => {
         if (!firestore || !updatedPurok.purokId || !tenantPath) return;
-        const docRef = doc(firestore, `${tenantPath}/puroks/${updatedPurok.purokId}`);
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/puroks/${updatedPurok.purokId}`);
         const { purokId, ...dataToUpdate } = updatedPurok;
         updateDocumentNonBlocking(docRef, { ...dataToUpdate });
         toast({ title: "Purok Updated", description: `The record for ${updatedPurok.name} has been updated.`});
@@ -104,7 +110,8 @@ export default function PurokList() {
 
     const handleDelete = (id: string) => {
         if (!firestore || !tenantPath) return;
-        const docRef = doc(firestore, `${tenantPath}/puroks/${id}`);
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/puroks/${id}`);
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Purok Deleted", description: "The purok record has been permanently deleted." });
     };
@@ -119,9 +126,12 @@ export default function PurokList() {
         ];
 
         try {
+            const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
             const batch = writeBatch(firestore);
+            const collectionRef = collection(firestore, `${safePath}/puroks`);
+            
             samplePuroks.forEach((purok) => {
-                const newDocRef = doc(collection(firestore, `${tenantPath}/puroks`));
+                const newDocRef = doc(collectionRef); // Use doc(CollectionReference) to generate ID
                 batch.set(newDocRef, {
                     ...purok,
                     purokId: newDocRef.id,
@@ -140,9 +150,10 @@ export default function PurokList() {
         if (!firestore || !puroks || !tenantPath) return;
         
         try {
+            const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
             const batch = writeBatch(firestore);
             puroks.forEach((purok) => {
-                const docRef = doc(firestore, `${tenantPath}/puroks/${purok.purokId}`);
+                const docRef = doc(firestore, `${safePath}/puroks/${purok.purokId}`);
                 batch.delete(docRef);
             });
             await batch.commit();
