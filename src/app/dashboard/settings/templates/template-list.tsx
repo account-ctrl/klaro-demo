@@ -39,9 +39,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenantContext } from '@/lib/hooks/useTenant';
 
 type DocumentTemplateWithId = DocumentTemplate & { id?: string };
 
@@ -49,12 +47,13 @@ export default function TemplateList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
+    const { tenantPath } = useTenantContext();
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
     const templatesCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, `/barangays/${BARANGAY_ID}/document_templates`);
-    }, [firestore]);
+        if (!firestore || !tenantPath) return null;
+        return collection(firestore, `${tenantPath}/document_templates`);
+    }, [firestore, tenantPath]);
     
     const { data: templates, isLoading } = useCollection<DocumentTemplate>(templatesCollectionRef);
 
@@ -79,8 +78,8 @@ export default function TemplateList() {
 
     const handleEdit = (updatedTemplate: DocumentTemplateWithId) => {
         const docId = updatedTemplate.id || updatedTemplate.templateId;
-        if (!firestore || !docId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${docId}`);
+        if (!firestore || !docId || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/document_templates/${docId}`);
         const { templateId, id, createdAt, ...dataToUpdate } = updatedTemplate;
         
         const finalData = {
@@ -93,14 +92,14 @@ export default function TemplateList() {
     };
 
     const handleDelete = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/document_templates/${id}`);
+        if (!firestore || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/document_templates/${id}`);
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Template Deleted", description: "The document template has been permanently deleted." });
     };
 
     const handleResetDefaults = async () => {
-        if (!firestore || !user) return;
+        if (!firestore || !user || !tenantPath) return;
 
         const defaultTemplatesList = [
             { name: 'Barangay Clearance', description: 'Standard clearance for general purposes.', content: DEFAULT_BARANGAY_CLEARANCE },
@@ -116,7 +115,7 @@ export default function TemplateList() {
             // We iterate and create new docs. In a more complex app, we might check for duplicates first.
             // Here we just add them as new templates.
             defaultTemplatesList.forEach(tpl => {
-                const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/document_templates`));
+                const newDocRef = doc(collection(firestore, `${tenantPath}/document_templates`));
                 batch.set(newDocRef, {
                     templateId: newDocRef.id,
                     name: tpl.name,

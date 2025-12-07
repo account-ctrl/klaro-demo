@@ -32,34 +32,30 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
-
+import { useTenantContext } from '@/lib/hooks/useTenant';
 
 export default function ProgramsList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
+    const { tenantPath } = useTenantContext();
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
     const programsCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, `/barangays/${BARANGAY_ID}/programs`);
-    }, [firestore]);
+        if (!firestore || !tenantPath) return null;
+        return collection(firestore, `${tenantPath}/programs`);
+    }, [firestore, tenantPath]);
     
     const { data: programs, isLoading } = useCollection<Program>(programsCollectionRef);
 
     const handleAdd = (newProgram: ProgramFormValues) => {
         if (!programsCollectionRef || !user) return;
         
-        // Ensure newProgram data is clean and matches Types
         const payload = {
             name: newProgram.name,
             category: newProgram.category,
             description: newProgram.description || '',
-            // Optional: You might want to add createdAt here if not handled by server rules or if you want consistent client sorting immediately
-            // createdAt: serverTimestamp() 
+            createdAt: serverTimestamp() 
         };
         
         addDocumentNonBlocking(programsCollectionRef, payload)
@@ -77,8 +73,8 @@ export default function ProgramsList() {
     };
 
     const handleEdit = (updatedProgram: Program) => {
-        if (!firestore || !updatedProgram.programId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/programs/${updatedProgram.programId}`);
+        if (!firestore || !updatedProgram.programId || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/programs/${updatedProgram.programId}`);
         const { programId, ...dataToUpdate } = updatedProgram;
         updateDocumentNonBlocking(docRef, { ...dataToUpdate })
             .catch(error => {
@@ -89,8 +85,8 @@ export default function ProgramsList() {
     };
 
     const handleDelete = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/programs/${id}`);
+        if (!firestore || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/programs/${id}`);
         deleteDocumentNonBlocking(docRef)
             .catch(error => {
                 console.error("Error deleting program:", error);
