@@ -7,21 +7,23 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
 // --- Configuration ---
+// Try to get credentials from env var, otherwise rely on ADC
 const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-
-if (!serviceAccountKey) {
-    console.error("❌ Error: FIREBASE_SERVICE_ACCOUNT_KEY not found in .env.local");
-    console.error("Please ensure you have your Service Account JSON in .env.local");
-    process.exit(1);
-}
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
     try {
-        admin.initializeApp({
-            credential: admin.credential.cert(JSON.parse(serviceAccountKey))
-        });
-        console.log("🔥 Firebase Admin Initialized");
+        if (serviceAccountKey) {
+            admin.initializeApp({
+                credential: admin.credential.cert(JSON.parse(serviceAccountKey))
+            });
+            console.log("🔥 Firebase Admin Initialized (Service Account)");
+        } else {
+             // Fallback for environment variables (GOOGLE_APPLICATION_CREDENTIALS) or Cloud Shell
+            console.warn("⚠️ No FIREBASE_SERVICE_ACCOUNT_KEY found. Attempting to use Default Credentials...");
+            admin.initializeApp();
+            console.log("🔥 Firebase Admin Initialized (ADC)");
+        }
     } catch (error) {
         console.error("❌ Failed to initialize Firebase Admin:", error);
         process.exit(1);
