@@ -4,34 +4,42 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // --- Tenant Directory (Public Read for resolving paths, Write restricted) ---
+    // Used by the client to look up "Where is bacoor-brgy-genesis located?"
     match /tenant_directory/{slug} {
       allow read: if true; 
       allow write: if false; // Only Admin SDK can write
     }
+    
+    // --- Global User Profiles (Optional, if used) ---
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
 
     // --- Logical Vault Structure ---
-    // Strict locking: Only allow access if the user's token claims match the path.
-    // We assume the user has a custom claim 'tenantPath' in their auth token.
+    // The core of the multi-tenant architecture.
+    // Deep Wildcard Match: Captures the hierarchy levels for Province, City, Barangay.
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
-      // Helper function to check tenant access
+      // Helper: Validates that the user's custom claim 'tenantPath' strictly matches this document's path.
+      // The claim is set by the Admin SDK during provisioning/login.
       function isTenantMember() {
         return request.auth != null && 
                request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
       }
 
-      // Allow read/write to the tenant root doc itself
+      // 1. Root Vault Document (e.g., .../barangays/brgy-genesis)
       allow read: if isTenantMember();
-      allow write: if isTenantMember(); // Or restrict to admin roles
+      allow write: if false; // Only Admin SDK (Provisioning) writes the root metadata
 
-      // Allow access to all subcollections within this vault
+      // 2. All Subcollections within the Vault (Settings, Residents, Assets, etc.)
+      // {document=**} is a recursive wildcard.
       match /{document=**} {
         allow read, write: if isTenantMember();
       }
     }
 
-    // --- Legacy / Global Collections (Keep for backward compatibility during migration) ---
-    // Explicitly allow public access for demo collections to avoid any auth friction
+    // --- Legacy / Global Collections (TEMPORARY: Keep for backward compatibility/demo) ---
+    // Warning: These are insecure public endpoints. Remove when migration is complete.
     match /barangays/{barangayId}/fixed_assets/{document=**} { allow read, write: if true; }
     match /barangays/{barangayId}/asset_bookings/{document=**} { allow read, write: if true; }
     match /barangays/{barangayId}/emergency_alerts/{document=**} { allow read, write: if true; }
@@ -39,9 +47,9 @@ service cloud.firestore {
     match /barangays/{barangayId}/certificate_requests/{document=**} { allow read, write: if true; }
     match /barangays/{barangayId}/ordinances/{document=**} { allow read, write: if true; }
     
-    // Default catch-all for authenticated users (Tighten this later!)
+    // Default Fallback (Block everything else)
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
