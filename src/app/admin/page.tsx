@@ -154,9 +154,14 @@ export default function AdminDashboardPage() {
       toast({ title: "Action queued", description: "Delete functionality is being migrated to new vault structure." });
   };
 
-  const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
-      toast({ title: "Copied", description: "Dashboard link copied to clipboard." });
+  const copyToClipboard = async (text: string) => {
+      try {
+          await navigator.clipboard.writeText(text);
+          toast({ title: "Copied", description: "Dashboard link copied to clipboard." });
+      } catch (err) {
+          console.error("Clipboard write failed:", err);
+          toast({ variant: "destructive", title: "Copy Failed", description: "Browser permission denied." });
+      }
   };
 
   const getDashboardLink = (tenantId: string) => {
