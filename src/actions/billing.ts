@@ -13,7 +13,8 @@ export async function upgradeTenantPlan(tenantId: string, newPlan: 'premium') {
   };
 
   // 2. Apply Update
-  await adminDb.collection('tenants').doc(tenantId).update({
+  // Note: We use 'barangays' collection for tenants in this codebase as per admin pages
+  await adminDb.collection('barangays').doc(tenantId).update({
     'billing.plan': newPlan,
     'billing.status': 'active',
     'billing.nextBillingDate': new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // +1 Year
