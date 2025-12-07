@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Trash2, FileText, CheckCircle2 } from "lucide-react";
+import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Trash2, FileText, CheckCircle2, Loader2 } from "lucide-react";
 import { getProvinces, getCitiesMunicipalities, fetchBarangays, Province, CityMunicipality, Barangay as PSGCBarangay } from '@/lib/data/psgc';
 import { Progress } from "@/components/ui/progress";
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useAuth } from '@/firebase';
 import { collection, query, where, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
@@ -43,12 +43,14 @@ type TenantBarangay = {
     quality: number;
     lastActivity: any; // Timestamp
     createdAt: any; // Timestamp
+    tenantId?: string; // New Arch
 };
 
 export default function JurisdictionsPage() {
   const [selectedProvince, setSelectedProvince] = useState<Province | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityMunicipality | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [tenantToInspect, setTenantToInspect] = useState<TenantBarangay | null>(null);
   
@@ -57,6 +59,7 @@ export default function JurisdictionsPage() {
   const [isLoadingMaster, setIsLoadingMaster] = useState(false);
 
   const firestore = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
 
   const provinces = useMemo(() => getProvinces(), []);
@@ -76,11 +79,12 @@ export default function JurisdictionsPage() {
   }, [cities, searchQuery, selectedProvince]);
 
 
-  // Real Firestore Data Fetching for Tenants
+  // Data Fetching: Prioritize 'tenant_directory' (New Arch), fallback/merge 'barangays' (Legacy) logic implied.
+  // Actually, let's just query 'tenant_directory' as the source of truth for "Provisioned Vaults".
   const tenantsQuery = useMemoFirebase(() => {
       if (!firestore || !selectedCity || !selectedProvince) return null;
       return query(
-          collection(firestore, 'barangays'),
+          collection(firestore, 'tenant_directory'),
           where('city', '==', selectedCity.name),
           where('province', '==', selectedProvince.name)
       );
@@ -118,6 +122,11 @@ export default function JurisdictionsPage() {
           if (tenant) {
               return {
                   ...tenant,
+                  // Normalize fields if missing in directory (directory has limited subset)
+                  status: tenant.status || 'Live',
+                  population: tenant.population || 0,
+                  quality: tenant.quality || 100,
+                  id: tenant.id || tenant.tenantId, // Use directory ID (slug)
                   isOfficial: true,
                   psgcCode: official.code
               };
@@ -135,7 +144,7 @@ export default function JurisdictionsPage() {
               lastActivity: null,
               psgcCode: official.code,
               isOfficial: true
-          } as any; // Cast to satisfy type mix
+          } as any; 
       });
   }, [masterBarangays, tenantBarangays, selectedCity, selectedProvince]);
 
@@ -167,13 +176,30 @@ export default function JurisdictionsPage() {
   };
 
   const handleDeleteTenant = async (id: string) => {
-      if (!firestore) return;
+      if (!auth?.currentUser) return;
+      setIsDeleting(true);
       try {
-          await deleteDoc(doc(firestore, 'barangays', id));
+          const token = await auth.currentUser.getIdToken();
+          const res = await fetch('/api/admin/delete-tenant', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ tenantId: id })
+          });
+
+          if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || 'Failed to delete');
+          }
+
           toast({ title: "Tenant Deleted", description: "The barangay has been reset to 'Untapped' status." });
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
-          toast({ variant: "destructive", title: "Error", description: "Failed to delete tenant." });
+          toast({ variant: "destructive", title: "Error", description: e.message });
+      } finally {
+          setIsDeleting(false);
       }
   };
 
@@ -448,8 +474,8 @@ export default function JurisdictionsPage() {
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDeleteTenant(brgy.id)} className="bg-destructive hover:bg-destructive/90">
-                                                                        Delete
+                                                                    <AlertDialogAction onClick={() => handleDeleteTenant(brgy.id)} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                                                                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
                                                                     </AlertDialogAction>
                                                                 </AlertDialogFooter>
                                                             </AlertDialogContent>
