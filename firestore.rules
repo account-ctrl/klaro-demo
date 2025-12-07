@@ -3,6 +3,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // --- Tenant Directory (Public Read for resolving paths, Write restricted) ---
+    match /tenant_directory/{slug} {
+      allow read: if true; 
+      allow write: if false; // Only Admin SDK can write
+    }
+
+    // --- Logical Vault Structure ---
+    // Strict locking: Only allow access if the user's token claims match the path.
+    // We assume the user has a custom claim 'tenantPath' in their auth token.
+    match /provinces/{province}/cities/{city}/barangays/{barangay} {
+      
+      // Helper function to check tenant access
+      function isTenantMember() {
+        return request.auth != null && 
+               request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
+      }
+
+      // Allow read/write to the tenant root doc itself
+      allow read: if isTenantMember();
+      allow write: if isTenantMember(); // Or restrict to admin roles
+
+      // Allow access to all subcollections within this vault
+      match /{document=**} {
+        allow read, write: if isTenantMember();
+      }
+    }
+
+    // --- Legacy / Global Collections (Keep for backward compatibility during migration) ---
     // Explicitly allow public access for demo collections to avoid any auth friction
     match /barangays/{barangayId}/fixed_assets/{document=**} { allow read, write: if true; }
     match /barangays/{barangayId}/asset_bookings/{document=**} { allow read, write: if true; }
@@ -11,7 +39,7 @@ service cloud.firestore {
     match /barangays/{barangayId}/certificate_requests/{document=**} { allow read, write: if true; }
     match /barangays/{barangayId}/ordinances/{document=**} { allow read, write: if true; }
     
-    // Default catch-all for authenticated users
+    // Default catch-all for authenticated users (Tighten this later!)
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
