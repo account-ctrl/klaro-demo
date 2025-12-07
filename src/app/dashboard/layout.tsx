@@ -115,9 +115,17 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   // Helper to format tenant ID for display (e.g., "brgy-san-isidro" -> "San Isidro")
-  const tenantDisplayName = tenantId
-    ? tenantId.split('-').slice(2).join(' ').replace(/\b\w/g, l => l.toUpperCase()) 
-    : 'Unknown Tenant';
+  const formatTenantName = (id: string | null) => {
+      if (!id) return 'Unknown Tenant';
+      const parts = id.split('-');
+      // If we have "city-barangay", remove city. If just "name", keep it.
+      if (parts.length > 1) {
+          return parts.slice(1).join(' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+      return id.replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const tenantDisplayName = formatTenantName(tenantId);
   
   if (isUserLoading) return null; // Guard handles loading UI
 

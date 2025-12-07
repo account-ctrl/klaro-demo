@@ -63,10 +63,11 @@ export async function POST(req: Request) {
 
     // 4. Set Custom Claims
     // Critical: This binds the user to the specific vault path in Security Rules
+    // CHANGED: Role is now 'admin' instead of 'captain'
     await adminAuth.setCustomUserClaims(uid, {
         tenantPath: vaultPath,
         tenantId: tenantSlug,
-        role: 'captain'
+        role: 'admin' 
     });
     console.log(`[PROVISION] Set custom claims for ${uid}`);
 
@@ -116,10 +117,11 @@ export async function POST(req: Request) {
 
         // Step D: Update User Profile (Global)
         // If it's a "zombie" user, we need to make sure this is recreated.
+        // CHANGED: Role is now 'admin'
         t.set(userProfileRef, {
             email: adminEmail,
             fullName: adminName,
-            role: 'captain',
+            role: 'admin', 
             tenantPath: vaultPath,
             tenantId: tenantSlug,
             updatedAt: Timestamp.now()

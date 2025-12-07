@@ -10,10 +10,10 @@ service cloud.firestore {
       return request.auth.token.role == 'super_admin';
     }
 
-    // Check if the user's tenantPath claim matches the document's path prefix
-    function isAuthorizedTenant(province, city, barangay) {
+    // Check if the user is a Tenant Admin for the specific path
+    function isTenantAdmin(province, city, barangay) {
       let expectedPath = /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
-      return request.auth.token.tenantPath == expectedPath;
+      return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
     }
 
     // --- GLOBAL RULES ---
@@ -40,13 +40,14 @@ service cloud.firestore {
     // Match the deep path: /provinces/{p}/cities/{c}/barangays/{b}
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
-      // The Barangay Root Document (Read-Only metadata for the tenant)
-      allow read: if isAuthorizedTenant(province, city, barangay);
-      allow write: if false; // Metadata is managed by provisioning API
+      // The Barangay Root Document (Read-Only metadata for the tenant admin, managed by API)
+      allow read: if isTenantAdmin(province, city, barangay);
+      allow write: if false; 
 
       // Match ANY document at ANY depth inside the barangay
+      // Only Super Admins (covered by global rule) and Tenant Admins can write
       match /{document=**} {
-        allow read, write: if isAuthorizedTenant(province, city, barangay);
+        allow read, write: if isTenantAdmin(province, city, barangay);
       }
     }
   }

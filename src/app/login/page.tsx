@@ -50,7 +50,8 @@ export default function LoginPage() {
                         return;
                     }
 
-                    const ALLOWED_ROLES = ['captain', 'admin', 'official', 'staff'];
+                    // CHANGED: Removed 'captain', only allowing 'admin' as the primary role.
+                    const ALLOWED_ROLES = ['admin', 'official', 'staff'];
                     if (!ALLOWED_ROLES.includes(role as string)) {
                          await auth.signOut();
                          toast({
