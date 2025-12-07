@@ -49,6 +49,7 @@ export async function sendInvite(
           </div>
         `,
       },
+      createdAt: new Date(), // Helpful for sorting
     });
 
     console.log(`Successfully queued invitation email for ${to}`);
