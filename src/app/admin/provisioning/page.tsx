@@ -12,7 +12,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, useAuth } from '@/firebase';
 import { collection, query, where, orderBy, limit } from 'firebase/firestore';
-import { SimulateProvisioningDialog } from '@/components/admin/SimulateProvisioningDialog';
 import { OnboardingSimulator } from '@/components/admin/OnboardingSimulator';
 
 // Define the shape of our Firestore Barangay Document
@@ -47,7 +46,7 @@ export default function ProvisioningPage() {
 
   const { data: requests, isLoading } = useCollection<OnboardingRequest>(requestsQuery);
 
-  // 2. The Action Handler (Refactored to accept optional request param)
+  // 2. The Action Handler
   const handleDecision = async (action: 'approve' | 'reject' | 'delete', request?: OnboardingRequest) => {
     const target = request || selectedRequest;
     if (!target || !auth?.currentUser) return;
@@ -83,7 +82,6 @@ export default function ProvisioningPage() {
                  action === 'delete' ? 'Request Deleted.' : 'Request Rejected.' 
       });
       
-      // Cleanup UI
       if (selectedRequest?.id === target.id) {
           setSelectedRequest(null);
           setIsRejectOpen(false);
@@ -186,7 +184,6 @@ export default function ProvisioningPage() {
                                                     className="text-red-400 hover:text-red-600 hover:bg-red-50"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        // Call delete directly
                                                         handleDecision('delete', req);
                                                     }}
                                                     disabled={processing}
@@ -221,7 +218,6 @@ export default function ProvisioningPage() {
           </div>
 
           <div className="w-80 space-y-6">
-              <SimulateProvisioningDialog />
               <OnboardingSimulator />
           </div>
       </div>
@@ -263,7 +259,7 @@ export default function ProvisioningPage() {
                 <Button 
                   variant="outline" 
                   className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => handleDecision('delete')} // Uses selectedRequest from state
+                  onClick={() => handleDecision('delete')}
                   disabled={processing}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />

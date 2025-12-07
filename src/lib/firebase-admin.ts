@@ -2,6 +2,7 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { firebaseConfig } from '@/firebase/config';
 
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY 
   ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) 
@@ -12,13 +13,16 @@ const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
 if (!getApps().length) {
     if (serviceAccount) {
         initializeApp({
-            credential: cert(serviceAccount)
+            credential: cert(serviceAccount),
+            projectId: firebaseConfig.projectId
         });
     } else {
         // Fallback or warning - in production App Hosting this works automatically with default creds
         // In local dev without keys, this might be partial.
         try {
-            initializeApp();
+            initializeApp({
+                projectId: firebaseConfig.projectId
+            });
         } catch (e) {
             console.warn("Firebase Admin failed to initialize. Check service account credentials.");
         }
