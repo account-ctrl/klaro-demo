@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import React from 'react';
+import React, { useEffect } from 'react';
 import OfficialsList from './officials-management/officials-list';
 import { Separator } from '@/components/ui/separator';
 import PurokList from './puroks/purok-list';
@@ -33,18 +33,20 @@ import DocumentTypeList from './documents/document-type-list';
 import TemplateList from './templates/template-list';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProgramsList from './programs/programs-list';
+import { useTenantProfile } from '@/hooks/use-tenant-profile';
+import { updateDoc } from 'firebase/firestore';
 
 const profileFormSchema = z.object({
   barangayName: z.string().min(1, "Barangay name is required"),
   city: z.string().min(1, "City/Municipality is required"),
   province: z.string().min(1, "Province is required"),
-  region: z.string().min(1, "Region is required"),
-  zipCode: z.string().min(1, "Zip code is required"),
-  barangayHallAddress: z.string().min(1, "Barangay Hall address is required"),
+  region: z.string().optional(),
+  zipCode: z.string().optional(),
+  barangayHallAddress: z.string().optional(),
   contactNumber: z.string().optional(),
   email: z.string().email("Invalid email address").optional(),
-  barangayLogoUrl: z.string().url("Please enter a valid URL").optional(),
-  cityLogoUrl: z.string().url("Please enter a valid URL").optional(),
+  logoUrl: z.string().optional(), // simplified for now (base64 or url)
+  cityLogoUrl: z.string().optional(),
 });
 
 const financialFormSchema = z.object({
@@ -64,6 +66,8 @@ type SystemFormValues = z.infer<typeof systemFormSchema>;
 
 export default function SettingsPage() {
     const { toast } = useToast();
+    const { profile, isLoading, docRef } = useTenantProfile();
+    
     const [isProfilePending, startProfileTransition] = React.useTransition();
     const [isFinancialPending, startFinancialTransition] = React.useTransition();
     const [isSystemPending, startSystemTransition] = React.useTransition();
@@ -71,16 +75,16 @@ export default function SettingsPage() {
     const profileForm = useForm<ProfileFormValues>({
         resolver: zodResolver(profileFormSchema),
         defaultValues: {
-            barangayName: "San Isidro",
-            city: "Quezon City",
-            province: "Metro Manila",
-            region: "National Capital Region (NCR)",
-            zipCode: "1100",
-            barangayHallAddress: "123 Rizal Street, Barangay San Isidro, Quezon City",
-            contactNumber: "02-8123-4567",
-            email: "contact@sanisidro.gov.ph",
-            barangayLogoUrl: "https://via.placeholder.com/150",
-            cityLogoUrl: "https://via.placeholder.com/150",
+            barangayName: "",
+            city: "",
+            province: "",
+            region: "",
+            zipCode: "",
+            barangayHallAddress: "",
+            contactNumber: "",
+            email: "",
+            logoUrl: "",
+            cityLogoUrl: "",
         },
     });
 
@@ -101,12 +105,53 @@ export default function SettingsPage() {
         },
     });
 
+    // Hydrate forms when profile loads
+    useEffect(() => {
+        if (profile) {
+            profileForm.reset({
+                barangayName: profile.name || "",
+                city: profile.city || "",
+                province: profile.province || "",
+                region: profile.region || "",
+                zipCode: profile.zipCode || "",
+                barangayHallAddress: profile.barangayHallAddress || "",
+                contactNumber: profile.contactNumber || "",
+                email: profile.email || "",
+                logoUrl: profile.logoUrl || "",
+                cityLogoUrl: profile.cityLogoUrl || "",
+            });
+
+            if (profile.settings) {
+                systemForm.reset({
+                    paperSize: profile.settings.paperSize || "A4",
+                    pickupSmsTemplate: profile.settings.pickupSmsTemplate || "KlaroBarangay: Your {DOC_TYPE} is now ready for pickup. Please bring a valid ID. Thank you!",
+                    sosSmsTemplate: profile.settings.sosSmsTemplate || "KLARO-SOS: Emergency alert from {RESIDENT_NAME} at {LOCATION}. Assigned tanod, please respond immediately."
+                });
+            }
+        }
+    }, [profile, profileForm, systemForm]);
+
     function onProfileSubmit(data: ProfileFormValues) {
-        startProfileTransition(() => {
-            setTimeout(() => {
-                console.log(data);
+        if (!docRef) return;
+        startProfileTransition(async () => {
+            try {
+                await updateDoc(docRef, {
+                    name: data.barangayName,
+                    city: data.city,
+                    province: data.province,
+                    region: data.region,
+                    zipCode: data.zipCode,
+                    barangayHallAddress: data.barangayHallAddress,
+                    contactNumber: data.contactNumber,
+                    email: data.email,
+                    logoUrl: data.logoUrl,
+                    cityLogoUrl: data.cityLogoUrl
+                });
                 toast({ title: "Settings Saved", description: "Your barangay profile has been updated." });
-            }, 1000);
+            } catch (error) {
+                console.error(error);
+                toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
+            }
         });
     }
 
@@ -120,14 +165,26 @@ export default function SettingsPage() {
     }
 
      function onSystemSubmit(data: SystemFormValues) {
-        startSystemTransition(() => {
-            setTimeout(() => {
-                console.log(data);
+        if (!docRef) return;
+        startSystemTransition(async () => {
+            try {
+                // Merge with existing settings
+                await updateDoc(docRef, {
+                    'settings.paperSize': data.paperSize,
+                    'settings.pickupSmsTemplate': data.pickupSmsTemplate,
+                    'settings.sosSmsTemplate': data.sosSmsTemplate
+                });
                 toast({ title: "System Settings Saved", description: "Your system and notification settings have been updated." });
-            }, 1000);
+            } catch (error) {
+                console.error(error);
+                toast({ title: "Error", description: "Failed to update system settings.", variant: "destructive" });
+            }
         });
     }
 
+  if (isLoading) {
+      return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -281,12 +338,12 @@ export default function SettingsPage() {
                      <div className="grid gap-4 sm:grid-cols-2">
                         <FormField
                             control={profileForm.control}
-                            name="barangayLogoUrl"
+                            name="logoUrl"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Barangay Logo URL</FormLabel>
+                                <FormLabel>Barangay Logo URL (or Base64)</FormLabel>
                                 <FormControl>
-                                    <Input {...field} />
+                                    <Input {...field} placeholder="https://... or data:image/..." />
                                 </FormControl>
                                 <FormDescription>URL to a high-resolution PNG/JPG of the barangay logo.</FormDescription>
                                 <FormMessage />
