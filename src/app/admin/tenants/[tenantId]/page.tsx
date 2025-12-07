@@ -4,7 +4,7 @@
 import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection, query, limit, getDoc, orderBy } from 'firebase/firestore';
+import { doc, collection, query, limit, getDoc, orderBy, updateDoc } from 'firebase/firestore'; // Import updateDoc
 import { getTenantPath } from '@/lib/firebase/db-client';
 import {
   ArrowLeft,
@@ -17,7 +17,11 @@ import {
   FileText,
   Settings,
   MoreVertical,
-  Calendar
+  Calendar,
+  Pencil,
+  Save,
+  X,
+  UserPlus
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -25,6 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -42,11 +47,18 @@ export default function TenantOversightPage() {
     const firestore = useFirestore();
     const tenantId = params?.tenantId as string;
 
-    // 1. Resolve Tenant Path
-    // We can't use useTenant() here because we are NOT "inside" the tenant.
-    // We are looking AT the tenant from the outside.
     const [path, setPath] = React.useState<string | null>(null);
     const [isLoadingPath, setIsLoadingPath] = React.useState(true);
+    const [isEditing, setIsEditing] = React.useState(false); // Edit Mode State
+    
+    // Editable Fields State
+    const [editForm, setEditForm] = React.useState({
+        barangayName: '',
+        city: '',
+        province: '',
+        captainName: '',
+        captainEmail: ''
+    });
 
     React.useEffect(() => {
         async function resolve() {
@@ -58,7 +70,6 @@ export default function TenantOversightPage() {
         resolve();
     }, [firestore, tenantId]);
 
-    // 2. Fetch Vault Data (Once path is known)
     const vaultRef = useMemoFirebase(() => {
         if (!firestore || !path) return null;
         return doc(firestore, path);
@@ -72,13 +83,54 @@ export default function TenantOversightPage() {
     const { data: vaultData, isLoading: isVaultLoading } = useDoc(vaultRef);
     const { data: settingsData } = useDoc(settingsRef);
 
-    // 3. Fetch Recent Residents (Preview)
+    // Initialize form when data loads
+    React.useEffect(() => {
+        if (settingsData) {
+            setEditForm({
+                barangayName: settingsData.barangayName || '',
+                city: settingsData.location?.city || '',
+                province: settingsData.location?.province || '',
+                captainName: settingsData.captainProfile?.name || '',
+                captainEmail: settingsData.captainProfile?.email || ''
+            });
+        }
+    }, [settingsData]);
+
     const residentsQuery = useMemoFirebase(() => {
         if (!firestore || !path) return null;
         return query(collection(firestore, `${path}/residents`), orderBy('createdAt', 'desc'), limit(5));
     }, [firestore, path]);
 
     const { data: recentResidents } = useCollection(residentsQuery);
+
+    // Handle Save Changes
+    const handleSaveChanges = async () => {
+        if (!settingsRef || !vaultRef) return;
+        
+        try {
+            // Update Settings Doc
+            await updateDoc(settingsRef, {
+                barangayName: editForm.barangayName,
+                'location.city': editForm.city,
+                'location.province': editForm.province,
+                'captainProfile.name': editForm.captainName,
+                'captainProfile.email': editForm.captainEmail
+            });
+
+            // Update Root Vault Meta (for consistency)
+            await updateDoc(vaultRef, {
+                name: editForm.barangayName,
+                city: editForm.city,
+                province: editForm.province
+            });
+
+            toast({ title: "Tenant Updated", description: "Configuration changes saved successfully." });
+            setIsEditing(false);
+        } catch (error) {
+            console.error("Update failed", error);
+            toast({ variant: "destructive", title: "Update Failed", description: "Could not save changes." });
+        }
+    };
 
     const isLoading = isLoadingPath || isVaultLoading;
 
@@ -116,39 +168,75 @@ export default function TenantOversightPage() {
                     <Button variant="ghost" size="sm" className="pl-0 text-muted-foreground hover:text-foreground mb-2" onClick={() => router.push('/admin')}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Command Center
                     </Button>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                        {settingsData?.barangayName || vaultData?.name || 'Unknown Tenant'}
-                    </h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                            {isEditing ? (
+                                <Input 
+                                    value={editForm.barangayName} 
+                                    onChange={(e) => setEditForm({...editForm, barangayName: e.target.value})} 
+                                    className="text-2xl font-bold h-10 w-[400px]"
+                                />
+                            ) : (
+                                settingsData?.barangayName || vaultData?.name || 'Unknown Tenant'
+                            )}
+                        </h1>
+                        {!isEditing && (
+                            <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                                <Pencil className="h-4 w-4 text-slate-400 hover:text-slate-700" />
+                            </Button>
+                        )}
+                    </div>
+                    
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                         <MapPin className="h-4 w-4" />
-                        {settingsData?.location?.city || vaultData?.city}, {settingsData?.location?.province || vaultData?.province}
+                        {isEditing ? (
+                            <div className="flex gap-2">
+                                <Input value={editForm.city} onChange={e => setEditForm({...editForm, city: e.target.value})} className="h-7 w-32 text-xs" placeholder="City" />
+                                <Input value={editForm.province} onChange={e => setEditForm({...editForm, province: e.target.value})} className="h-7 w-32 text-xs" placeholder="Province" />
+                            </div>
+                        ) : (
+                            <>{settingsData?.location?.city || vaultData?.city}, {settingsData?.location?.province || vaultData?.province}</>
+                        )}
                         <span className="text-slate-300">|</span>
                         <Badge variant="outline" className="font-mono text-xs">{tenantId}</Badge>
                     </div>
                 </div>
                 
                 <div className="flex items-center gap-3">
-                     <Badge className={vaultData?.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-slate-100 text-slate-700'}>
-                        {vaultData?.status === 'active' ? '● Operational' : '● Inactive'}
-                     </Badge>
-                     
-                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon">
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Admin Controls</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem disabled>
-                                <Activity className="mr-2 h-4 w-4" /> View Audit Logs
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
-                                <ShieldCheck className="mr-2 h-4 w-4" /> Suspend Tenant
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                     </DropdownMenu>
+                     {isEditing ? (
+                         <div className="flex gap-2">
+                             <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                                 <X className="h-4 w-4 mr-2" /> Cancel
+                             </Button>
+                             <Button size="sm" onClick={handleSaveChanges}>
+                                 <Save className="h-4 w-4 mr-2" /> Save Changes
+                             </Button>
+                         </div>
+                     ) : (
+                         <>
+                             <Badge className={vaultData?.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-slate-100 text-slate-700'}>
+                                {vaultData?.status === 'active' ? '● Operational' : '● Inactive'}
+                             </Badge>
+                             
+                             <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon">
+                                        <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Admin Controls</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                                        <Pencil className="mr-2 h-4 w-4" /> Edit Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600">
+                                        <ShieldCheck className="mr-2 h-4 w-4" /> Suspend Tenant
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                             </DropdownMenu>
+                         </>
+                     )}
                 </div>
             </div>
 
@@ -197,7 +285,7 @@ export default function TenantOversightPage() {
             </div>
 
             {/* Detailed Views */}
-            <Tabs defaultValue="overview" className="space-y-6">
+            <Tabs defaultValue="config" className="space-y-6">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="officials">Officials</TabsTrigger>
@@ -243,25 +331,47 @@ export default function TenantOversightPage() {
 
                 <TabsContent value="config">
                      <Card>
-                        <CardHeader>
-                            <CardTitle>Vault Configuration</CardTitle>
-                            <CardDescription>Read-only view of the tenant's system settings.</CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Vault Configuration</CardTitle>
+                                <CardDescription>System settings and contact information.</CardDescription>
+                            </div>
+                            {!isEditing && (
+                                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                                    <Pencil className="h-4 w-4 mr-2" /> Edit Config
+                                </Button>
+                            )}
                         </CardHeader>
                         <CardContent className="grid gap-6 md:grid-cols-2">
                              <div className="space-y-2">
                                 <h4 className="font-medium text-sm">Geography</h4>
                                 <div className="p-4 bg-slate-100 rounded-lg text-sm space-y-1">
                                     <div className="flex justify-between"><span className="text-muted-foreground">Region:</span> <span>IV-A (CALABARZON)</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Province:</span> <span>{settingsData?.location?.province}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">City:</span> <span>{settingsData?.location?.city}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Barangay:</span> <span>{settingsData?.barangayName}</span></div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Province:</span> 
+                                        {isEditing ? <Input value={editForm.province} onChange={e => setEditForm({...editForm, province: e.target.value})} className="h-6 w-32 text-xs" /> : <span>{settingsData?.location?.province}</span>}
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">City:</span> 
+                                        {isEditing ? <Input value={editForm.city} onChange={e => setEditForm({...editForm, city: e.target.value})} className="h-6 w-32 text-xs" /> : <span>{settingsData?.location?.city}</span>}
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Barangay:</span> 
+                                        {isEditing ? <Input value={editForm.barangayName} onChange={e => setEditForm({...editForm, barangayName: e.target.value})} className="h-6 w-32 text-xs" /> : <span>{settingsData?.barangayName}</span>}
+                                    </div>
                                 </div>
                              </div>
                              <div className="space-y-2">
                                 <h4 className="font-medium text-sm">Primary Contact</h4>
                                 <div className="p-4 bg-slate-100 rounded-lg text-sm space-y-1">
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Name:</span> <span>{settingsData?.captainProfile?.name}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Email:</span> <span>{settingsData?.captainProfile?.email}</span></div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Name:</span> 
+                                        {isEditing ? <Input value={editForm.captainName} onChange={e => setEditForm({...editForm, captainName: e.target.value})} className="h-6 w-40 text-xs" /> : <span>{settingsData?.captainProfile?.name}</span>}
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Email:</span> 
+                                        {isEditing ? <Input value={editForm.captainEmail} onChange={e => setEditForm({...editForm, captainEmail: e.target.value})} className="h-6 w-40 text-xs" /> : <span>{settingsData?.captainProfile?.email}</span>}
+                                    </div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Role:</span> <span>Punong Barangay</span></div>
                                 </div>
                              </div>
