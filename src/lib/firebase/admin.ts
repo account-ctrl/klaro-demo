@@ -1,30 +1,29 @@
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, getApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY 
-  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) 
-  : undefined;
-
-// Only initialize if we have credentials or we are in a cloud environment that provides default credentials
+// 1. Initialize the Admin App
+// We check if an app is already initialized to avoid "app already exists" errors in hot-reload environments.
 if (!getApps().length) {
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY 
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY) 
+        : undefined;
+
     if (serviceAccount) {
         initializeApp({
             credential: cert(serviceAccount),
-            projectId: firebaseConfig.projectId
+            projectId: firebaseConfig.projectId,
         });
     } else {
-        try {
-            initializeApp({
-                projectId: firebaseConfig.projectId
-            });
-        } catch (e) {
-            console.warn("Firebase Admin failed to initialize. Check service account credentials.");
-        }
+        // Fallback for environments with ADC (Application Default Credentials) like Cloud Run/Functions
+        initializeApp({
+            projectId: firebaseConfig.projectId,
+        });
     }
 }
 
+// 2. Export Admin Services
 export const adminAuth = getAuth();
 export const adminDb = getFirestore();
