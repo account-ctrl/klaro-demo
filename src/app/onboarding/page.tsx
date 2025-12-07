@@ -31,9 +31,11 @@ import {
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useFirestore, useAuth, initiateEmailSignUp } from '@/firebase';
+// FIX: Unified imports
+import { useFirestore, useAuth, initiateEmailSignUp, initiateEmailSignIn } from '@/firebase'; 
 import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { getProvinces, getRegionByProvince, Province } from '@/lib/data/psgc'; // Use PSGC Utility
+import { getProvinces, getRegionByProvince, Province } from '@/lib/data/psgc';
+import SuccessStep from '@/components/onboarding/SuccessStep'; // Added Import
 
 // --- Schemas ---
 
@@ -41,7 +43,7 @@ const profileSchema = z.object({
   barangayName: z.string().min(3, "Barangay name is required."),
   city: z.string().min(3, "City/Municipality is required."),
   province: z.string().min(3, "Province is required."),
-  region: z.string().optional(), // Added region
+  region: z.string().optional(),
 });
 
 const officialsSchema = z.object({
@@ -129,14 +131,16 @@ export default function OnboardingPage() {
   const searchParams = useSearchParams();
   const firestore = useFirestore();
   const auth = useAuth();
+  
+  // FIX: Added State
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [provisionedTenantId, setProvisionedTenantId] = useState<string>('');
 
-  // State to hold collected data across steps
   const [profileData, setProfileData] = useState<ProfileFormValues | null>(null);
   const [officialsData, setOfficialsData] = useState<OfficialsFormValues | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isCertified, setIsCertified] = useState(false);
   
-  // Terminal Logs State
   const [logs, setLogs] = useState<string[]>([]);
   const [isCommissioning, setIsCommissioning] = useState(false);
 
@@ -154,10 +158,8 @@ export default function OnboardingPage() {
     defaultValues: { barangayName: '', city: '', province: '', region: '' },
   });
 
-  // Helper to determine region automatically
   const determineRegion = (provinceName: string) => {
       const allProvinces = getProvinces();
-      // Case insensitive match
       const matchedProvince = allProvinces.find(p => p.name.toLowerCase() === provinceName.toLowerCase());
       if (matchedProvince) {
           const regionName = getRegionByProvince(matchedProvince.code);
@@ -166,7 +168,6 @@ export default function OnboardingPage() {
       return '';
   };
 
-  // Effect to pre-fill from URL and Auto-Determine Region
   useEffect(() => {
       const province = searchParams.get('province');
       const city = searchParams.get('city');
@@ -180,7 +181,6 @@ export default function OnboardingPage() {
           
           let determinedRegion = regionParam ? decodeURIComponent(regionParam) : '';
 
-          // If region is missing in URL, try to find it via PSGC utility
           if (!determinedRegion) {
               determinedRegion = determineRegion(decodedProvince);
           }
@@ -204,9 +204,7 @@ export default function OnboardingPage() {
     name: "officials",
   });
 
-  // Handlers
   const handleProfileSubmit = (data: ProfileFormValues) => {
-    // Double check region before proceeding if user manually typed province
     if (!data.region) {
         const regionName = determineRegion(data.province);
         if (regionName) {
@@ -227,6 +225,7 @@ export default function OnboardingPage() {
     setCurrentStep(4);
   };
 
+  // FIX: Corrected handleCommissionStart
   const handleCommissionStart = async () => {
     if (!isCertified) {
         toast({ title: "Certification Required", description: "Please certify that you are an authorized representative.", variant: "destructive" });
@@ -241,7 +240,6 @@ export default function OnboardingPage() {
     setIsCommissioning(true);
     setCurrentStep(5);
     
-    // Terminal Sequence + Real Firestore Writes
     const sequence = [
         "Connecting to PSGC National Database...",
         `VERIFIED: ${profileData.region || 'Region Unknown'} - ${profileData.province} - ${profileData.city} - ${profileData.barangayName}`,
@@ -256,28 +254,25 @@ export default function OnboardingPage() {
 
     let delay = 0;
     
-    // Fire off the visual logs
     sequence.forEach((log, index) => {
         delay += Math.random() * 800 + 500;
         setTimeout(async () => {
             setLogs(prev => [...prev, log]);
             
-            // Trigger actual writes at specific steps to simulate work
             if (index === 2) { 
-                // CALL PUBLIC PROVISION API
                 try {
                     const captain = officialsData.officials.find(o => o.role === 'Captain');
-                    const inviteToken = searchParams.get('token'); // Get Invite Token
+                    const inviteToken = searchParams.get('token');
 
                     const res = await fetch('/api/public/provision', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            inviteToken, // Pass invite token to backend
+                            inviteToken,
                             province: profileData.province,
                             city: profileData.city,
                             barangay: profileData.barangayName,
-                            region: profileData.region, // Sending Region
+                            region: profileData.region,
                             adminProfile: captain ? {
                                 name: captain.name,
                                 email: captain.email,
@@ -286,17 +281,21 @@ export default function OnboardingPage() {
                         })
                     });
                     
+                    const data = await res.json();
+
                     if (!res.ok) {
-                        const err = await res.json();
-                        // Ignore collision error for simulation resilience (re-onboarding)
                         if (res.status !== 409) {
-                             throw new Error(err.error || 'Provisioning failed');
+                             throw new Error(data.error || 'Provisioning failed');
                         } else {
                              setLogs(prev => [...prev, ">> NOTICE: Vault already exists. Re-linking."]);
+                             if (data.tenantSlug) setProvisionedTenantId(data.tenantSlug);
                         }
+                    } else {
+                        if (data.tenantSlug) {
+                            setProvisionedTenantId(data.tenantSlug);
+                        }
+                        setLogs(prev => [...prev, ">> SUCCESS: Vault Provisioned."]);
                     }
-                    
-                    setLogs(prev => [...prev, ">> SUCCESS: Vault Provisioned."]);
                 } catch (e: any) {
                     console.error("Provisioning Error:", e);
                     setLogs(prev => [...prev, `>> ERROR: ${e.message}`]);
@@ -304,26 +303,23 @@ export default function OnboardingPage() {
             }
 
             if (index === 5) {
-                // Client-side authentication sign-in
                 const captain = officialsData.officials.find(o => o.role === 'Captain');
                 if (captain?.email && captain?.password && auth) {
                     try {
-                        // Sign in the user on the client side so they are logged in when redirected
-                        await initiateEmailSignUp(auth, captain.email, captain.password);
+                        // FIX: Use initiateEmailSignIn
+                        await initiateEmailSignIn(auth, captain.email, captain.password);
                         setLogs(prev => [...prev, ">> AUTH: Client session established."]);
-                    } catch (error) {
+                    } catch (error: any) {
                          console.error("Client Auth Error:", error);
-                         // Don't fail the whole flow if client login fails, they can login manually later
-                         setLogs(prev => [...prev, ">> NOTICE: Automatic login failed, please login manually."]);
+                         setLogs(prev => [...prev, `>> NOTICE: Login failed (${error.code}). Please login manually.`]);
                     }
                 }
             }
 
             if (index === sequence.length - 1) {
-                // Finalize
+                // FIX: Set success state instead of redirect
                 setTimeout(() => {
-                     toast({ title: "Commissioning Successful", description: "Your barangay node is live." });
-                     window.location.href = '/dashboard'; 
+                     setShowSuccess(true);
                 }, 1500);
             }
         }, delay);
@@ -340,6 +336,26 @@ export default function OnboardingPage() {
       reader.readAsDataURL(file);
     }
   };
+
+  // FIX: Render Success Step
+  if (showSuccess && profileData && officialsData) {
+      const captain = officialsData.officials.find(o => o.role === 'Captain');
+      return (
+          <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+              <SuccessStep 
+                  tenantData={{
+                      barangayName: profileData.barangayName,
+                      city: profileData.city,
+                      province: profileData.province,
+                      adminName: captain?.name || 'Admin',
+                      adminEmail: captain?.email || '',
+                      tenantId: provisionedTenantId || 'Pending-Activation'
+                  }}
+                  onComplete={() => router.push('/login')}
+              />
+          </div>
+      );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-100 font-sans selection:bg-primary selection:text-primary-foreground">
@@ -590,15 +606,21 @@ export default function OnboardingPage() {
                     <div className="bg-zinc-950 p-6 rounded-lg border border-zinc-800 space-y-4 font-mono text-sm">
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Node ID:</span>
-                            <span className="text-zinc-200">{`${profileData?.province.substring(0,3).toUpperCase()}-${profileData?.city.substring(0,3).toUpperCase()}-${profileData?.barangayName.replace(/\s/g,'').toUpperCase()}`}</span>
+                            <span className="text-zinc-200">
+                                {profileData ? `${profileData.province.substring(0,3).toUpperCase()}-${profileData.city.substring(0,3).toUpperCase()}-${profileData.barangayName.replace(/\s/g,'').toUpperCase()}` : 'PENDING'}
+                            </span>
                         </div>
                          <div className="flex justify-between">
                             <span className="text-zinc-500">Jurisdiction:</span>
-                            <span className="text-zinc-200">{profileData?.barangayName}, {profileData?.city}, {profileData?.province}</span>
+                            <span className="text-zinc-200">
+                                {profileData ? `${profileData.barangayName}, ${profileData.city}, ${profileData.province}` : '...'}
+                            </span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-zinc-500">Primary Custodian:</span>
-                            <span className="text-zinc-200">{officialsData?.officials.find(o => o.role === 'Captain')?.name}</span>
+                            <span className="text-zinc-200">
+                                {officialsData?.officials.find(o => o.role === 'Captain')?.name || '...'}
+                            </span>
                         </div>
                          <div className="flex justify-between">
                             <span className="text-zinc-500">Security Level:</span>
