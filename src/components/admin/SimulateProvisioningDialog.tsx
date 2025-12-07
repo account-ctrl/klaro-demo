@@ -45,67 +45,17 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
     };
 
     const handleSimulate = async () => {
-        if (!firestore) return;
+        // Just prepare data, no DB writes needed for simulation link
         setIsLoading(true);
-
         try {
-            // Force test prefix for ID
-            const tenantId = `test-${formData.province}-${formData.city}-${formData.barangayName}`
-                .toLowerCase()
-                .replace(/[^a-z0-9-]/g, '-')
-                .replace(/-+/g, '-');
-
-            // 1. Create Test Tenant Request
-            await setDoc(doc(firestore, 'barangays', tenantId), {
-                name: formData.barangayName,
-                city: formData.city,
-                province: formData.province,
-                region: 'TEST-REGION',
-                status: 'Onboarding', // Put it in queue
-                isTest: true,
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-                population: Math.floor(Math.random() * 5000),
-                households: Math.floor(Math.random() * 1000),
-                quality: Math.floor(Math.random() * 100),
-                createdAt: serverTimestamp(),
-                lastActivity: serverTimestamp()
-            });
-
-            // 2. Create Mock Captain
-            const userId = `user-test-${Math.random().toString(36).substr(2, 9)}`;
-            await setDoc(doc(firestore, 'users', userId), {
-                userId,
-                fullName: formData.captainName,
-                position: 'Captain',
-                barangayId: tenantId,
-                systemRole: 'Admin',
-                email: `admin.${tenantId}@test.klaro.gov`,
-                status: 'Active',
-                isTest: true,
-                createdAt: serverTimestamp()
-            });
-
-            toast({
-                title: "Simulation Request Created",
-                description: `Created test request for ${tenantId}. You can now launch the user journey.`
-            });
-            
             // Store data for next step
             setCreatedTenantData({
                 province: formData.province,
                 city: formData.city,
                 barangayName: formData.barangayName
             });
-
-            // Don't close immediately, show the launch button
-            // setOpen(false); 
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Simulation Failed",
-                description: "Could not create test data."
-            });
         } finally {
             setIsLoading(false);
         }
@@ -117,7 +67,8 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
         const url = `/onboarding?province=${encodeURIComponent(createdTenantData.province)}&city=${encodeURIComponent(createdTenantData.city)}&barangay=${encodeURIComponent(createdTenantData.barangayName)}&simulationMode=true`;
         
         setOpen(false);
-        router.push(url);
+        // Force refresh or just standard push?
+        window.location.href = url; // Standard redirect to leave the admin shell context
     };
 
     return (
@@ -140,8 +91,7 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
                         Mock Onboarding Simulation
                     </DialogTitle>
                     <DialogDescription>
-                        This will create a temporary tenant tagged as <span className="font-mono text-xs bg-slate-100 p-1 rounded">isTest: true</span>. 
-                        It will not affect production metrics.
+                        This will generate a pre-filled link to test the Captain's onboarding journey.
                     </DialogDescription>
                 </DialogHeader>
                 
@@ -162,10 +112,6 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
                                     <Input value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} />
                                 </div>
                             </div>
-                            <div className="grid gap-2">
-                                <Label>Captain Name</Label>
-                                <Input value={formData.captainName} onChange={e => setFormData({...formData, captainName: e.target.value})} />
-                            </div>
                         </div>
 
                         <DialogFooter className="gap-2 sm:gap-0">
@@ -174,7 +120,7 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
                             </Button>
                             <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={handleSimulate} disabled={isLoading}>
                                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Create Request
+                                Prepare Link
                             </Button>
                         </DialogFooter>
                     </>
@@ -182,25 +128,17 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
                     <div className="py-6 text-center space-y-4">
                         <div className="flex justify-center">
                             <div className="h-12 w-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
-                                <TestTube className="h-6 w-6" />
+                                <PlayCircle className="h-6 w-6" />
                             </div>
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold">Test Request Created!</h3>
+                            <h3 className="text-lg font-semibold">Simulation Ready</h3>
                             <p className="text-slate-500 text-sm">
-                                You can now approve it in the queue OR simulate the Captain's onboarding journey using these details.
+                                Click below to launch the onboarding wizard as a new Captain.
                             </p>
                         </div>
-                        <div className="bg-slate-50 p-3 rounded text-sm text-left border">
-                            <div className="grid grid-cols-2 gap-2">
-                                <span className="text-slate-500">Barangay:</span>
-                                <span className="font-medium">{createdTenantData.barangayName}</span>
-                                <span className="text-slate-500">Location:</span>
-                                <span className="font-medium">{createdTenantData.city}, {createdTenantData.province}</span>
-                            </div>
-                        </div>
                         <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white" onClick={handleLaunchJourney}>
-                            <PlayCircle className="mr-2 h-4 w-4" /> Launch Journey Simulator
+                            Launch Simulator
                         </Button>
                     </div>
                 )}

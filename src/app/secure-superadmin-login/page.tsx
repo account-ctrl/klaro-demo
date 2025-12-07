@@ -66,7 +66,7 @@ export default function SecureAdminLoginPage() {
     };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#050A18] p-4 font-mono">
+    <div className="flex items-center justify-center min-h-screen bg-[#050A18] p-4 font-sans">
         {/* Subtle radial gradient for depth */}
         <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#0A1229] via-[#050A18] to-black z-0 pointer-events-none" />
         
