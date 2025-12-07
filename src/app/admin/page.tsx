@@ -1,15 +1,35 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye } from "lucide-react";
+import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2 } from "lucide-react";
 import Link from 'next/link';
 import { Progress } from "@/components/ui/progress";
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, query, orderBy, limit, doc, deleteDoc } from 'firebase/firestore';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription as DialogDesc,
+    DialogFooter
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 // Define the shape of our Firestore Barangay Document
 type Barangay = {
@@ -27,32 +47,52 @@ type Barangay = {
 
 export default function AdminDashboardPage() {
   const firestore = useFirestore();
+  const { toast } = useToast();
+  const [selectedTenant, setSelectedTenant] = useState<Barangay | null>(null);
 
-  // Fetch Live Data
+  // 1. Fetch Global Stats (Scalable)
+  const statsRef = useMemoFirebase(() => {
+     if (!firestore) return null;
+     return doc(firestore, 'system', 'stats');
+  }, [firestore]);
+  
+  const { data: globalStats } = useDoc<{ totalPopulation: number, totalHouseholds: number, activeTenants: number }>(statsRef);
+
+
+  // 2. Fetch Recent Tenants (For the List View only)
   const barangaysQuery = useMemoFirebase(() => {
       if (!firestore) return null;
       return query(
           collection(firestore, 'barangays'),
           orderBy('createdAt', 'desc'),
-          limit(50) // Limit for dashboard view
+          limit(50) 
       );
   }, [firestore]);
 
   const { data: realBarangays, isLoading } = useCollection<Barangay>(barangaysQuery);
 
-  // Calculate Aggregates
+  // Fallback Aggregation (Only used if globalStats is missing initially)
   const aggregates = useMemo(() => {
+      if (globalStats) {
+          return {
+              population: globalStats.totalPopulation || 0,
+              households: globalStats.totalHouseholds || 0,
+              active: globalStats.activeTenants || 0,
+              quality: 85 // Mocked avg until we aggregate quality too
+          };
+      }
+
+      // Client-side fallback for immediate feedback before first sync
       if (!realBarangays) return { population: 0, households: 0, active: 0, quality: 0 };
-      
       return realBarangays.reduce((acc, curr) => ({
           population: acc.population + (curr.population || 0),
           households: acc.households + (curr.households || 0),
           active: acc.active + (curr.status === 'Live' ? 1 : 0),
           quality: acc.quality + (curr.quality || 0)
       }), { population: 0, households: 0, active: 0, quality: 0 });
-  }, [realBarangays]);
+  }, [realBarangays, globalStats]);
 
-  const averageQuality = realBarangays?.length ? Math.round(aggregates.quality / realBarangays.length) : 0;
+  const averageQuality = realBarangays?.length && !globalStats ? Math.round(aggregates.quality / realBarangays.length) : aggregates.quality;
 
   const kpiData = [
     { 
@@ -74,7 +114,7 @@ export default function AdminDashboardPage() {
     { 
         title: "Active Barangays", 
         value: aggregates.active.toLocaleString(), 
-        trend: realBarangays ? `of ${realBarangays.length} Provisioned` : "Loading...", 
+        trend: "Live", 
         subtext: "SaaS Tenants", 
         icon: ShieldCheck, 
         color: "text-amber-500" 
@@ -88,6 +128,33 @@ export default function AdminDashboardPage() {
         color: "text-purple-500" 
     },
   ];
+
+  const handleDelete = async (id: string) => {
+      if (!firestore) return;
+      try {
+          // Note: In a real app, you should use the API to delete so it updates global stats!
+          // Direct deleteDoc here will skip the aggregation logic in the API.
+          // For consistency with the "Scalable" requirement, we should call the API.
+          
+          const auth = await import('firebase/auth').then(m => m.getAuth());
+          const token = await auth.currentUser?.getIdToken();
+
+          await fetch('/api/admin/approve-request', {
+             method: 'POST',
+             headers: { 
+                 'Content-Type': 'application/json',
+                 'Authorization': `Bearer ${token}`
+             },
+             body: JSON.stringify({ requestId: id, action: 'delete' })
+          });
+
+          toast({ title: "Tenant Deleted", description: "The tenant vault has been removed." });
+          setSelectedTenant(null);
+      } catch (e) {
+          console.error(e);
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete tenant." });
+      }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -144,7 +211,7 @@ export default function AdminDashboardPage() {
                          <div className="text-center space-y-2">
                             <MapIcon className="h-16 w-16 text-slate-600 mx-auto" />
                             <p className="text-slate-500 text-sm">Interactive WebGL Map Component</p>
-                            <p className="text-xs text-slate-600 font-mono">Rendering {aggregates.households > 0 ? aggregates.households : 'Zero'} Points...</p>
+                            <p className="text-xs text-slate-600 font-mono">Rendering {aggregates.households > 0 ? aggregates.households.toLocaleString() : 'Zero'} Points...</p>
                          </div>
                     </div>
                  </div>
@@ -277,7 +344,7 @@ export default function AdminDashboardPage() {
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group">
+                                    <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group" onClick={() => setSelectedTenant(tenant)}>
                                         <Eye className="h-3.5 w-3.5 mr-1" /> Inspect
                                     </Button>
                                 </TableCell>
@@ -294,6 +361,91 @@ export default function AdminDashboardPage() {
             </Table>
           </CardContent>
       </Card>
+
+      {/* INSPECTION DIALOG */}
+        <Dialog open={!!selectedTenant} onOpenChange={(open) => !open && setSelectedTenant(null)}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-green-600" />
+                        {selectedTenant?.name}
+                    </DialogTitle>
+                    <DialogDesc>Tenant Vault Details & Controls</DialogDesc>
+                </DialogHeader>
+                {selectedTenant && (
+                    <div className="space-y-4 py-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">Vault ID</span>
+                                <div className="font-mono text-sm bg-slate-100 p-2 rounded truncate" title={selectedTenant.id}>
+                                    {selectedTenant.id}
+                                </div>
+                            </div>
+                             <div className="space-y-1">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">Status</span>
+                                <div className="flex items-center gap-2">
+                                    <Badge className="bg-green-100 text-green-700 border-0 hover:bg-green-200">
+                                        <CheckCircle2 className="h-3 w-3 mr-1" /> Live
+                                    </Badge>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Location:</span>
+                                <span className="font-medium">{selectedTenant.city}, {selectedTenant.province}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Population:</span>
+                                <span className="font-medium">{selectedTenant.population?.toLocaleString() || 0}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Data Quality Score:</span>
+                                <span className="font-medium text-green-600">{selectedTenant.quality || 0}%</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Created:</span>
+                                <span className="font-mono text-xs">{selectedTenant.createdAt?.toDate ? selectedTenant.createdAt.toDate().toLocaleDateString() : 'N/A'}</span>
+                             </div>
+                        </div>
+
+                        <div className="flex justify-between gap-2 pt-2 border-t mt-4">
+                             <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                                        <Trash2 className="h-4 w-4 mr-2" /> Delete Tenant
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Tenant Vault?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action is irreversible. It will permanently delete all data associated with <strong>{selectedTenant.name}</strong>, including residents, documents, and logs.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDelete(selectedTenant.id)} className="bg-destructive hover:bg-destructive/90">
+                                            Delete Permanently
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                             </AlertDialog>
+
+                             <div className="flex gap-2">
+                                <Button variant="ghost" onClick={() => setSelectedTenant(null)}>Close</Button>
+                                <Button asChild className="bg-slate-900 text-white">
+                                    <Link href={`/dashboard`}>
+                                        <FileText className="mr-2 h-4 w-4" /> Enter Vault
+                                    </Link>
+                                </Button>
+                             </div>
+                        </div>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }

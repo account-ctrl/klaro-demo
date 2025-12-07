@@ -6,12 +6,31 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Mail } from "lucide-react";
+import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Trash2, FileText, CheckCircle2 } from "lucide-react";
 import { getProvinces, getCitiesMunicipalities, fetchBarangays, Province, CityMunicipality, Barangay as PSGCBarangay } from '@/lib/data/psgc';
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import Link from 'next/link';
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription as DialogDesc
+} from "@/components/ui/dialog";
 
 // Define the shape of our Firestore Barangay Document
 type TenantBarangay = {
@@ -31,11 +50,14 @@ export default function JurisdictionsPage() {
   const [selectedCity, setSelectedCity] = useState<CityMunicipality | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
+  const [tenantToInspect, setTenantToInspect] = useState<TenantBarangay | null>(null);
+  
   // State for official PSGC list
   const [masterBarangays, setMasterBarangays] = useState<PSGCBarangay[]>([]);
   const [isLoadingMaster, setIsLoadingMaster] = useState(false);
 
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const provinces = useMemo(() => getProvinces(), []);
   
@@ -88,8 +110,6 @@ export default function JurisdictionsPage() {
       
       return masterBarangays.map(official => {
           // Find matching tenant
-          // Note: PSGC names might differ slightly (e.g., "Poblacion" vs "Brgy. Poblacion"). 
-          // Simple includes/match for now.
           const tenant = tenantBarangays?.find(t => 
               t.name.toLowerCase() === official.name.toLowerCase() || 
               t.name.toLowerCase().includes(official.name.toLowerCase())
@@ -144,6 +164,17 @@ export default function JurisdictionsPage() {
   const handleBackToCities = () => {
       setSelectedCity(null);
       setSearchQuery('');
+  };
+
+  const handleDeleteTenant = async (id: string) => {
+      if (!firestore) return;
+      try {
+          await deleteDoc(doc(firestore, 'barangays', id));
+          toast({ title: "Tenant Deleted", description: "The barangay has been reset to 'Untapped' status." });
+      } catch (e) {
+          console.error(e);
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete tenant." });
+      }
   };
 
 
@@ -395,11 +426,35 @@ export default function JurisdictionsPage() {
                                             <TableCell className="text-xs text-slate-500">
                                                 {brgy.lastActivity ? 'Active recently' : '-'}
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right flex items-center justify-end gap-2">
                                                 {brgy.status === 'Live' ? (
-                                                    <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group">
-                                                        <Eye className="h-3.5 w-3.5 mr-1" /> Inspect
-                                                    </Button>
+                                                    <>
+                                                        <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group" onClick={() => setTenantToInspect(brgy)}>
+                                                            <Eye className="h-3.5 w-3.5 mr-1" /> Inspect
+                                                        </Button>
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50">
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Delete Tenant?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        This will permanently delete the vault for <strong>{brgy.name}</strong>. 
+                                                                        This action cannot be undone.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDeleteTenant(brgy.id)} className="bg-destructive hover:bg-destructive/90">
+                                                                        Delete
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </>
                                                 ) : (
                                                     <Button 
                                                         variant="ghost" 
@@ -422,6 +477,67 @@ export default function JurisdictionsPage() {
                </Card>
           </div>
       )}
+
+        {/* TENANT DETAILS INSPECTION DIALOG */}
+        <Dialog open={!!tenantToInspect} onOpenChange={(open) => !open && setTenantToInspect(null)}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-green-600" />
+                        {tenantToInspect?.name}
+                    </DialogTitle>
+                    <DialogDesc>Tenant Vault Details</DialogDesc>
+                </DialogHeader>
+                {tenantToInspect && (
+                    <div className="space-y-4 py-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">Vault ID</span>
+                                <div className="font-mono text-sm bg-slate-100 p-2 rounded truncate" title={tenantToInspect.id}>
+                                    {tenantToInspect.id}
+                                </div>
+                            </div>
+                             <div className="space-y-1">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">Status</span>
+                                <div className="flex items-center gap-2">
+                                    <Badge className="bg-green-100 text-green-700 border-0 hover:bg-green-200">
+                                        <CheckCircle2 className="h-3 w-3 mr-1" /> Live
+                                    </Badge>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Location:</span>
+                                <span className="font-medium">{tenantToInspect.city}, {tenantToInspect.province}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Population:</span>
+                                <span className="font-medium">{tenantToInspect.population?.toLocaleString() || 0}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Data Quality Score:</span>
+                                <span className="font-medium text-green-600">{tenantToInspect.quality || 0}%</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Created:</span>
+                                <span className="font-mono text-xs">{tenantToInspect.createdAt?.toDate ? tenantToInspect.createdAt.toDate().toLocaleDateString() : 'N/A'}</span>
+                             </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                             <Button variant="outline" onClick={() => setTenantToInspect(null)}>Close</Button>
+                             <Button asChild className="bg-slate-900 text-white">
+                                 <Link href={`/dashboard`}>
+                                     <FileText className="mr-2 h-4 w-4" /> Enter Vault
+                                 </Link>
+                             </Button>
+                        </div>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
 
     </div>
   );

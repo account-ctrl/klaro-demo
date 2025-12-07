@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin'; 
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: Request) {
   try {
@@ -25,25 +25,38 @@ export async function POST(req: Request) {
 
     const requestRef = adminDb.collection('barangays').doc(requestId);
     const requestSnap = await requestRef.get();
+    const statsRef = adminDb.collection('system').doc('stats');
 
     if (!requestSnap.exists) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
 
+    const data = requestSnap.data();
+
     // ---------------------------------------------------------
     // SCENARIO A: DELETE REQUEST (Cleanup)
     // ---------------------------------------------------------
     if (action === 'delete') {
-        // Hard delete the document
-        await requestRef.delete();
-        
-        // Also cleanup associated users if they exist (optional but good for hygiene)
-        // For this demo, we assume the barangay doc is the main thing
+        const wasLive = data?.status === 'Live';
+        const population = data?.population || 0;
+        const households = data?.households || 0;
+
+        await adminDb.runTransaction(async (t) => {
+             // 1. Delete Doc
+             t.delete(requestRef);
+             
+             // 2. Decrement Global Stats if it was a live tenant
+             if (wasLive) {
+                 t.set(statsRef, {
+                     totalPopulation: FieldValue.increment(-population),
+                     totalHouseholds: FieldValue.increment(-households),
+                     activeTenants: FieldValue.increment(-1)
+                 }, { merge: true });
+             }
+        });
         
         return NextResponse.json({ success: true, status: 'deleted' });
     }
-
-    const data = requestSnap.data();
 
     // ---------------------------------------------------------
     // SCENARIO B: REJECT REQUEST
@@ -61,7 +74,9 @@ export async function POST(req: Request) {
     // SCENARIO C: APPROVE & PROVISION
     // ---------------------------------------------------------
     if (action === 'approve') {
-      
+      const population = data?.population || 0;
+      const households = data?.households || 0;
+
       await adminDb.runTransaction(async (t) => {
         // 1. Update Request Status to Live
         t.update(requestRef, {
@@ -71,12 +86,17 @@ export async function POST(req: Request) {
         });
         
         // 2. Initialize Counters if needed
-        const statsRef = requestRef.collection('counters').doc('stats');
-        t.set(statsRef, { residentCount: 0, blotterCount: 0 }, { merge: true });
+        const tenantStatsRef = requestRef.collection('counters').doc('stats');
+        t.set(tenantStatsRef, { residentCount: 0, blotterCount: 0 }, { merge: true });
 
-        // 3. Metric Isolation logic:
-        // Ensure that if this is a test tenant, we explicitly mark related data or do nothing extra.
-        // The data.isTest field handles the exclusion from dashboard queries (if filtered correctly there).
+        // 3. Update Global System Stats (The Scalable Way)
+        // We use merge: true to ensure the doc is created if it doesn't exist
+        t.set(statsRef, {
+             totalPopulation: FieldValue.increment(population),
+             totalHouseholds: FieldValue.increment(households),
+             activeTenants: FieldValue.increment(1),
+             lastUpdated: Timestamp.now()
+        }, { merge: true });
       });
 
       return NextResponse.json({ success: true, status: 'approved', tenantId: requestId });

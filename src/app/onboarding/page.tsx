@@ -25,7 +25,8 @@ import {
   Stamp,
   Server,
   ArrowRight,
-  Check
+  Check,
+  FileBadge
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';

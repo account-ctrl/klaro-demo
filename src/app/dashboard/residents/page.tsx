@@ -10,6 +10,7 @@ import { DataTable } from "./data-table";
 import { ResidentFormValues } from "./resident-actions";
 import { useToast } from "@/hooks/use-toast";
 import { useResidents, useHouseholds, useBarangayRef, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { updateSystemStats } from "@/lib/trigger-simulation";
 
 type ResidentWithId = Resident & { id?: string };
 
@@ -34,6 +35,9 @@ export default function ResidentsPage() {
     };
     
     setDocumentNonBlocking(docRef, finalDoc, { merge: true });
+
+    // Simulate Cloud Function Trigger
+    updateSystemStats({ population: 1 });
 
     toast({
         title: "Resident Added",
@@ -69,6 +73,9 @@ export default function ResidentsPage() {
     if (!firestore) return;
     const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/residents/${id}`);
     deleteDocumentNonBlocking(docRef);
+
+    // Simulate Cloud Function Trigger
+    updateSystemStats({ population: -1 });
   };
   
   const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, households ?? []), [households]);
