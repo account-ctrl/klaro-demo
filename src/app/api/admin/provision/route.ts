@@ -12,9 +12,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Construct the Tenant Path using the Helper
-    const vaultPath = Paths.getVaultRoot(province, city, barangayName);
-    const tenantSlug = `${slugify(city)}-${slugify(barangayName)}`;
+    // 1. Construct the Tenant Path using the Helper (or manual slugify if helper not available)
+    const provinceSlug = slugify(province);
+    const citySlug = slugify(city);
+    const barangaySlug = slugify(barangayName);
+    
+    const vaultPath = `provinces/${provinceSlug}/cities/${citySlug}/barangays/${barangaySlug}`;
+    const tenantSlug = `${citySlug}-${barangaySlug}`;
 
     // 2. Auth: Create User
     let uid;
@@ -43,9 +47,9 @@ export async function POST(req: Request) {
 
     // 4. Transactional Write
     await adminDb.runTransaction(async (t) => {
-        const directoryRef = adminDb.doc(Paths.getDirectoryDocPath(tenantSlug));
+        const directoryRef = adminDb.collection('tenant_directory').doc(tenantSlug);
         const tenantRef = adminDb.doc(vaultPath);
-        const settingsRef = adminDb.doc(Paths.getSettingsPath(vaultPath));
+        const settingsRef = adminDb.doc(`${vaultPath}/settings/general`);
         const userProfileRef = adminDb.collection('users').doc(uid); 
 
         // Step A: Directory
@@ -63,9 +67,9 @@ export async function POST(req: Request) {
             name: barangayName,
             city: city,
             province: province,
-            status: 'Live',
+            status: 'active',
             createdAt: Timestamp.now(),
-            plan: 'standard'
+            plan: 'free'
         }, { merge: true });
 
         // Step C: Pre-filled Settings (Crucial for Dashboard UX)
@@ -74,18 +78,12 @@ export async function POST(req: Request) {
             location: {
                 province: province,
                 city: city,
-                region: 'IV-A' // Could be dynamic if passed
             },
             captainProfile: {
                 name: adminName,
                 email: adminEmail,
-                contactNumber: ''
             },
-            modules: ['blotter', 'residents', 'certificates'],
-            theme: {
-                primaryColor: 'blue',
-            },
-            lastUpdated: Timestamp.now()
+            createdAt: Timestamp.now()
         }, { merge: true });
 
         // Step D: Update User Profile in Firestore

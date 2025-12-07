@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { Lock, User, Key, Loader2, AlertOctagon, Terminal } from "lucide-react";
 import { useAuth, initiateEmailSignIn } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Logo } from "@/components/logo";
+import Image from 'next/image';
 
 export default function SecureAdminLoginPage() {
     const router = useRouter();
@@ -72,17 +72,17 @@ export default function SecureAdminLoginPage() {
         
         <Card className="w-full max-w-sm border-[#1F2937] bg-[#0A1124] text-slate-200 shadow-2xl z-10 rounded-lg">
             <CardHeader className="text-center pt-8 pb-4">
-                 <div className="flex justify-center mb-4">
-                    <div className="bg-orange-500 rounded p-1">
-                        {/* KlaroGov Logo Placeholder - White Icon */}
-                        <div className="grid grid-cols-2 gap-0.5 w-6 h-6">
-                            <div className="bg-white rounded-[1px]"></div>
-                            <div className="bg-white rounded-[1px] opacity-70"></div>
-                            <div className="bg-white rounded-[1px] opacity-70"></div>
-                            <div className="bg-white rounded-[1px]"></div>
-                        </div>
+                 <div className="flex justify-center mb-4 items-center">
+                    {/* Actual Logo Image */}
+                    <div className="relative w-8 h-8 mr-3">
+                        <Image 
+                            src="/KlaroGov Logo.png" 
+                            alt="KlaroGov Seal" 
+                            fill 
+                            className="object-contain"
+                        />
                     </div>
-                    <span className="ml-2 font-bold text-lg text-white tracking-tight flex items-center">KlaroGov</span>
+                    <span className="font-bold text-lg text-white tracking-tight flex items-center">KlaroGov</span>
                 </div>
                 <CardTitle className="text-xl font-bold tracking-tight text-white">System Authority</CardTitle>
                 <CardDescription className="text-slate-500 text-xs mt-1">
