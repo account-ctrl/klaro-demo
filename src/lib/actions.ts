@@ -1,64 +1,66 @@
 'use server';
 
-import { getBarangayInsights } from '@/ai/flows/barangay-data-insights';
-import { barangayDataForAI } from '@/lib/data';
-import { redirect } from 'next/navigation';
-import { z } from 'zod';
-import { revalidatePath } from 'next/cache';
+import { getFirestore } from 'firebase-admin/firestore';
+import { adminApp } from '@/lib/firebase-admin'; // Assuming admin app is initialized here
 
-const profileSchema = z.object({
-  barangayName: z.string().min(3, "Barangay name must be at least 3 characters."),
-  city: z.string().min(3, "City/Municipality must be at least 3 characters."),
-  province: z.string().min(3, "Province must be at least 3 characters."),
-});
+const db = getFirestore(adminApp);
 
-// Mock action. In a real app, this would save to a Firestore document.
-export async function saveProfile(prevState: any, formData: FormData) {
-  const validatedFields = profileSchema.safeParse({
-    barangayName: formData.get('barangayName'),
-    city: formData.get('city'),
-    province: formData.get('province'),
-  });
+interface SendInviteArgs {
+  to: string;
+  link: string;
+  barangay: string;
+  inviter: string;
+}
 
-  if (!validatedFields.success) {
-    return {
-      message: 'Please correct the errors below.',
-      errors: validatedFields.error.flatten().fieldErrors,
-    };
+/**
+ * Creates an email document in the 'mail' collection
+ * which is then processed by the Firebase Email Trigger extension.
+ */
+export async function sendInvite(
+  { to, link, barangay, inviter }: SendInviteArgs
+): Promise<{ success: boolean; error?: string }> {
+  if (!to || !link || !barangay) {
+    return { success: false, error: "Missing required fields for sending invite." };
   }
-  
-  console.log('Saved Profile:', validatedFields.data);
-  // In a real app, update the user's onboarding step in Firestore here.
-  return { success: true, message: 'Profile saved!' };
-}
 
-// Mock action for saving officials list
-export async function saveOfficials(officials: { name: string; role: string }[]) {
-  // Add basic validation
-  if (!officials || officials.length === 0 || officials.some(o => !o.name || !o.role)) {
-    return { success: false, message: 'Please add at least one official with a name and role.' };
-  }
-  console.log('Saved Officials:', officials);
-  // In a real app, save to Firestore and update onboarding step.
-  return { success: true, message: 'Officials saved!' };
-}
-
-// Mock action to finalize onboarding
-export async function completeOnboarding() {
-  console.log('Onboarding complete!');
-  // In a real app, update user's status to 'complete' in Firestore.
-  // Then, revalidate the root path to trigger the redirect logic on the homepage.
-  revalidatePath('/');
-  redirect('/dashboard');
-}
-
-
-export async function generateInsightsAction() {
   try {
-    const result = await getBarangayInsights(barangayDataForAI);
-    return { success: true, insights: result.insights };
+    const mailRef = db.collection('mail');
+    
+    await mailRef.add({
+      to: [to],
+      message: {
+        subject: `Invitation to Onboard Barangay ${barangay}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h2>Hello!</h2>
+            <p>You have been invited by <strong>${inviter}</strong> to set up the digital vault for <strong>Barangay ${barangay}</strong> on the KlaroGov platform.</p>
+            <p>Please click the secure link below to begin the onboarding process:</p>
+            <p style="text-align: center;">
+              <a 
+                href="${link}" 
+                style="background-color: #f59e0b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;"
+              >
+                Start Onboarding
+              </a>
+            </p>
+            <p>If you are not the intended recipient or did not expect this invitation, please disregard this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee;" />
+            <p style="font-size: 0.8em; color: #777;">
+              This is an automated message from the KlaroGov Super Administration Panel.
+            </p>
+          </div>
+        `,
+      },
+    });
+
+    console.log(`Successfully queued invitation email for ${to}`);
+    return { success: true };
+
   } catch (error) {
-    console.error(error);
-    return { success: false, error: 'Failed to generate insights. Please try again later.' };
+    console.error("Error queuing email in Firestore:", error);
+    if (error instanceof Error) {
+        return { success: false, error: error.message };
+    }
+    return { success: false, error: "An unknown error occurred while sending the invite." };
   }
 }
