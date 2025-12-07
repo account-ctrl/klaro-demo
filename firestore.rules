@@ -1,63 +1,52 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- Helper Functions ---
+
+    // --- HELPER FUNCTIONS ---
+
+    // Check if the user is a Super Admin
     function isSuperAdmin() {
-      return request.auth != null && request.auth.token.role == 'super_admin';
+      return request.auth.token.role == 'super_admin';
     }
 
-    function isTenantMember(docTenantId) {
-      return (request.auth.token.tenantId == docTenantId) || 
-             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == docTenantId);
+    // Check if the user's tenantPath claim matches the document's path prefix
+    function isAuthorizedTenant(province, city, barangay) {
+      let expectedPath = /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
+      return request.auth.token.tenantPath == expectedPath;
     }
 
-    // --- DEBUG MODE: Global Read Access (TEMPORARY) ---
-    // Warning: This exposes ALL data. Revert immediately after testing.
+    // --- GLOBAL RULES ---
+
+    // 1. Super Admin: Unlimited Access
     match /{document=**} {
-      allow read: if true; 
-      allow write: if isSuperAdmin(); // Keep write restricted to avoid mess
+      allow read, write: if isSuperAdmin();
     }
 
-    // ... (Keep existing specific rules below if needed, but the global match above might shadow them depending on order/specificity logic in Firestore. 
-    // In Firestore rules, overlapping match statements are allowed, and if ANY allow rule grants access, access is granted.
-    // So adding the global read above ensures read is allowed.)
-
-    // --- Tenant Directory ---
-    match /tenant_directory/{slug} {
-      allow read: if true; 
-      allow write: if isSuperAdmin();
+    // 2. Tenant Directory: Public Read (for finding login paths), No Write
+    match /tenant_directory/{tenantSlug} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Admin SDK can write
     }
     
-    // --- Global User Profiles ---
+    // 3. Global User Profiles: Users can read their own profile
     match /users/{userId} {
-      allow read: if (request.auth != null && request.auth.uid == userId) || 
-                     isSuperAdmin() || 
-                     isTenantMember(resource.data.tenantId);
-      
-      allow write: if (request.auth != null && request.auth.uid == userId) || 
-                      isSuperAdmin() || 
-                      isTenantMember(resource.data.tenantId);
-      
-      allow create: if request.auth != null && 
-                       (request.resource.data.tenantId == request.auth.token.tenantId || 
-                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == request.resource.data.tenantId);
+        allow read: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
+        allow write: if isSuperAdmin(); // Only Super Admins manage roles via API
     }
 
-    // --- Logical Vault Structure ---
+    // --- THE VAULT (Strict Isolation) ---
+
+    // Match the deep path: /provinces/{p}/cities/{c}/barangays/{b}
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
-      function isVaultMember() {
-        return request.auth != null && 
-               request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
-      }
+      // The Barangay Root Document (Read-Only metadata for the tenant)
+      allow read: if isAuthorizedTenant(province, city, barangay);
+      allow write: if false; // Metadata is managed by provisioning API
 
-      allow read: if isVaultMember() || isSuperAdmin();
-      allow write: if isSuperAdmin() || isVaultMember();
-
+      // Match ANY document at ANY depth inside the barangay
       match /{document=**} {
-        allow read, write: if isVaultMember() || isSuperAdmin();
+        allow read, write: if isAuthorizedTenant(province, city, barangay);
       }
     }
   }
