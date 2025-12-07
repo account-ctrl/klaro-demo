@@ -40,6 +40,7 @@ const profileSchema = z.object({
   barangayName: z.string().min(3, "Barangay name is required."),
   city: z.string().min(3, "City/Municipality is required."),
   province: z.string().min(3, "Province is required."),
+  region: z.string().optional(), // Added region
 });
 
 const officialsSchema = z.object({
@@ -149,7 +150,7 @@ export default function OnboardingPage() {
   // Forms
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { barangayName: '', city: '', province: '' },
+    defaultValues: { barangayName: '', city: '', province: '', region: '' },
   });
 
   // Effect to pre-fill from URL
@@ -157,14 +158,15 @@ export default function OnboardingPage() {
       const province = searchParams.get('province');
       const city = searchParams.get('city');
       const barangay = searchParams.get('barangay');
+      const region = searchParams.get('region');
 
       if (province && city && barangay) {
           profileForm.reset({
               province: decodeURIComponent(province),
               city: decodeURIComponent(city),
-              barangayName: decodeURIComponent(barangay)
+              barangayName: decodeURIComponent(barangay),
+              region: region ? decodeURIComponent(region) : ''
           });
-          // Optional: Auto-advance if you trust the link, but let user review first
       }
   }, [searchParams, profileForm]);
 
@@ -210,7 +212,7 @@ export default function OnboardingPage() {
     // Terminal Sequence + Real Firestore Writes
     const sequence = [
         "Connecting to PSGC National Database...",
-        `VERIFIED: Region IV-A (CALABARZON) - ${profileData.province} - ${profileData.city} - ${profileData.barangayName}`,
+        `VERIFIED: ${profileData.region || 'Region Unknown'} - ${profileData.province} - ${profileData.city} - ${profileData.barangayName}`,
         `Allocating isolated storage in ${profileData.province} Region...`,
         "Initializing Blotter & Health Record schemas...",
         "Generating unique encryption keys for [Barangay Name]...",
@@ -241,6 +243,7 @@ export default function OnboardingPage() {
                             province: profileData.province,
                             city: profileData.city,
                             barangay: profileData.barangayName,
+                            region: profileData.region, // Sending Region
                             adminProfile: captain ? {
                                 name: captain.name,
                                 email: captain.email,
@@ -344,6 +347,18 @@ export default function OnboardingPage() {
                         </div>
                         
                         <div className="grid gap-6">
+                            <FormField name="region" control={profileForm.control} render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-zinc-300">Region</FormLabel>
+                                <FormControl>
+                                    <div className="relative">
+                                        <Input placeholder="Region (Optional)..." {...field} className="bg-zinc-950/50 border-zinc-700 focus-visible:ring-primary pl-4" />
+                                    </div>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )} />
+
                             <FormField name="province" control={profileForm.control} render={({ field }) => (
                             <FormItem>
                                 <FormLabel className="text-zinc-300">Province</FormLabel>

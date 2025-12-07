@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -56,6 +55,7 @@ export default function TenantOversightPage() {
         barangayName: '',
         city: '',
         province: '',
+        region: '', // Added Region
         captainName: '',
         captainEmail: ''
     });
@@ -90,6 +90,7 @@ export default function TenantOversightPage() {
                 barangayName: settingsData.barangayName || '',
                 city: settingsData.location?.city || '',
                 province: settingsData.location?.province || '',
+                region: settingsData.location?.region || settingsData.region || '', // Load region
                 captainName: settingsData.captainProfile?.name || '',
                 captainEmail: settingsData.captainProfile?.email || ''
             });
@@ -113,6 +114,7 @@ export default function TenantOversightPage() {
                 barangayName: editForm.barangayName,
                 'location.city': editForm.city,
                 'location.province': editForm.province,
+                'location.region': editForm.region, // Save Region
                 'captainProfile.name': editForm.captainName,
                 'captainProfile.email': editForm.captainEmail
             });
@@ -121,7 +123,9 @@ export default function TenantOversightPage() {
             await updateDoc(vaultRef, {
                 name: editForm.barangayName,
                 city: editForm.city,
-                province: editForm.province
+                province: editForm.province,
+                region: editForm.region, // Save Region
+                'location.region': editForm.region
             });
 
             toast({ title: "Tenant Updated", description: "Configuration changes saved successfully." });
@@ -346,7 +350,10 @@ export default function TenantOversightPage() {
                              <div className="space-y-2">
                                 <h4 className="font-medium text-sm">Geography</h4>
                                 <div className="p-4 bg-slate-100 rounded-lg text-sm space-y-1">
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Region:</span> <span>IV-A (CALABARZON)</span></div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Region:</span>
+                                        {isEditing ? <Input value={editForm.region} onChange={e => setEditForm({...editForm, region: e.target.value})} className="h-6 w-48 text-xs" /> : <span>{settingsData?.location?.region || vaultData?.region || '—'}</span>}
+                                    </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-muted-foreground">Province:</span> 
                                         {isEditing ? <Input value={editForm.province} onChange={e => setEditForm({...editForm, province: e.target.value})} className="h-6 w-32 text-xs" /> : <span>{settingsData?.location?.province}</span>}
