@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     
     const tenantRef = adminDb.doc(vaultPath);
     const directoryRef = adminDb.collection('tenant_directory').doc(tenantSlug);
+    const settingsRef = adminDb.doc(`${vaultPath}/settings/general`); // Explicit settings path
     
     // Check existence
     const tenantSnap = await tenantRef.get();
@@ -36,7 +37,6 @@ export async function POST(req: Request) {
          // If already active, we might return 409, but for resilience we proceed if it's just a retry
          if (data?.status === 'Live') {
              console.log(`[PROVISION] Tenant ${vaultPath} already active.`);
-             // return NextResponse.json({ error: 'Tenant already active.' }, { status: 409 });
          }
     }
 
@@ -81,15 +81,13 @@ export async function POST(req: Request) {
 
         } catch (e: any) {
             console.error(`[PROVISION] User creation failed: ${e.message}`);
-            // We don't abort the whole process, but we log it. 
-            // In a strict world, we might want to fail here.
         }
     }
 
 
     // --- 2. DB WRITES ---
     await adminDb.runTransaction(async (t) => {
-        // A. Vault Root
+        // A. Vault Root Metadata (minimal)
         t.set(tenantRef, {
             name: barangay,
             city: city,
@@ -98,11 +96,6 @@ export async function POST(req: Request) {
             fullPath: vaultPath,
             status: 'Live',
             createdAt: Timestamp.now(),
-            settings: {
-                allowGlobalSearch: false, 
-                barangayName: barangay,
-                location: { province, city }
-            },
             location: {
                 region: region || '',
                 province: province,
@@ -111,7 +104,23 @@ export async function POST(req: Request) {
             }
         }, { merge: true });
 
-        // B. Directory Entry
+        // B. Dedicated Settings Document (used by Admin Dashboard & Settings Page)
+        // This ensures data is where the dashboard expects it.
+        t.set(settingsRef, {
+            barangayName: barangay,
+            location: {
+                province: province,
+                city: city,
+                region: region || '',
+            },
+            captainProfile: adminProfile ? {
+                name: adminProfile.name,
+                email: adminProfile.email,
+            } : {},
+            createdAt: Timestamp.now()
+        }, { merge: true });
+
+        // C. Directory Entry (Global Lookup)
         t.set(directoryRef, {
             fullPath: vaultPath,
             province,
@@ -123,19 +132,21 @@ export async function POST(req: Request) {
             updatedAt: Timestamp.now()
         }, { merge: true });
 
-        // C. Admin User Profile (Firestore)
+        // D. Admin User Profile (Global Firestore User)
         if (adminUid) {
             const userRef = adminDb.collection('users').doc(adminUid);
             t.set(userRef, {
                 uid: adminUid,
+                userId: adminUid, // Redundant but safe
                 email: adminProfile.email,
                 fullName: adminProfile.name,
+                position: 'Punong Barangay (Captain)', // Using standard title
                 role: 'captain',
                 systemRole: 'Admin',
                 tenantPath: vaultPath,
                 tenantId: tenantSlug,
                 createdAt: Timestamp.now(),
-                status: 'active'
+                status: 'Active'
             }, { merge: true });
         }
     });

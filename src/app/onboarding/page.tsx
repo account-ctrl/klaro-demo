@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useFirestore, useAuth, initiateEmailSignUp } from '@/firebase';
 import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { getProvinces, getRegionByProvince, Province } from '@/lib/data/psgc'; // Use PSGC Utility
 
 // --- Schemas ---
 
@@ -153,19 +154,42 @@ export default function OnboardingPage() {
     defaultValues: { barangayName: '', city: '', province: '', region: '' },
   });
 
-  // Effect to pre-fill from URL
+  // Helper to determine region automatically
+  const determineRegion = (provinceName: string) => {
+      const allProvinces = getProvinces();
+      // Case insensitive match
+      const matchedProvince = allProvinces.find(p => p.name.toLowerCase() === provinceName.toLowerCase());
+      if (matchedProvince) {
+          const regionName = getRegionByProvince(matchedProvince.code);
+          return regionName;
+      }
+      return '';
+  };
+
+  // Effect to pre-fill from URL and Auto-Determine Region
   useEffect(() => {
       const province = searchParams.get('province');
       const city = searchParams.get('city');
       const barangay = searchParams.get('barangay');
-      const region = searchParams.get('region');
+      const regionParam = searchParams.get('region');
 
       if (province && city && barangay) {
+          const decodedProvince = decodeURIComponent(province);
+          const decodedCity = decodeURIComponent(city);
+          const decodedBarangay = decodeURIComponent(barangay);
+          
+          let determinedRegion = regionParam ? decodeURIComponent(regionParam) : '';
+
+          // If region is missing in URL, try to find it via PSGC utility
+          if (!determinedRegion) {
+              determinedRegion = determineRegion(decodedProvince);
+          }
+
           profileForm.reset({
-              province: decodeURIComponent(province),
-              city: decodeURIComponent(city),
-              barangayName: decodeURIComponent(barangay),
-              region: region ? decodeURIComponent(region) : ''
+              province: decodedProvince,
+              city: decodedCity,
+              barangayName: decodedBarangay,
+              region: determinedRegion
           });
       }
   }, [searchParams, profileForm]);
@@ -182,6 +206,14 @@ export default function OnboardingPage() {
 
   // Handlers
   const handleProfileSubmit = (data: ProfileFormValues) => {
+    // Double check region before proceeding if user manually typed province
+    if (!data.region) {
+        const regionName = determineRegion(data.province);
+        if (regionName) {
+            data.region = regionName;
+            profileForm.setValue('region', regionName);
+        }
+    }
     setProfileData(data);
     setCurrentStep(2);
   };
@@ -347,18 +379,7 @@ export default function OnboardingPage() {
                         </div>
                         
                         <div className="grid gap-6">
-                            <FormField name="region" control={profileForm.control} render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-zinc-300">Region</FormLabel>
-                                <FormControl>
-                                    <div className="relative">
-                                        <Input placeholder="Region (Optional)..." {...field} className="bg-zinc-950/50 border-zinc-700 focus-visible:ring-primary pl-4" />
-                                    </div>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )} />
-
+                            
                             <FormField name="province" control={profileForm.control} render={({ field }) => (
                             <FormItem>
                                 <FormLabel className="text-zinc-300">Province</FormLabel>
@@ -366,6 +387,20 @@ export default function OnboardingPage() {
                                     <div className="relative">
                                         <Input placeholder="Search Province..." {...field} className="bg-zinc-950/50 border-zinc-700 focus-visible:ring-primary pl-4" />
                                         {field.value.length > 3 && <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-green-500" />}
+                                    </div>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )} />
+
+                            {/* Hidden Region Field but used for logic */}
+                             <FormField name="region" control={profileForm.control} render={({ field }) => (
+                            <FormItem className={field.value ? "" : "hidden"}> 
+                                <FormLabel className="text-zinc-300">Region</FormLabel>
+                                <FormControl>
+                                    <div className="relative">
+                                        <Input readOnly placeholder="Region Auto-Detected..." {...field} className="bg-zinc-900 border-zinc-800 text-zinc-500 focus-visible:ring-0 pl-4 cursor-not-allowed" />
+                                        <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-green-500" />
                                     </div>
                                 </FormControl>
                                 <FormMessage />

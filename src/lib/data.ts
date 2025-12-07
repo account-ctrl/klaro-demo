@@ -1,143 +1,99 @@
 
-import type { Project } from '@/lib/types';
+import {
+    Activity,
+    AlertTriangle,
+    Archive,
+    Calendar,
+    FileText,
+    Heart,
+    Home,
+    LayoutDashboard,
+    Megaphone,
+    PawPrint,
+    Settings,
+    Shield,
+    Users,
+    Vote,
+    ScrollText,
+    Truck,
+    Briefcase
+} from "lucide-react";
 
-export const projectData: Project[] = [
-  { projectId: 'PROJ-001', projectName: 'Purok 1 Road Widening', budget_amount: 1500000, target_start_date: '2023-01-15', target_end_date: '2023-06-30', status: 'Completed', percentComplete: 100, category: 'Infrastructure' },
-  { projectId: 'PROJ-002', projectName: 'Barangay Hall Repainting', budget_amount: 250000, target_start_date: '2023-07-01', target_end_date: '2023-08-31', status: 'Completed', percentComplete: 100, category: 'Infrastructure' },
-  { projectId: 'PROJ-003', projectName: 'New Drainage System Construction', budget_amount: 3500000, target_start_date: '2023-09-01', target_end_date: '2024-05-30', status: 'Ongoing', percentComplete: 75, category: 'Infrastructure' },
-  { projectId: 'PROJ-004', projectName: 'Streetlight Installation Phase 2', budget_amount: 750000, target_start_date: '2024-06-01', target_end_date: '2024-09-30', status: 'Ongoing', percentComplete: 25, category: 'Infrastructure' },
-  { projectId: 'PROJ-005', projectName: 'Community Vegetable Garden', budget_amount: 50000, target_start_date: '2024-07-01', target_end_date: '2024-07-31', status: 'Planned', percentComplete: 0, category: 'Social Services' },
-];
-
-export const statsData = {
-  totalResidents: 789,
-  certificationsIssued: 124,
-  caseResolutionCount: 56,
-};
-
-export const barangayDataForAI = {
-  residentDemographics: JSON.stringify([
-    { purok: '1', count: 150, avgAge: 35 },
-    { purok: '2', count: 200, avgAge: 32 },
-    { purok: '3', count: 180, avgAge: 40 },
-    { purok: '4', count: 259, avgAge: 28 },
-  ]),
-  projectStatus: JSON.stringify([
-    { name: 'Road Repair', status: 'Ongoing', budget: 500000 },
-    { name: 'Community Garden', status: 'Completed', budget: 50000 },
-    { name: 'Streetlight Installation', status: 'Planned', budget: 250000 },
-  ]),
-  blotterResolutions: JSON.stringify([
-    { month: 'January', resolved: 10, unresolved: 2 },
-    { month: 'February', resolved: 8, unresolved: 3 },
-    { month: 'March', resolved: 12, unresolved: 1 },
-  ]),
-};
+// --- Official Position Constants (Sync across app) ---
 
 export const officialsAndStaff = [
-    // Elected
-    'Punong Barangay (Barangay Captain)',
-    'Sangguniang Barangay Member (Barangay Kagawad)',
-    'SK Chairperson (Sangguniang Kabataan Chairperson)',
-    // Appointed
-    'Barangay Secretary',
-    'Barangay Treasurer',
-    'Barangay Record Keeper',
-    // Peace, Order & Justice
-    'Lupon President',
-    'Lupon Member (Pangkat Tagapagkasundo)',
-    'Chief Tanod (Executive Officer)',
-    'Barangay Tanod (BPSO - Barangay Public Safety Officer)',
-    // Health & Social Services
-    'BHW President (Head of Health Workers)',
-    'Barangay Health Worker (BHW)',
-    'Barangay Nutrition Scholar (BNS)',
-    'Day Care Worker (CDC Worker)',
-    'VAWC Desk Officer',
-    // Support Staff
-    'Admin Aide / Clerk',
-    'Driver / Ambulance Operator',
-    'Utility Worker',
-    'Eco-Aide / Street Sweeper',
+    "Punong Barangay (Captain)",
+    "Sangguniang Barangay Member (Barangay Kagawad)",
+    "SK Chairperson",
+    "Barangay Secretary",
+    "Barangay Treasurer",
+    "Barangay Record Keeper",
+    "Admin Staff / Clerk",
+    "Barangay Tanod (Executive Officer)",
+    "Barangay Tanod (Member)",
+    "Lupon Tagapamayapa Member",
+    "BHW (Barangay Health Worker)",
+    "BNS (Barangay Nutrition Scholar)",
+    "Day Care Worker",
+    "Utility Worker / Street Sweeper",
+    "Driver / Operator"
 ];
 
 export const committeeAssignments = [
-    'Committee on Peace and Order & Public Safety',
-    'Committee on Appropriations / Finance',
-    'Committee on Infrastructure & Public Works',
-    'Committee on Health & Sanitation',
-    'Committee on Education & Culture',
-    'Committee on Women, Family, & Gender and Development (GAD)',
-    'Committee on Youth & Sports Development',
-    'Committee on Environmental Protection',
-    'Committee on Agriculture / Livelihood / Cooperatives',
-    'Committee on Human Rights & Rules',
+    "Committee on Peace and Order",
+    "Committee on Appropriations / Finance",
+    "Committee on Health and Sanitation",
+    "Committee on Education and Culture",
+    "Committee on Women and Family",
+    "Committee on Youth and Sports Development",
+    "Committee on Infrastructure / Public Works",
+    "Committee on Environmental Protection",
+    "Committee on Agriculture / Livelihood",
+    "Committee on Human Rights",
+    "Committee on Rules and Privileges"
 ];
 
 export const systemRoles = [
-    'Super Admin',
-    'Admin',
-    'Encoder',
-    'Viewer',
-    'Responder'
+    "Super Admin", // Developer
+    "Admin", // Captain/Secretary
+    "Encoder", // Staff
+    "Responder", // Tanod/Health Worker
+    "Viewer" // Limited access
 ];
 
-export const fundSources = [
-    "General Fund",
-    "Sangguniang Kabataan (SK) Fund",
-    "Gender and Development (GAD) Fund",
-    "Calamity / DRRM Fund"
+// --- Navigation Menus ---
+
+export const navItems = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Residents", href: "/dashboard/residents", icon: Users },
+    { name: "Households", href: "/dashboard/households", icon: Home },
+    { name: "Blotter & Justice", href: "/dashboard/blotter", icon: Shield },
+    { name: "Certificates", href: "/dashboard/documents", icon: FileText },
+    { name: "Health & Medicine", href: "/dashboard/ehealth", icon: Heart }, // Updated Path
+    { name: "Legislative", href: "/dashboard/legislative", icon: ScrollText }, // New Phase 2
+    { name: "Emergency & 911", href: "/dashboard/emergency", icon: AlertTriangle },
+    { name: "Assets & Fleet", href: "/dashboard/assets", icon: Truck }, // New Phase 3
+    { name: "Treasury", href: "/dashboard/financials", icon: Vote },
+    { name: "Projects", href: "/dashboard/projects", icon: Briefcase }, // New Phase 2
+    { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone },
+    { name: "Calendar", href: "/dashboard/scheduler", icon: Calendar },
+    { name: "Animal Registry", href: "/dashboard/pets", icon: PawPrint },
+    { name: "Activity Logs", href: "/dashboard/activity", icon: Activity },
+    { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
-export const incomeCategories = [
-    { label: "National Tax Allotment (NTA/IRA)", value: "National Tax Allotment (NTA/IRA)" },
-    { label: "Real Property Tax (RPT) Share", value: "Real Property Tax (RPT) Share" },
-    { label: "Barangay Clearance Fees", value: "Barangay Clearance Fees" },
-    { label: "Business Permit / Clearance Fees", value: "Business Permit / Clearance Fees" },
-    { label: "Certification Fees", value: "Certification Fees" },
-    { label: "Permit to Construct / Building Clearance", value: "Permit to Construct / Building Clearance" },
-    { label: "Community Tax Certificate (Cedula) Share", value: "Community Tax Certificate (Cedula) Share" },
-    { label: "Barangay Facilities Rental", value: "Barangay Facilities Rental" },
-    { label: "Donations / Grants", value: "Donations / Grants" },
+export const residentNavItems = [
+    { name: "My Dashboard", href: "/resident/dashboard", icon: LayoutDashboard },
+    { name: "My Requests", href: "/resident/my-requests", icon: FileText },
+    { name: "Community Board", href: "/resident/announcements", icon: Megaphone },
+    { name: "Barangay Officials", href: "/resident/directory", icon: Users },
+    { name: "My Profile", href: "/resident/profile", icon: Settings },
 ];
 
-export const expenseCategories = [
-    { label: "Honoraria (Officials & Staff)", value: "Honoraria (Officials & Staff)" },
-    { label: "Cash Gift / Year-End Bonus", value: "Cash Gift / Year-End Bonus" },
-    { label: "PhilHealth / Pag-IBIG Contributions", value: "PhilHealth / Pag-IBIG Contributions" },
-    { label: "Traveling / Training Expenses", value: "Traveling / Training Expenses" },
-    { label: "Office Supplies & Materials", value: "Office Supplies & Materials" },
-    { label: "Water & Electricity Utilities", value: "Water & Electricity Utilities" },
-    { label: "Internet & Communication", value: "Internet & Communication" },
-    { label: "Repairs & Maintenance", value: "Repairs & Maintenance" },
-    { label: "Fuel, Oil, and Lubricants", value: "Fuel, Oil, and Lubricants" },
-    { label: "Fidelity Bond Premiums", value: "Fidelity Bond Premiums" },
-    { label: "Purchase of Equipment", value: "Purchase of Equipment" },
-    { label: "Purchase of Furniture", value: "Purchase of Furniture" },
-    { label: "Infrastructure Projects", value: "Infrastructure Projects" },
-    { label: "Aid to Indigents (AICS)", value: "Aid to Indigents (AICS)" },
-    { label: "Disaster Response / Relief Goods", value: "Disaster Response / Relief Goods" },
-    { label: "Peace & Order Activities", value: "Peace & Order Activities" },
-];
-
-
-// Deprecated. Data now comes from firestore.
-export const officialData: any[] = [];
-
-export const LOCATION_OPTIONS = [
-  "Barangay Hall Storage Room",
-  "Health Center",
-  "Multi-Purpose Court",
-  "Day Care Center",
-  "Security Outpost",
-  "Treasurer's Office",
-  "Session Hall"
-];
-
-export const OFFICIAL_ROSTER = [
-    { id: "off1", name: "Juan Dela Cruz (Kapitan)" },
-    { id: "off2", name: "Maria Clara (Treasurer)" },
-    { id: "off3", name: "Jose Rizal (Secretary)" },
-    { id: "off4", name: "Andres Bonifacio (Tanod Chief)" },
-    { id: "off5", name: "Emilio Aguinaldo (Kagawad)" },
+export const adminNavItems = [
+    { name: "Command Center", href: "/admin", icon: LayoutDashboard },
+    { name: "Tenant Health", href: "/admin/health", icon: Activity },
+    { name: "Billing & Plans", href: "/admin/billing", icon: Vote },
+    { name: "Jurisdictions", href: "/admin/jurisdictions", icon: Map },
+    { name: "Global Settings", href: "/admin/settings", icon: Settings },
 ];
