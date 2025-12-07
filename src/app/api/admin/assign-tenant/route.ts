@@ -1,10 +1,10 @@
 
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
 
 export async function POST(req: Request) {
   try {
-    const { userId, tenantSlug } = await req.json();
+    const { userId, tenantSlug, fullName, email, role } = await req.json();
 
     if (!userId || !tenantSlug) {
       return NextResponse.json({ error: 'Missing userId or tenantSlug' }, { status: 400 });
@@ -16,8 +16,6 @@ export async function POST(req: Request) {
     const dirSnap = await dirRef.get();
 
     if (!dirSnap.exists) {
-        // Fallback or explicit check if we passed a raw path?
-        // Ideally we strictly use slugs from the directory.
         return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
@@ -32,15 +30,23 @@ export async function POST(req: Request) {
     await adminAuth.setCustomUserClaims(userId, {
         tenantPath: tenantPath,
         tenantId: tenantId,
-        role: 'admin' // Or pass role in body
+        role: role || 'admin' 
     });
 
     // 3. Update Firestore Profile (for frontend fallback/sync)
-    await adminDb.collection('users').doc(userId).set({
+    // CRITICAL: We must ensure the user profile has all display info
+    const userUpdate = {
         tenantPath: tenantPath,
         tenantId: tenantId,
-        assignedAt: new Date()
-    }, { merge: true });
+        assignedAt: new Date(),
+        ...(fullName && { fullName }),
+        ...(email && { email }),
+        ...(role && { role }),
+        // Ensure system roles are set if missing
+        systemRole: role === 'super_admin' ? 'SuperAdmin' : 'Admin' 
+    };
+
+    await adminDb.collection('users').doc(userId).set(userUpdate, { merge: true });
 
     return NextResponse.json({ 
         success: true, 
