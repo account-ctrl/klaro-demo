@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,68 +13,89 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Logo } from "@/components/logo";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Shield, User, Loader2 } from "lucide-react";
-import { useAuth, initiateAnonymousSignIn, initiateEmailSignIn, FirebaseClientProvider } from '@/firebase';
+import { useRouter } from "next/navigation";
+import { Shield, User, Loader2, AlertTriangle } from "lucide-react";
+import { useAuth, initiateEmailSignIn } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 
-function LoginCard() {
+export default function LoginPage() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     const auth = useAuth();
+    const { toast } = useToast();
     const [isPending, startTransition] = React.useTransition();
-    const [email, setEmail] = React.useState('admin@demo.com');
-    const [password, setPassword] = React.useState('password');
-    const isTour = searchParams.get('tour') === 'true';
+    const [email, setEmail] = React.useState('');
+    const [password, setPassword] = React.useState('');
 
-    const handleRoleSimulation = (role: 'superadmin' | 'user' | 'admin', tour: boolean) => {
+    const handleLogin = (e: React.FormEvent) => {
+        e.preventDefault();
         if (!auth) return;
 
         startTransition(async () => {
-            if (role === 'user') {
-                // Use a predefined email/password for the resident user to have a stable UID
-                initiateEmailSignIn(auth, 'resident@demo.com', 'password');
-                router.push('/resident/dashboard');
-            } else {
-                 await initiateAnonymousSignIn(auth);
-                 const destination = tour ? `/dashboard?role=${role}&tour=true` : `/dashboard?role=${role}`;
-                 router.push(destination);
+            try {
+                // 1. Authenticate
+                await initiateEmailSignIn(auth, email, password);
+                
+                // 2. Security Check (Role Enforcement)
+                const user = auth.currentUser;
+                if (user) {
+                    const tokenResult = await user.getIdTokenResult(true);
+                    const role = tokenResult.claims.role;
+
+                    // STRICT BARRIER: Super Admins are forbidden here
+                    if (role === 'super_admin') {
+                        await auth.signOut();
+                        toast({
+                            variant: "destructive",
+                            title: "Security Alert",
+                            description: "Super Admins are forbidden on this public node. Use the secure channel."
+                        });
+                        return;
+                    }
+
+                    // Success Redirect
+                    if (role === 'captain' || role === 'admin') {
+                        router.push('/dashboard');
+                    } else {
+                        // Default fallback
+                        router.push('/dashboard');
+                    }
+                }
+            } catch (error: any) {
+                console.error(error);
+                toast({
+                    variant: "destructive",
+                    title: "Authentication Failed",
+                    description: error.message
+                });
             }
         });
     };
-    
-    useEffect(() => {
-        if (isTour) {
-            handleRoleSimulation('admin', true);
-        }
-    }, [isTour, auth]);
-
-    const handleAdminLogin = (e: React.FormEvent) => {
-        e.preventDefault();
-        handleRoleSimulation('admin', false);
-    };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background/60 p-4">
-        <Card className="w-full max-w-md border-0 bg-transparent shadow-none sm:border sm:bg-card sm:shadow-lg">
-            <CardHeader className="text-center">
-                 <div className="flex justify-center mb-4">
-                    <Logo />
+    <div className="flex items-center justify-center min-h-screen bg-slate-50 p-4">
+        {/* Background Pattern */}
+        <div className="fixed inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
+
+        <Card className="w-full max-w-md border border-slate-200 bg-white/80 backdrop-blur-sm shadow-xl z-10">
+            <CardHeader className="text-center pb-2">
+                 <div className="flex justify-center mb-6">
+                    <Logo className="scale-125" />
                 </div>
-                <CardTitle className="text-2xl font-bold">Sign in to your Account</CardTitle>
-                <CardDescription>Enter your credentials to access your dashboard.</CardDescription>
+                <CardTitle className="text-2xl font-bold text-slate-900">Tenant Access Portal</CardTitle>
+                <CardDescription>Authorized Barangay Personnel Only</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <form onSubmit={handleAdminLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">Official Email</Label>
                         <Input 
                             id="email" 
                             type="email" 
-                            placeholder="admin@brgy.gov.ph" 
+                            placeholder="captain@barangay.gov.ph" 
                             required 
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            suppressHydrationWarning
+                            className="bg-white"
                         />
                     </div>
                     <div className="space-y-2">
@@ -85,49 +106,28 @@ function LoginCard() {
                             required 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            suppressHydrationWarning
+                            className="bg-white"
                         />
                     </div>
-                    <Button type="submit" size="lg" className="w-full" disabled={isPending} suppressHydrationWarning>
-                        {isPending ? <Loader2 className="mr-2 animate-spin" /> : <Shield className="mr-2" />}
-                        {isPending ? 'Signing in...' : 'Login as Barangay Admin'}
+                    <Button type="submit" size="lg" className="w-full bg-blue-700 hover:bg-blue-800 text-white" disabled={isPending}>
+                        {isPending ? <Loader2 className="mr-2 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
+                        {isPending ? 'Verifying Credentials...' : 'Access Dashboard'}
                     </Button>
                 </form>
 
-                <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-background px-2 text-muted-foreground">
-                        Or for simulation
-                        </span>
-                    </div>
+                <div className="flex items-center gap-4 py-2">
+                    <div className="h-px bg-slate-200 flex-1" />
+                    <span className="text-xs text-slate-400 uppercase tracking-wider">Assistance</span>
+                    <div className="h-px bg-slate-200 flex-1" />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                    <Button onClick={() => handleRoleSimulation('user', false)} variant="outline" className="w-full" disabled={isPending} suppressHydrationWarning>
-                        {isPending ? <Loader2 className="mr-2 animate-spin" /> : <User className="mr-2" />}
-                        Resident Login
-                    </Button>
+                <div className="text-center text-xs text-slate-500 space-y-2">
+                    <p>Forgot your credentials? Contact your City DILG Officer.</p>
+                    <p>By logging in, you agree to the <a href="#" className="underline hover:text-blue-700">Data Privacy Act of 2012</a>.</p>
                 </div>
 
             </CardContent>
-            <CardFooter>
-                <p className="text-xs text-center text-muted-foreground w-full">
-                    Admin login uses anonymous sign-in. Resident login uses a predefined account for profile simulation.
-                </p>
-            </CardFooter>
         </Card>
     </div>
   );
-}
-
-
-export default function LoginPage() {
-    return (
-        <FirebaseClientProvider>
-            <LoginCard />
-        </FirebaseClientProvider>
-    )
 }
