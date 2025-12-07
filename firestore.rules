@@ -8,57 +8,60 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.role == 'super_admin';
     }
 
-    // --- Tenant Directory (Public Read for resolving paths, Write restricted) ---
-    // Used by the client to look up "Where is bacoor-brgy-genesis located?"
+    function isTenantMember(docTenantId) {
+      // 1. Check Custom Claim (Fastest, Free)
+      // 2. Fallback: Check User Profile in DB (1 Read cost, handles stale tokens)
+      return (request.auth.token.tenantId == docTenantId) || 
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == docTenantId);
+    }
+
+    // --- Tenant Directory ---
     match /tenant_directory/{slug} {
       allow read: if true; 
-      allow write: if isSuperAdmin(); // Allow Super Admins to manage directory via client if needed
+      allow write: if isSuperAdmin();
     }
     
-    // --- Global User Profiles (Optional, if used) ---
+    // --- Global User Profiles ---
     match /users/{userId} {
-      // Users can read/write their own profile. Super Admins can read/write all.
-      // Important: Captains also need to Read/Write users in their tenant to add officials.
-      // We check if the target user has the same tenantId as the requester.
-      allow read: if (request.auth != null && request.auth.uid == userId) || isSuperAdmin() || (request.auth.token.tenantId == resource.data.tenantId);
-      allow write: if (request.auth != null && request.auth.uid == userId) || isSuperAdmin() || (request.auth.token.tenantId == resource.data.tenantId);
-      // Allow creation if assigning to own tenant
-      allow create: if request.auth != null && request.resource.data.tenantId == request.auth.token.tenantId;
+      // Allow read if:
+      // 1. Own Profile
+      // 2. Super Admin
+      // 3. Same Tenant (Co-worker)
+      allow read: if (request.auth != null && request.auth.uid == userId) || 
+                     isSuperAdmin() || 
+                     isTenantMember(resource.data.tenantId);
+      
+      // Allow write if:
+      // 1. Own Profile (limited fields?) - usually specific fields only
+      // 2. Super Admin
+      // 3. Same Tenant (e.g. Captain editing Staff)
+      allow write: if (request.auth != null && request.auth.uid == userId) || 
+                      isSuperAdmin() || 
+                      isTenantMember(resource.data.tenantId);
+      
+      // Allow create if assigning to own tenant
+      allow create: if request.auth != null && 
+                       (request.resource.data.tenantId == request.auth.token.tenantId || 
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == request.resource.data.tenantId);
     }
 
     // --- Logical Vault Structure ---
-    // The core of the multi-tenant architecture.
-    // Deep Wildcard Match: Captures the hierarchy levels for Province, City, Barangay.
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
-      // Helper: Validates that the user's custom claim 'tenantPath' strictly matches this document's path.
-      function isTenantMember() {
+      function isVaultMember() {
         return request.auth != null && 
                request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
       }
 
-      // 1. Root Vault Document (e.g., .../barangays/brgy-genesis)
-      allow read: if isTenantMember() || isSuperAdmin();
-      allow write: if isSuperAdmin() || isTenantMember(); // Allow Captains to update their own root profile (settings)
+      allow read: if isVaultMember() || isSuperAdmin();
+      allow write: if isSuperAdmin() || isVaultMember();
 
-      // 2. All Subcollections within the Vault (Settings, Residents, Assets, etc.)
-      // {document=**} is a recursive wildcard.
       match /{document=**} {
-        allow read, write: if isTenantMember() || isSuperAdmin();
+        allow read, write: if isVaultMember() || isSuperAdmin();
       }
     }
 
-    // --- Legacy / Global Collections (TEMPORARY: Keep for backward compatibility/demo) ---
-    // Warning: These are insecure public endpoints. Remove when migration is complete.
-    match /barangays/{barangayId}/fixed_assets/{document=**} { allow read, write: if true; }
-    match /barangays/{barangayId}/asset_bookings/{document=**} { allow read, write: if true; }
-    match /barangays/{barangayId}/emergency_alerts/{document=**} { allow read, write: if true; }
-    match /barangays/{barangayId}/blotter_cases/{document=**} { allow read, write: if true; }
-    match /barangays/{barangayId}/certificate_requests/{document=**} { allow read, write: if true; }
-    match /barangays/{barangayId}/ordinances/{document=**} { allow read, write: if true; }
-    
-    // Default Fallback
-    // Allow Super Admin to access any other collections (like 'system' or 'stats')
+    // --- Default Fallback ---
     match /{document=**} {
       allow read, write: if isSuperAdmin();
     }
