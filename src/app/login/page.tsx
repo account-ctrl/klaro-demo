@@ -52,13 +52,17 @@ export default function LoginPage() {
                         return;
                     }
 
-                    // STRICT BARRIER: Must have 'captain' or 'admin' role
-                    if (role !== 'captain' && role !== 'admin') {
+                    // STRICT BARRIER: Officials Login
+                    // Only Captains and Admins (Staff) are allowed in this dashboard
+                    // Residents should use the Resident Portal (/resident/login)
+                    const ALLOWED_ROLES = ['captain', 'admin', 'official', 'staff'];
+                    
+                    if (!ALLOWED_ROLES.includes(role as string)) {
                          await auth.signOut();
                          toast({
                              variant: "destructive",
                              title: "Access Denied",
-                             description: "This account is not authorized to access the Admin Dashboard. Please contact your administrator."
+                             description: "This portal is for Barangay Officials only. Residents should use the Resident App."
                          });
                          return;
                     }
@@ -68,10 +72,17 @@ export default function LoginPage() {
                 }
             } catch (error: any) {
                 console.error(error);
+                let message = error.message;
+                
+                // User Disabled Handling
+                if (error.code === 'auth/user-disabled') {
+                    message = "This account has been deactivated. Please contact your administrator.";
+                }
+
                 toast({
                     variant: "destructive",
                     title: "Authentication Failed",
-                    description: error.message
+                    description: message
                 });
             }
         });

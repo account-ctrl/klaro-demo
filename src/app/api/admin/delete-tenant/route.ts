@@ -36,7 +36,33 @@ export async function POST(req: Request) {
         console.warn(`Tenant Directory entry not found for ${tenantId}. Proceeding with cleanup.`);
     }
 
-    // 2. Perform Deletion
+    // 2. DISABLE ALL USERS (Officials & Residents)
+    // We search for any user who has a custom claim matching this tenantId
+    // Note: 'listUsers' is slow for millions, but fine for tenant-level cleanup.
+    // Ideally, this should be a Cloud Function for scalability.
+    
+    let nextPageToken;
+    let disabledCount = 0;
+    
+    do {
+        const listUsersResult = await adminAuth.listUsers(1000, nextPageToken);
+        const usersToDisable = listUsersResult.users.filter(user => 
+            user.customClaims && user.customClaims.tenantId === tenantId
+        );
+
+        for (const user of usersToDisable) {
+            await adminAuth.updateUser(user.uid, { disabled: true });
+            // Optionally, we could wipe their claims too:
+            // await adminAuth.setCustomUserClaims(user.uid, null);
+            disabledCount++;
+        }
+        nextPageToken = listUsersResult.pageToken;
+    } while (nextPageToken);
+
+    console.log(`Disabled ${disabledCount} users for tenant ${tenantId}`);
+
+
+    // 3. Perform Database Deletion
     const batch = adminDb.batch();
 
     // A. Delete Directory Entry
@@ -56,12 +82,11 @@ export async function POST(req: Request) {
 
     await batch.commit();
 
-    // Note: Firestore does not support recursive delete of subcollections via SDK in one go.
-    // The subcollections (residents, assets) will become "orphaned" (unreachable via UI) 
-    // but technically still exist until a Cloud Function sweeps them.
-    // For this admin dashboard, breaking the link (Directory & Root) is sufficient to "delete" it from view.
-
-    return NextResponse.json({ success: true, message: 'Tenant deleted successfully.' });
+    return NextResponse.json({ 
+        success: true, 
+        message: 'Tenant deleted and users disabled.',
+        usersDisabled: disabledCount
+    });
 
   } catch (error: any) {
     console.error("Delete Tenant Error:", error);

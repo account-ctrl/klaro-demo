@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useAuth, useFirestore } from '@/firebase';
 import { getTenantPath } from '@/lib/firebase/db-client';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface TenantContextProps {
   tenantPath: string | null;
@@ -33,60 +34,90 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function resolveTenant() {
       // 1. Wait for Auth & Firestore
       if (!auth?.currentUser || !firestore) {
-         // Don't stop loading until we know auth state (user might be null if not logged in)
          if (auth && !auth.currentUser) {
-             setIsLoading(false);
+             if (isMounted) setIsLoading(false);
          }
          return;
       }
 
       try {
         const tokenResult = await auth.currentUser.getIdTokenResult();
-        
-        // --- PRIORITY 1: Super Admin Context Switching ---
+        const role = tokenResult.claims.role;
+
+        // --- PRIORITY 1: Super Admin Context Switching (URL Override) ---
+        // Super Admins can "visit" any tenant via ?tenantId=...
         const overrideTenantId = searchParams.get('tenantId');
-        if (overrideTenantId && tokenResult.claims.role === 'super_admin') {
+        if (overrideTenantId && role === 'super_admin') {
             const path = await getTenantPath(firestore, overrideTenantId);
             if (path) {
-                setTenantPath(path);
-                setTenantId(overrideTenantId);
-                setIsLoading(false);
+                if (isMounted) {
+                    setTenantPath(path);
+                    setTenantId(overrideTenantId);
+                    setIsLoading(false);
+                }
                 return;
             } else {
                 console.error(`Tenant ID ${overrideTenantId} not found.`);
             }
         }
 
-        // --- PRIORITY 2: User's Assigned Tenant ---
+        // --- PRIORITY 2: User's Assigned Tenant (Custom Claims) ---
+        // This is the standard path for Captains/Officials.
+        // We trust the token claim first for speed.
         const claimPath = tokenResult.claims.tenantPath as string;
         const claimId = tokenResult.claims.tenantId as string;
 
         if (claimPath) {
-          setTenantPath(claimPath);
-          setTenantId(claimId); 
-          setIsLoading(false);
+          if (isMounted) {
+              setTenantPath(claimPath);
+              setTenantId(claimId); 
+              setIsLoading(false);
+          }
           return;
         }
+        
+        // --- PRIORITY 3: Fallback to User Profile (Firestore) ---
+        // If claims are delayed or missing (rare), check the user document.
+        const userRef = doc(firestore, 'users', auth.currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            if (userData.tenantId) {
+                 // Resolve path from directory if we only have ID
+                 const path = await getTenantPath(firestore, userData.tenantId);
+                 if (path && isMounted) {
+                     setTenantPath(path);
+                     setTenantId(userData.tenantId);
+                     setIsLoading(false);
+                     return;
+                 }
+            }
+        }
 
-        // --- PRIORITY 3: No Tenant Found (Orphaned User) ---
-        // If the user logs in but has no tenant, we strictly block them or redirect to onboarding.
-        // We DO NOT fallback to a demo tenant anymore.
-        setError("User is not associated with any active tenant.");
-        setTenantPath(null);
-        setTenantId(null);
+        // --- PRIORITY 4: No Tenant Found (Orphaned User) ---
+        if (isMounted) {
+            setError("User is not associated with any active tenant.");
+            setTenantPath(null);
+            setTenantId(null);
+        }
 
       } catch (err: any) {
         console.error("Failed to resolve tenant:", err);
-        setError(err.message);
+        if (isMounted) setError(err.message);
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     }
 
     resolveTenant();
+
+    return () => { isMounted = false; };
   }, [auth?.currentUser, firestore, searchParams]);
 
   return (

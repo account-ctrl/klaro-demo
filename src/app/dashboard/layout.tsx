@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
 import {
@@ -32,60 +32,94 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ActivityFeed } from './activity/activity-feed';
 import { cn } from '@/lib/utils';
+import { TenantProvider, useTenant } from '@/providers/tenant-provider';
 
-// Removed Tour import
+// ----------------------------------------------------------------------
+// 1. TENANT GUARD & LOADING WRAPPER
+// ----------------------------------------------------------------------
+
+const TenantGuard = ({ children }: { children: React.ReactNode }) => {
+    const { tenantPath, isLoading, error } = useTenant();
+    const router = useRouter();
+    const { user } = useUser();
+
+    useEffect(() => {
+        // If loaded but no tenant and no error (meaning user is logged out or invalid)
+        if (!isLoading && !tenantPath && !error) {
+             // Let the layout handle it via AuthProvider logic or error boundary
+        }
+    }, [isLoading, tenantPath, error]);
+
+    if (isLoading) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+                <div className="text-center space-y-4">
+                    <Skeleton className="h-12 w-12 rounded-full mx-auto" />
+                    <p className="text-slate-500 text-sm animate-pulse">Verifying Secure Context...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-red-50 p-4">
+                <div className="max-w-md text-center space-y-4">
+                    <h2 className="text-2xl font-bold text-red-700">Access Denied</h2>
+                    <p className="text-red-600">{error}</p>
+                    <Button onClick={() => router.push('/login')} variant="outline" className="border-red-200 hover:bg-red-100 text-red-700">
+                        Return to Login
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+    
+    // Strict Role Check: Block Super Admins from "visiting" without explicit Context
+    // This prevents accidental edits to the wrong tenant if state bleeds.
+    // (Handled by TenantProvider logic already, but double-check visually if needed)
+
+    return <>{children}</>;
+};
+
+// ----------------------------------------------------------------------
+// 2. INNER LAYOUT (The UI Shell)
+// ----------------------------------------------------------------------
 
 const InnerLayout = ({ children }: { children: React.ReactNode }) => {
-  // Default to false (expanded)
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, isUserLoading } = useUser();
   const { auth } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  
+  // Get Tenant Context for displaying the Name
+  const { tenantId } = useTenant();
 
-  // Check if we are in the emergency dashboard to hide layout elements
-  // Using startsWith to cover potential sub-routes or trailing slashes
   const isEmergencyDashboard = pathname?.startsWith('/dashboard/emergency');
 
   const handleLogout = async () => {
     if(auth) {
       await signOut(auth);
-      router.push('/login');
+      window.location.href = '/login'; // Hard reload to clear state
     }
   };
+
+  // Helper to format tenant ID for display (e.g., "brgy-san-isidro" -> "San Isidro")
+  const tenantDisplayName = tenantId 
+    ? tenantId.split('-').slice(2).join(' ').replace(/\b\w/g, l => l.toUpperCase()) 
+    : 'Unknown Tenant';
   
-  if (isUserLoading) {
-      return (
-        <div className="flex h-screen w-full flex-col">
-            <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b bg-[#2e3f50] px-4">
-                <div className="flex items-center gap-4">
-                    <Skeleton className="h-8 w-8 bg-white/10" />
-                    <Skeleton className="h-6 w-32 bg-white/10" />
-                </div>
-                <div className="flex-1 max-w-lg px-4">
-                     <Skeleton className="h-10 w-full bg-white/10" />
-                </div>
-                 <div className="flex items-center gap-2">
-                     <Skeleton className="h-8 w-8 rounded-full bg-white/10" />
-                </div>
-            </header>
-            <main className="mt-16 h-full w-full bg-muted/40 p-6">
-                 <Skeleton className="h-full w-full rounded-lg" />
-            </main>
-        </div>
-      )
-  }
+  if (isUserLoading) return null; // Guard handles loading UI
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground font-sans overflow-hidden">
       
-      {/* 1. GLOBAL HEADER (AppBar) - Hidden on Emergency Dashboard */}
+      {/* 1. GLOBAL HEADER (AppBar) */}
       {!isEmergencyDashboard && (
         <header className="fixed top-0 z-50 flex h-14 w-full items-center justify-between bg-[#2e3f50] text-white px-0 shadow-sm border-b border-[#405163]">
-            {/* LEFT: Branding (Aligned with Sidebar) */}
+            {/* LEFT: Branding */}
             <div 
                 className="flex items-center gap-3 pl-4 h-full transition-all duration-300 border-r border-[#405163] bg-[#2e3f50] shrink-0" 
                 style={{ width: isCollapsed ? '80px' : '256px' }}
@@ -103,115 +137,82 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
             </div>
             </div>
 
-            {/* CONTEXT: Barangay Selector (Now outside the sidebar width constraint) */}
+            {/* CONTEXT: Tenant Name Display */}
             <div className="flex items-center h-full shrink-0 border-r border-[#405163]/50">
                 <div className="hidden md:flex items-center h-full px-4">
                     <Button variant="ghost" className="flex items-center gap-2 text-white hover:bg-white/10 hover:text-white h-8 px-2 text-sm font-normal">
-                        <span className="truncate max-w-[150px]">Brgy. San Isidro</span>
-                        <ChevronDown size={14} className="opacity-70 shrink-0" />
+                        <span className="truncate max-w-[150px] font-bold text-[#ff7a59]">
+                            {tenantDisplayName || 'Loading...'}
+                        </span>
+                        <span className="text-xs text-white/50 bg-white/10 px-1.5 py-0.5 rounded">Active</span>
                     </Button>
                 </div>
             </div>
 
             {/* CENTER: Omni-Search */}
             <div className="flex flex-1 max-w-xl px-6">
-            <div className="relative w-full group">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
-                <Search size={16} />
-                </div>
-                <input
-                type="text"
-                placeholder="Search..."
-                className="h-9 w-full rounded-[3px] bg-[#1c2b39] pl-9 pr-4 text-sm text-white placeholder:text-white/40 outline-none border border-transparent focus:border-[#ff7a59] transition-all"
-                />
-            </div>
-            </div>
-
-            {/* RIGHT: Utilities & Quick Actions */}
-            <div className="flex items-center gap-1 pr-4 justify-end ml-auto">
-            {/* QUICK ACTIONS (Global) */}
-            <div className="hidden xl:flex items-center gap-2 mr-2">
-                <Button asChild size="sm" className="h-8 bg-[#29ABE2] hover:bg-[#29ABE2]/90 text-white border-0">
-                    <Link href="/dashboard/documents"><Plus className="mr-1 h-3 w-3" /> Request</Link>
-                </Button>
-                <Button variant="destructive" size="sm" asChild className="h-8">
-                    <Link href="/dashboard/blotter"><Gavel className="mr-1 h-3 w-3" /> Blotter</Link>
-                </Button>
-                <Button variant="secondary" size="sm" asChild className="h-8 bg-white/10 text-white hover:bg-white/20 border-0">
-                    <Link href="/dashboard/residents"><UserPlus className="mr-1 h-3 w-3" /> Resident</Link>
-                </Button>
-            </div>
-
-            <div className="h-6 w-[1px] bg-white/20 mx-1 hidden xl:block"></div>
-
-            <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9 hidden sm:flex">
-                <Sparkles size={18} />
-            </Button>
-            
-            <Link href="/dashboard/settings" passHref>
-                <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
-                    <Settings size={18} />
-                </Button>
-            </Link>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9 relative">
-                    <Bell size={18} />
-                    <span className="absolute top-2 right-2 h-2 w-2 bg-[#ff7a59] rounded-full border border-[#2e3f50]"></span>
-                </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-80 mt-2" align="end">
-                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="p-2 max-h-80 overflow-y-auto text-sm text-muted-foreground text-center py-8">
-                    No new notifications
-                </div>
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    className="relative h-8 w-8 rounded-full ml-2 bg-[#ff7a59] hover:bg-[#ff7a59]/90 text-white p-0 border-2 border-[#2e3f50]"
-                    id="user-profile-menu"
-                >
-                    <span className="text-xs font-bold">
-                        {user?.email?.charAt(0).toUpperCase() ?? 'A'}
-                    </span>
-                </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 mt-2" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                    <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                        {user?.displayName || 'Barangay Official'}
-                    </p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                        {user?.email || 'No email associated'}
-                    </p>
+                <div className="relative w-full group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+                    <Search size={16} />
                     </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                    <Link href="/dashboard/profile">
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Profile & Preferences</span>
-                    </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
-                </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                    <input
+                    type="text"
+                    placeholder="Search residents, cases, or docs..."
+                    className="h-9 w-full rounded-[3px] bg-[#1c2b39] pl-9 pr-4 text-sm text-white placeholder:text-white/40 outline-none border border-transparent focus:border-[#ff7a59] transition-all"
+                    />
+                </div>
+            </div>
+
+            {/* RIGHT: Utilities */}
+            <div className="flex items-center gap-1 pr-4 justify-end ml-auto">
+                <div className="hidden xl:flex items-center gap-2 mr-2">
+                    <Button asChild size="sm" className="h-8 bg-[#29ABE2] hover:bg-[#29ABE2]/90 text-white border-0">
+                        <Link href="/dashboard/documents"><Plus className="mr-1 h-3 w-3" /> Request</Link>
+                    </Button>
+                </div>
+
+                <div className="h-6 w-[1px] bg-white/20 mx-1 hidden xl:block"></div>
+                
+                <Link href="/dashboard/settings" passHref>
+                    <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
+                        <Settings size={18} />
+                    </Button>
+                </Link>
+
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        className="relative h-8 w-8 rounded-full ml-2 bg-[#ff7a59] hover:bg-[#ff7a59]/90 text-white p-0 border-2 border-[#2e3f50]"
+                    >
+                        <span className="text-xs font-bold">
+                            {user?.email?.charAt(0).toUpperCase() ?? 'U'}
+                        </span>
+                    </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56 mt-2" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">
+                            {user?.displayName || 'User'}
+                        </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                            {user?.email}
+                        </p>
+                        </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Sign out</span>
+                    </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </header>
       )}
 
-      {/* 2. SIDEBAR (Navigation Drawer) - Hidden on Emergency Dashboard */}
+      {/* 2. SIDEBAR */}
       {!isEmergencyDashboard && (
         <aside
             id="sidebar-nav"
@@ -224,7 +225,7 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
         </aside>
       )}
 
-      {/* 3. MAIN CONTENT AREA - Adjusted for Emergency Dashboard */}
+      {/* 3. MAIN CONTENT */}
       <div
         className={cn(
           "flex flex-col h-full w-full bg-white transition-all duration-300 overflow-hidden",
@@ -251,7 +252,11 @@ export default function DashboardLayout({
 }) {
   return (
     <FirebaseClientProvider>
-      <InnerLayout>{children}</InnerLayout>
+      <TenantProvider>
+          <TenantGuard>
+              <InnerLayout>{children}</InnerLayout>
+          </TenantGuard>
+      </TenantProvider>
     </FirebaseClientProvider>
   );
 }
