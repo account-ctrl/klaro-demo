@@ -1,9 +1,6 @@
 'use server';
 
-import { getFirestore } from 'firebase-admin/firestore';
-import { adminApp } from '@/lib/firebase-admin'; // Assuming admin app is initialized here
-
-const db = getFirestore(adminApp);
+import { adminDb } from '@/lib/firebase/admin'; // Corrected import path and variable
 
 interface SendInviteArgs {
   to: string;
@@ -24,7 +21,8 @@ export async function sendInvite(
   }
 
   try {
-    const mailRef = db.collection('mail');
+    // Use the already initialized adminDb instance
+    const mailRef = adminDb.collection('mail');
     
     await mailRef.add({
       to: [to],

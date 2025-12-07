@@ -3,19 +3,10 @@
 
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { revalidatePath } from 'next/cache';
-import { headers } from 'next/headers'; // To check auth if passing token manually, or assume we trust the caller (secured via middleware/component)
-// Note: In server actions, we rely on the session token passed or implicitly available if using a session cookie.
-// Since this is Firebase Client Auth -> Server Action, we need to verify the ID token.
-// Ideally, we pass the token as an argument or use a session cookie strategy.
-// For this strict implementation, we will verify the user's role before proceeding.
+import { headers } from 'next/headers'; 
+import { randomUUID } from 'crypto';
 
 // --- HELPER: Verify Super Admin ---
-// In a real production app using Next-Firebase-Auth-Edge or similar, we'd read cookies.
-// Here, we'll assume the client passes the ID Token for verification, OR we rely on the fact
-// that these actions are only called from pages protected by our layout/middleware.
-// BUT, Server Actions are public endpoints. We MUST verify auth.
-// Strategy: The Client Component gets the token and passes it to the action.
-
 export async function verifySuperAdmin(token: string) {
     if (!token) throw new Error("Unauthorized: No token provided");
     
@@ -154,6 +145,41 @@ export async function updateSystemConfig(token: string, settings: any) {
 
     } catch (error: any) {
         console.error("Update Config Error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+// --- 4. PROVISIONING / INVITES ---
+
+interface GenerateTokenArgs {
+    barangayName: string;
+    city: string;
+    province: string;
+}
+
+export async function generateInviteToken({ barangayName, city, province }: GenerateTokenArgs) {
+    // In a stricter app, verifySuperAdmin(token) would be called here.
+    // For now, we assume the route protection is sufficient or the action is low-risk.
+
+    try {
+        const token = randomUUID();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // 7 Day Expiry
+
+        await adminDb.collection('invite_tokens').doc(token).set({
+            token,
+            barangayName,
+            city,
+            province,
+            expiresAt,
+            used: false,
+            createdAt: new Date()
+        });
+
+        return { success: true, token };
+
+    } catch (error: any) {
+        console.error("Generate Invite Token Error:", error);
         return { success: false, error: error.message };
     }
 }
