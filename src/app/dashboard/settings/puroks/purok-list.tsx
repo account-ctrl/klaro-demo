@@ -42,13 +42,19 @@ export default function PurokList() {
     const { tenantPath, tenantId } = useTenantContext();
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
-    // FIX: Use Secure Context for Collections
     const puroksCollectionRef = useMemoFirebase(() => {
         if (!firestore || !tenantPath) return null;
         return collection(firestore, `${tenantPath}/puroks`);
     }, [firestore, tenantPath]);
     
-    const { data: puroks, isLoading: isLoadingPuroks } = useCollection<Purok>(puroksCollectionRef);
+    // FIX: Removed the incorrect officialsQuery that was causing the crash.
+    // Instead, we will fetch officials manually if needed, or rely on a simpler pattern.
+    // The previous implementation tried to use 'useMemoFirebase' to return a promise of a query,
+    // but 'useCollection' expects a Query object directly, not a Promise.
+    
+    // For now, let's just fetch the collection reference, and filter in client or use a simpler query.
+    // Given we need 'where' clause which requires importing query/where from firebase/firestore...
+    // The safest way in this 'use client' file without top-level imports clashing is:
     
     const [officials, setOfficials] = useState<Official[]>([]);
     const [isLoadingOfficials, setIsLoadingOfficials] = useState(true);
@@ -56,7 +62,11 @@ export default function PurokList() {
     React.useEffect(() => {
         if(!firestore || !tenantId) return;
         
-        const { collection, query, where, onSnapshot } = require('firebase/firestore');
+        // Dynamic import to avoid SSR issues if any, but mostly to keep logic contained.
+        // Actually, since we already import 'collection' at top level, we can import 'query' and 'where' too.
+        // It is cleaner to do it standard way.
+        
+        const { query, where, onSnapshot } = require('firebase/firestore');
         const q = query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
         
         const unsubscribe = onSnapshot(q, (snapshot: any) => {
@@ -68,6 +78,8 @@ export default function PurokList() {
         return () => unsubscribe();
     }, [firestore, tenantId]);
 
+
+    const { data: puroks, isLoading: isLoadingPuroks } = useCollection<Purok>(puroksCollectionRef);
 
     const handleAdd = (newPurok: PurokFormValues) => {
         if (!puroksCollectionRef || !user) return;
