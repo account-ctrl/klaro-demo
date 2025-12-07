@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2 } from "lucide-react";
+import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2, Copy, ExternalLink } from "lucide-react";
 import Link from 'next/link';
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
@@ -51,7 +51,6 @@ export default function AdminDashboardPage() {
   const [selectedTenant, setSelectedTenant] = useState<Barangay | null>(null);
 
   // 1. Fetch Global Stats (Scalable)
-  // FIX: Access 'system' collection which is now permitted by Rules for SuperAdmin
   const statsRef = useMemoFirebase(() => {
      if (!firestore) return null;
      return doc(firestore, 'system', 'stats');
@@ -61,8 +60,6 @@ export default function AdminDashboardPage() {
 
 
   // 2. Fetch Recent Tenants
-  // FIX: Change 'barangays' -> 'tenant_directory' to match the new schema!
-  // The 'barangays' collection doesn't exist at the root anymore.
   const barangaysQuery = useMemoFirebase(() => {
       if (!firestore) return null;
       return query(
@@ -155,6 +152,18 @@ export default function AdminDashboardPage() {
   const handleDelete = async (id: string) => {
       // Implementation pending API update
       toast({ title: "Action queued", description: "Delete functionality is being migrated to new vault structure." });
+  };
+
+  const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text);
+      toast({ title: "Copied", description: "Dashboard link copied to clipboard." });
+  };
+
+  const getDashboardLink = (tenantId: string) => {
+      if (typeof window !== 'undefined') {
+          return `${window.location.origin}/dashboard?tenantId=${tenantId}`;
+      }
+      return `/dashboard?tenantId=${tenantId}`;
   };
 
   if (listError || statsError) {
@@ -415,6 +424,20 @@ export default function AdminDashboardPage() {
                              </div>
                         </div>
 
+                        {/* DASHBOARD LINK SECTION */}
+                         <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground uppercase">Dashboard Link</span>
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-slate-100 p-2 rounded text-xs font-mono truncate text-slate-600 border border-slate-200">
+                                    {getDashboardLink(selectedTenant.id)}
+                                </div>
+                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => copyToClipboard(getDashboardLink(selectedTenant.id))}>
+                                    <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+
+
                         <div className="flex justify-between gap-2 pt-2 border-t mt-4">
                              <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -441,7 +464,7 @@ export default function AdminDashboardPage() {
                              <div className="flex gap-2">
                                 <Button variant="ghost" onClick={() => setSelectedTenant(null)}>Close</Button>
                                 <Button asChild className="bg-slate-900 text-white">
-                                    <Link href={`/dashboard`}>
+                                    <Link href={`/dashboard?tenantId=${selectedTenant.id}`}>
                                         <FileText className="mr-2 h-4 w-4" /> Enter Vault
                                     </Link>
                                 </Button>
