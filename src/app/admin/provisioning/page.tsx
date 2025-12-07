@@ -47,12 +47,13 @@ export default function ProvisioningPage() {
 
   const { data: requests, isLoading } = useCollection<OnboardingRequest>(requestsQuery);
 
-  // 2. The Action Handler
-  const handleDecision = async (action: 'approve' | 'reject' | 'delete') => {
-    if (!selectedRequest || !auth?.currentUser) return;
+  // 2. The Action Handler (Refactored to accept optional request param)
+  const handleDecision = async (action: 'approve' | 'reject' | 'delete', request?: OnboardingRequest) => {
+    const target = request || selectedRequest;
+    if (!target || !auth?.currentUser) return;
     
     // Safety check for delete
-    if (action === 'delete' && !confirm(`Are you sure you want to permanently delete the request for ${selectedRequest.name}?`)) {
+    if (action === 'delete' && !confirm(`Are you sure you want to permanently delete the request for ${target.name}?`)) {
         return;
     }
 
@@ -67,7 +68,7 @@ export default function ProvisioningPage() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          requestId: selectedRequest.id,
+          requestId: target.id,
           action,
           rejectionReason: action === 'reject' ? rejectReason : undefined
         })
@@ -82,8 +83,11 @@ export default function ProvisioningPage() {
                  action === 'delete' ? 'Request Deleted.' : 'Request Rejected.' 
       });
       
-      setSelectedRequest(null);
-      setIsRejectOpen(false);
+      // Cleanup UI
+      if (selectedRequest?.id === target.id) {
+          setSelectedRequest(null);
+          setIsRejectOpen(false);
+      }
 
     } catch (err: any) {
       console.error(err);
@@ -182,17 +186,16 @@ export default function ProvisioningPage() {
                                                     className="text-red-400 hover:text-red-600 hover:bg-red-50"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        if(confirm('Quick delete this test record?')) {
-                                                            setSelectedRequest(req);
-                                                            // We need to trigger the delete immediately but we used state for context
-                                                            // A bit hacky but we call the handler directly with the req in state
-                                                            // Actually better to just set state then call a dedicated quick action?
-                                                            // Let's just set state and call handleDecision('delete') in a microtask or just rewrite handleDecision to take params
-                                                            // For now, let's just open the dialog which now has delete
-                                                        }
+                                                        // Call delete directly
+                                                        handleDecision('delete', req);
                                                     }}
+                                                    disabled={processing}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    {processing && selectedRequest?.id === req.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4" />
+                                                    )}
                                                 </Button>
                                             )}
                                             <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700" onClick={() => setSelectedRequest(req)}>
@@ -260,7 +263,7 @@ export default function ProvisioningPage() {
                 <Button 
                   variant="outline" 
                   className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => handleDecision('delete')}
+                  onClick={() => handleDecision('delete')} // Uses selectedRequest from state
                   disabled={processing}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
