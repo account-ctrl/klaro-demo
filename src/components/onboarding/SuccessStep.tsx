@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/firebase';
 
 interface SuccessStepProps {
   tenantData: {
@@ -36,6 +37,7 @@ export default function SuccessStep({ tenantData, onComplete }: SuccessStepProps
   const [serialKey, setSerialKey] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
+  const auth = useAuth(); // Access auth state to ensure cleanup
 
   useEffect(() => {
     // Generate a random serial key on mount
@@ -63,6 +65,18 @@ export default function SuccessStep({ tenantData, onComplete }: SuccessStepProps
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const handleEnterCommandCenter = async () => {
+      // CRITICAL SAFETY STEP:
+      // Since "Onboarding" might have been run in simulation mode or by a different user session,
+      // we must ensure any lingering auth state is cleared before redirecting to login.
+      // This forces the user to log in with the *newly created* credentials (or simulation credentials)
+      // cleanly, preventing the "Unknown Tenant" error caused by stale session data.
+      if (auth && auth.currentUser) {
+          await auth.signOut();
+      }
+      onComplete(); // Triggers the redirect to /login
   };
 
   return (
@@ -182,7 +196,7 @@ export default function SuccessStep({ tenantData, onComplete }: SuccessStepProps
         </Button>
         <Button 
             className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold h-12 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all hover:shadow-[0_0_25px_rgba(234,179,8,0.7)]"
-            onClick={onComplete}
+            onClick={handleEnterCommandCenter}
         >
             Enter Command Center <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

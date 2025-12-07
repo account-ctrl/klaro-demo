@@ -1,50 +1,44 @@
 
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { adminDb } from '@/lib/firebase/admin';
+import { Timestamp } from 'firebase-admin/firestore';
+import { randomBytes } from 'crypto';
 
 export async function POST(req: Request) {
   try {
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.split('Bearer ')[1];
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    
-    // Verify caller is Super Admin
-    const decoded = await adminAuth.verifyIdToken(token);
-    if (decoded.role !== 'super_admin' && decoded.email !== 'superadmin@klaro.gov.ph') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { email, issuedBy } = await req.json();
+
+    if (!email) {
+      return NextResponse.json({ error: 'Recipient email is required' }, { status: 400 });
     }
 
-    const { province, city, barangay } = await req.json();
+    // 1. Generate Secure Token
+    // Generates a random 32-char hex string (e.g., "a1b2c3d4...")
+    const token = randomBytes(16).toString('hex');
 
-    // 1. Provision the Tenant (Ideally reuse provisioning logic, but for now we generate the slug)
-    const slugify = (text: string) => text.toLowerCase().replace(/[\s\.]+/g, '-').replace(/[^\w-]+/g, '');
-    const provinceSlug = slugify(province);
-    const citySlug = slugify(city);
-    const barangaySlug = slugify(barangay);
-    
-    // Pre-calculate the Tenant Slug (even if not provisioned yet, the onboarding will use this)
-    // Or we could enforce provisioning here. Let's pre-generate a "Token" for the onboarding.
-    
-    // Generate a secure, single-use token for the onboarding link
-    const inviteToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
-    // Store this invite in Firestore
-    await adminDb.collection('onboarding_invites').doc(inviteToken).set({
-        province,
-        city,
-        barangay,
-        status: 'pending',
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    // 2. Create Invite Record
+    await adminDb.collection('onboarding_invites').doc(token).set({
+        token,
+        recipientEmail: email,
+        status: 'pending', // pending -> used -> expired
+        issuedBy: issuedBy || 'system',
+        createdAt: Timestamp.now(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 Days validity
     });
 
-    // 2. Generate the Link
-    // The onboarding page will need to read ?token=...
-    const onboardingLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/onboarding?token=${inviteToken}`;
+    // 3. Construct Link
+    // Note: Assuming process.env.NEXT_PUBLIC_APP_URL is set, else fallback
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://klarogov.ph';
+    const inviteLink = `${baseUrl}/onboarding?token=${token}`;
 
-    return NextResponse.json({ success: true, link: onboardingLink });
+    return NextResponse.json({ 
+        success: true, 
+        token,
+        inviteLink
+    });
 
   } catch (error: any) {
+    console.error("Invite Generation Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
