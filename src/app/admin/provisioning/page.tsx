@@ -1,64 +1,91 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Users, Clock, CheckCircle2, XCircle, Search, FileText } from "lucide-react";
+import { Users, Clock, CheckCircle2, XCircle, Search, FileText, Eye, Loader2, ShieldCheck, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/hooks/use-toast';
+import { useCollection, useFirestore, useMemoFirebase, useAuth } from '@/firebase';
+import { collection, query, where, orderBy, limit } from 'firebase/firestore';
 
-// Mock Data for Provisioning Queue
-// In a real app, this would be fetched from a Firestore collection 'onboarding_requests'
-const provisioningQueue = [
-    { 
-        id: "req-103", 
-        jurisdiction: "Brgy. San Jose, Pasig", 
-        custodian: "Capt. Roberto Diaz", 
-        email: "roberto.diaz@pasig.gov.ph",
-        status: "Pending Seal", 
-        submittedAt: "2023-12-05 09:30 AM",
-        notes: "Seal image resolution is too low."
-    },
-    { 
-        id: "req-102", 
-        jurisdiction: "Brgy. Poblacion, Makati", 
-        custodian: "Juan Cruz", 
-        email: "juan.cruz@makati.gov.ph",
-        status: "Pending Review", 
-        submittedAt: "2023-12-05 08:15 AM",
-        notes: "Waiting for appointment paper verification."
-    },
-    { 
-        id: "req-101", 
-        jurisdiction: "Brgy. Labangon, Cebu", 
-        custodian: "Maria Lim", 
-        email: "maria.lim@cebucity.gov.ph",
-        status: "Identity Reject", 
-        submittedAt: "2023-12-04 04:45 PM",
-        notes: "ID provided does not match the official name."
-    },
-    { 
-        id: "req-100", 
-        jurisdiction: "Brgy. San Antonio, Davao", 
-        custodian: "Pedro Santos", 
-        email: "pedro.santos@davaocity.gov.ph",
-        status: "Approved", 
-        submittedAt: "2023-12-04 02:00 PM",
-        notes: "All documents valid. Tenant provisioned."
-    },
-    { 
-        id: "req-099", 
-        jurisdiction: "Brgy. Holy Spirit, QC", 
-        custodian: "Ana Reyes", 
-        email: "ana.reyes@quezoncity.gov.ph",
-        status: "Approved", 
-        submittedAt: "2023-12-04 10:00 AM",
-        notes: "Auto-approved via DILG Integration."
-    },
-];
+// Define the shape of our Firestore Barangay Document
+type OnboardingRequest = {
+    id: string; 
+    name: string;
+    city: string;
+    province: string;
+    status: 'Live' | 'Onboarding' | 'Untapped' | 'Rejected';
+    createdAt: any; 
+    // We might store custodian info in subcollection 'users' or denormalized here.
+    // For this implementation, we assume we can fetch associated users or they are denormalized.
+};
 
 export default function ProvisioningPage() {
+  const [selectedRequest, setSelectedRequest] = useState<OnboardingRequest | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejectOpen, setIsRejectOpen] = useState(false);
+  
+  const firestore = useFirestore();
+  const auth = useAuth();
+
+  // 1. Fetch Requests from 'barangays' where status is 'Onboarding'
+  // These are the "Pending" requests in our current data model
+  const requestsQuery = useMemoFirebase(() => {
+      if (!firestore) return null;
+      return query(
+          collection(firestore, 'barangays'),
+          where('status', '==', 'Onboarding'),
+          // orderBy('createdAt', 'desc'), // Requires index
+          limit(50)
+      );
+  }, [firestore]);
+
+  const { data: requests, isLoading } = useCollection<OnboardingRequest>(requestsQuery);
+
+  // 2. The Action Handler
+  const handleDecision = async (action: 'approve' | 'reject') => {
+    if (!selectedRequest || !auth?.currentUser) return;
+    
+    setProcessing(true);
+    const token = await auth.currentUser.getIdToken();
+
+    try {
+      const res = await fetch('/api/admin/approve-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          requestId: selectedRequest.id,
+          action,
+          rejectionReason: action === 'reject' ? rejectReason : undefined
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Operation failed');
+
+      toast({ title: action === 'approve' ? 'Vault Provisioned Successfully!' : 'Request Rejected.' });
+      
+      setSelectedRequest(null);
+      setIsRejectOpen(false);
+
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -68,56 +95,23 @@ export default function ProvisioningPage() {
         </div>
         <div className="flex gap-2">
             <Button variant="outline">Export Log</Button>
-            <Button className="bg-amber-600 hover:bg-amber-700 text-white">Manual Provision</Button>
         </div>
       </div>
 
-      {/* KPI Summary */}
+      {/* KPI Summary (Mocked logic for demo as we only query pending) */}
       <div className="grid gap-4 md:grid-cols-4">
           <Card className="shadow-sm border-slate-200">
               <CardContent className="p-6 flex items-center justify-between">
                   <div>
                       <p className="text-sm font-medium text-slate-500">Pending Review</p>
-                      <h3 className="text-2xl font-bold text-slate-800">12</h3>
+                      <h3 className="text-2xl font-bold text-slate-800">{requests?.length || 0}</h3>
                   </div>
                   <div className="p-3 bg-amber-100 rounded-full text-amber-600">
                       <Clock className="h-5 w-5" />
                   </div>
               </CardContent>
           </Card>
-          <Card className="shadow-sm border-slate-200">
-              <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                      <p className="text-sm font-medium text-slate-500">Approved Today</p>
-                      <h3 className="text-2xl font-bold text-slate-800">8</h3>
-                  </div>
-                  <div className="p-3 bg-green-100 rounded-full text-green-600">
-                      <CheckCircle2 className="h-5 w-5" />
-                  </div>
-              </CardContent>
-          </Card>
-          <Card className="shadow-sm border-slate-200">
-              <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                      <p className="text-sm font-medium text-slate-500">Rejected</p>
-                      <h3 className="text-2xl font-bold text-slate-800">3</h3>
-                  </div>
-                  <div className="p-3 bg-red-100 rounded-full text-red-600">
-                      <XCircle className="h-5 w-5" />
-                  </div>
-              </CardContent>
-          </Card>
-          <Card className="shadow-sm border-slate-200">
-              <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                      <p className="text-sm font-medium text-slate-500">Avg Approval Time</p>
-                      <h3 className="text-2xl font-bold text-slate-800">4h 15m</h3>
-                  </div>
-                  <div className="p-3 bg-blue-100 rounded-full text-blue-600">
-                      <FileText className="h-5 w-5" />
-                  </div>
-              </CardContent>
-          </Card>
+          {/* Other KPIs can be wired up with separate queries if needed */}
       </div>
 
       {/* Main Queue Table */}
@@ -141,56 +135,131 @@ export default function ProvisioningPage() {
                     <TableRow>
                         <TableHead>Request ID</TableHead>
                         <TableHead>Jurisdiction</TableHead>
-                        <TableHead>Custodian / Applicant</TableHead>
+                        {/* <TableHead>Custodian / Applicant</TableHead> */}
                         <TableHead>Date Submitted</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {provisioningQueue.map((req) => (
-                        <TableRow key={req.id} className="hover:bg-slate-50">
-                            <TableCell className="font-mono text-xs text-slate-500">{req.id}</TableCell>
-                            <TableCell className="font-medium text-slate-900">{req.jurisdiction}</TableCell>
-                            <TableCell>
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-medium text-slate-900">{req.custodian}</span>
-                                    <span className="text-xs text-slate-500">{req.email}</span>
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-slate-500 text-sm">{req.submittedAt}</TableCell>
-                            <TableCell>
-                                <Badge className={`
-                                    ${req.status === 'Pending Seal' ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : ''}
-                                    ${req.status === 'Pending Review' ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : ''}
-                                    ${req.status === 'Identity Reject' ? 'bg-red-100 text-red-700 hover:bg-red-200' : ''}
-                                    ${req.status === 'Approved' ? 'bg-green-100 text-green-700 hover:bg-green-200' : ''}
-                                    border-0
-                                `}>
-                                    {req.status}
-                                </Badge>
-                                {req.notes && req.status !== 'Approved' && (
-                                    <p className="text-[10px] text-slate-400 mt-1 max-w-[150px] truncate">{req.notes}</p>
-                                )}
-                            </TableCell>
-                            <TableCell className="text-right space-x-2">
-                                {req.status === 'Approved' ? (
-                                    <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50" disabled>
-                                        <CheckCircle2 className="h-4 w-4 mr-1" /> Provisioned
+                    {isLoading ? (
+                        <TableRow>
+                            <TableCell colSpan={6} className="h-24 text-center">Loading requests...</TableCell>
+                        </TableRow>
+                    ) : requests && requests.length > 0 ? (
+                        requests.map((req) => (
+                            <TableRow key={req.id} className="hover:bg-slate-50">
+                                <TableCell className="font-mono text-xs text-slate-500">{req.id}</TableCell>
+                                <TableCell className="font-medium text-slate-900">
+                                    {req.name}
+                                    <div className="text-xs text-slate-500">{req.city}, {req.province}</div>
+                                </TableCell>
+                                {/* <TableCell>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-slate-900">Custodian Info</span>
+                                    </div>
+                                </TableCell> */}
+                                <TableCell className="text-slate-500 text-sm">
+                                    {req.createdAt?.toDate ? req.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                </TableCell>
+                                <TableCell>
+                                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-0">
+                                        {req.status}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right space-x-2">
+                                    <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700" onClick={() => setSelectedRequest(req)}>
+                                        <Eye className="w-4 h-4 mr-1" /> Review
                                     </Button>
-                                ) : (
-                                    <>
-                                        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700">Review</Button>
-                                        <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">Approve</Button>
-                                    </>
-                                )}
+                                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setSelectedRequest(req)}>
+                                        Process
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                No pending requests found.
                             </TableCell>
                         </TableRow>
-                    ))}
+                    )}
                 </TableBody>
             </Table>
           </CardContent>
       </Card>
+
+      {/* INSPECTION DIALOG */}
+      <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify Commissioning Request</DialogTitle>
+          </DialogHeader>
+          
+          {selectedRequest && (
+            <div className="space-y-4 py-4">
+              <div className="bg-slate-50 p-4 rounded-md border text-sm space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Jurisdiction:</span>
+                  <span className="font-bold">{selectedRequest.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Location:</span>
+                  <span>{selectedRequest.city}, {selectedRequest.province}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Request ID:</span>
+                  <span className="font-mono">{selectedRequest.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status:</span>
+                  <span className="text-blue-600 font-medium">{selectedRequest.status}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  variant="destructive" 
+                  className="flex-1"
+                  onClick={() => setIsRejectOpen(true)}
+                  disabled={processing}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Reject
+                </Button>
+                <Button 
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => handleDecision('approve')}
+                  disabled={processing}
+                >
+                  {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
+                  Confirm & Provision
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* REJECTION REASON DIALOG */}
+      <Dialog open={isRejectOpen} onOpenChange={setIsRejectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reason for Rejection</DialogTitle>
+          </DialogHeader>
+          <Textarea 
+            placeholder="e.g., Jurisdiction ID conflict..."
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsRejectOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => handleDecision('reject')} disabled={processing}>
+              Confirm Rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,6 @@
-import { Bell, User } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { HeaderProfile } from "./HeaderProfile";
 
 export function Header() {
   return (
@@ -11,11 +11,7 @@ export function Header() {
           <Bell className="h-5 w-5" />
         </Button>
         <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden sm:block">Admin User</span>
-            <Avatar className="h-8 w-8">
-                <AvatarImage src="/avatars/01.png" alt="@admin" />
-                <AvatarFallback className="bg-amber-500 text-white">SA</AvatarFallback>
-            </Avatar>
+            <HeaderProfile />
         </div>
       </div>
     </header>
