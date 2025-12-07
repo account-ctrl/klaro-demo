@@ -207,12 +207,6 @@ export default function OnboardingPage() {
     setIsCommissioning(true);
     setCurrentStep(5);
     
-    // Generate Tenant ID
-    const tenantId = `${profileData.province}-${profileData.city}-${profileData.barangayName}`
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-')
-        .replace(/-+/g, '-');
-
     // Terminal Sequence + Real Firestore Writes
     const sequence = [
         "Connecting to PSGC National Database...",
@@ -236,20 +230,33 @@ export default function OnboardingPage() {
             
             // Trigger actual writes at specific steps to simulate work
             if (index === 2) { 
-                // Create Barangay Doc
-                const barangayRef = doc(firestore, 'barangays', tenantId);
-                setDoc(barangayRef, {
-                    name: profileData.barangayName,
-                    city: profileData.city,
-                    province: profileData.province,
-                    region: 'IV-A', // Mocked for now, strictly speaking we should look it up
-                    status: 'Live',
-                    population: 0, // Initial state
-                    households: 0,
-                    quality: 100, // Fresh start
-                    createdAt: serverTimestamp(),
-                    lastActivity: serverTimestamp()
-                }, { merge: true }).catch(console.error);
+                // CALL PUBLIC PROVISION API
+                try {
+                    const res = await fetch('/api/public/provision', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            province: profileData.province,
+                            city: profileData.city,
+                            barangay: profileData.barangayName
+                        })
+                    });
+                    
+                    if (!res.ok) {
+                        const err = await res.json();
+                        // Ignore collision error for simulation resilience (re-onboarding)
+                        if (res.status !== 409) {
+                             throw new Error(err.error || 'Provisioning failed');
+                        } else {
+                             setLogs(prev => [...prev, ">> NOTICE: Vault already exists. Re-linking."]);
+                        }
+                    }
+                    
+                    setLogs(prev => [...prev, ">> SUCCESS: Vault Provisioned."]);
+                } catch (e: any) {
+                    console.error("Provisioning Error:", e);
+                    setLogs(prev => [...prev, `>> ERROR: ${e.message}`]);
+                }
             }
 
             if (index === 5) {
@@ -259,41 +266,55 @@ export default function OnboardingPage() {
                          try {
                             // Create actual authentication user for the Captain
                              if (auth) {
+                                 // Note: initiateEmailSignUp signs the user in automatically
                                  await initiateEmailSignUp(auth, official.email, official.password);
-                                 // After sign up, the user is automatically signed in.
-                                 // We need to create the user profile document for them.
+                                 
+                                 // After sign up, assign the tenant claims immediately
                                  if (auth.currentUser) {
-                                     const userRef = doc(firestore, 'users', auth.currentUser.uid);
-                                     await setDoc(userRef, {
-                                         userId: auth.currentUser.uid,
-                                         fullName: official.name,
-                                         position: official.role,
-                                         barangayId: tenantId,
-                                         systemRole: 'Admin',
-                                         email: official.email,
-                                         status: 'Active',
-                                         createdAt: serverTimestamp()
+                                     // Sync claims
+                                     const tenantSlug = `${profileData.city}-${profileData.barangayName}`
+                                        .toLowerCase().replace(/[\s\.]+/g, '-').replace(/[^\w-]+/g, '');
+
+                                     const syncRes = await fetch('/api/admin/assign-tenant', {
+                                         method: 'POST',
+                                         headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ 
+                                             userId: auth.currentUser.uid,
+                                             tenantSlug: tenantSlug
+                                         })
                                      });
+                                     
+                                     if (syncRes.ok) {
+                                         // Force token refresh to pick up claims
+                                         await auth.currentUser.getIdToken(true);
+                                         setLogs(prev => [...prev, ">> AUTH: Secure session established."]);
+                                     } else {
+                                         console.error("Claim Sync Failed", await syncRes.json());
+                                     }
                                  }
                              }
                          } catch (error) {
                              console.error("Error creating user:", error);
-                             setLogs(prev => [...prev, "ERROR: Failed to create user account."]);
+                             setLogs(prev => [...prev, "ERROR: Failed to create user account (Email might be taken)."]);
                          }
                     } else {
                         // Create non-login records for other officials
                         const userId = `user-${Math.random().toString(36).substr(2, 9)}`;
                         const userRef = doc(firestore, 'users', userId);
+                        
+                        const tenantSlug = `${profileData.city}-${profileData.barangayName}`
+                            .toLowerCase().replace(/[\s\.]+/g, '-').replace(/[^\w-]+/g, '');
+
                         setDoc(userRef, {
                             userId: userId,
                             fullName: official.name,
                             position: official.role,
-                            barangayId: tenantId,
+                            tenantId: tenantSlug, 
                             systemRole: official.role === 'Captain' ? 'Admin' : 'Encoder',
                             email: official.email || `${official.name.toLowerCase().replace(/\s/g, '.')}@klarogov.ph`,
                             status: 'Active',
                             createdAt: serverTimestamp()
-                        }).catch(console.error);
+                        }, { merge: true }).catch(console.error);
                     }
                 }
             }
@@ -306,7 +327,10 @@ export default function OnboardingPage() {
                      // The requirement "make sure status and everything is not being mocked" implies the Admin Dashboard
                      // should see this.
                      toast({ title: "Commissioning Successful", description: "Your barangay node is live." });
-                     router.push('/dashboard');
+                     
+                     // Force hard reload or just push? 
+                     // Push is fine if TenantProvider re-renders on auth change (which it does)
+                     window.location.href = '/dashboard'; 
                 }, 1500);
             }
         }, delay);
