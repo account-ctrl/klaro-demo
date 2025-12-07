@@ -33,29 +33,53 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
-
+import { useTenantContext } from '@/lib/hooks/useTenant';
 
 export default function PurokList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
+    const { tenantPath, tenantId } = useTenantContext();
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
+    // FIX: Use Secure Context for Collections
     const puroksCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, `/barangays/${BARANGAY_ID}/puroks`);
-    }, [firestore]);
+        if (!firestore || !tenantPath) return null;
+        return collection(firestore, `${tenantPath}/puroks`);
+    }, [firestore, tenantPath]);
     
-    const officialsCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, '/users');
-    }, [firestore]);
+    // FIX: Use Global Users Query with Tenant Filter (Same as Officials List)
+    const officialsQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantId) return null;
+        const q = import('firebase/firestore').then(({ collection, query, where }) => 
+             query(collection(firestore, 'users'), where('tenantId', '==', tenantId))
+        );
+        return q;
+    }, [firestore, tenantId]);
 
     const { data: puroks, isLoading: isLoadingPuroks } = useCollection<Purok>(puroksCollectionRef);
-    const { data: officials, isLoading: isLoadingOfficials } = useCollection<Official>(officialsCollectionRef);
+    
+    // Manual officials fetch to handle the complex query promise if needed, 
+    // or assume useCollection handles promise (it usually does not).
+    // Let's implement the safer pattern used in OfficialsList.
+    const [officials, setOfficials] = useState<Official[]>([]);
+    const [isLoadingOfficials, setIsLoadingOfficials] = useState(true);
+
+    React.useEffect(() => {
+        if(!firestore || !tenantId) return;
+        
+        const { collection, query, where, onSnapshot } = require('firebase/firestore');
+        const q = query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
+        
+        const unsubscribe = onSnapshot(q, (snapshot: any) => {
+            const data = snapshot.docs.map((doc: any) => ({ ...doc.data(), userId: doc.id })) as Official[];
+            setOfficials(data);
+            setIsLoadingOfficials(false);
+        });
+
+        return () => unsubscribe();
+    }, [firestore, tenantId]);
+
 
     const handleAdd = (newPurok: PurokFormValues) => {
         if (!puroksCollectionRef || !user) return;
@@ -71,37 +95,33 @@ export default function PurokList() {
     };
 
     const handleEdit = (updatedPurok: Purok) => {
-        if (!firestore || !updatedPurok.purokId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/puroks/${updatedPurok.purokId}`);
+        if (!firestore || !updatedPurok.purokId || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/puroks/${updatedPurok.purokId}`);
         const { purokId, ...dataToUpdate } = updatedPurok;
         updateDocumentNonBlocking(docRef, { ...dataToUpdate });
         toast({ title: "Purok Updated", description: `The record for ${updatedPurok.name} has been updated.`});
     };
 
     const handleDelete = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/puroks/${id}`);
+        if (!firestore || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/puroks/${id}`);
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Purok Deleted", description: "The purok record has been permanently deleted." });
     };
 
     const handleLoadDefaults = async () => {
-        if (!firestore) return;
+        if (!firestore || !tenantPath) return;
 
         const samplePuroks = [
             { name: 'Purok 1', district: 'Centro', description: 'Main commercial area.' },
             { name: 'Purok 2', district: 'Riverside', description: 'Residential area near the river.' },
             { name: 'Purok 3', district: 'Upland', description: 'Agricultural zone.' },
-            { name: 'Purok 4', district: 'Sitio', description: 'Dense residential cluster.' },
-            { name: 'Purok 5', district: 'Highway', description: 'Along the national highway.' },
-            { name: 'Purok 6', description: 'New development area.' },
-            { name: 'Purok 7', description: 'Boundary area.' },
         ];
 
         try {
             const batch = writeBatch(firestore);
             samplePuroks.forEach((purok) => {
-                const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/puroks`));
+                const newDocRef = doc(collection(firestore, `${tenantPath}/puroks`));
                 batch.set(newDocRef, {
                     ...purok,
                     purokId: newDocRef.id,
@@ -117,12 +137,12 @@ export default function PurokList() {
     };
 
     const handleClearAll = async () => {
-        if (!firestore || !puroks) return;
+        if (!firestore || !puroks || !tenantPath) return;
         
         try {
             const batch = writeBatch(firestore);
             puroks.forEach((purok) => {
-                const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/puroks/${purok.purokId}`);
+                const docRef = doc(firestore, `${tenantPath}/puroks/${purok.purokId}`);
                 batch.delete(docRef);
             });
             await batch.commit();
