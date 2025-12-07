@@ -29,7 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.variable)}>
+      <body 
+        className={cn("min-h-screen bg-background font-sans antialiased", inter.variable)}
+        suppressHydrationWarning
+      >
         <FirebaseClientProvider>
           <TenantProvider>
             <Suspense>
