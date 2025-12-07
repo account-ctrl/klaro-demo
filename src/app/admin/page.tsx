@@ -90,7 +90,7 @@ export default function AdminDashboardPage() {
                  <div className="absolute bottom-4 right-4 bg-slate-950/80 backdrop-blur border border-slate-800 p-3 rounded-lg text-xs space-y-1">
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"></div>
-                        <span className="text-slate-300">High Density (>5k/sq km)</span>
+                        <span className="text-slate-300">High Density (&gt;5k/sq km)</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
