@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import { Paths } from '@/lib/firebase/paths';
 
 export async function POST(req: Request) {
   try {
@@ -10,9 +11,11 @@ export async function POST(req: Request) {
     
     // Verify Admin
     const decoded = await adminAuth.verifyIdToken(token);
-    // Allow if super_admin or we can check claims
-    // For now assume valid admin token is enough for this dev phase or check strict role
-    // if (decoded.role !== 'super_admin') ...
+    
+    // Strict Role Check: Only Super Admin can delete tenants
+    if (decoded.role !== 'super_admin') {
+        return NextResponse.json({ error: 'Forbidden: Insufficient privileges.' }, { status: 403 });
+    }
 
     const { tenantId } = await req.json();
 
@@ -22,29 +25,41 @@ export async function POST(req: Request) {
 
     console.log(`Deleting Tenant: ${tenantId}`);
 
-    // 1. Delete from Tenant Directory (New Arch)
-    const dirRef = adminDb.collection('tenant_directory').doc(tenantId);
+    // 1. Get Tenant Details from Directory
+    const dirRef = adminDb.collection(Paths.TenantDirectory).doc(tenantId);
     const dirSnap = await dirRef.get();
     
     let fullPath = null;
     if (dirSnap.exists) {
         fullPath = dirSnap.data()?.fullPath;
-        await dirRef.delete();
+    } else {
+        console.warn(`Tenant Directory entry not found for ${tenantId}. Proceeding with cleanup.`);
     }
 
-    // 2. Delete the Logical Vault Document (New Arch)
+    // 2. Perform Deletion
+    const batch = adminDb.batch();
+
+    // A. Delete Directory Entry
+    if (dirSnap.exists) {
+        batch.delete(dirRef);
+    }
+
+    // B. Delete Vault Root Document
     if (fullPath) {
-        await adminDb.doc(fullPath).delete();
-        // Ideally we recursive delete subcollections here, but Firestore doesn't do that natively 
-        // without a cloud function or recursive tool. For now we delete the root anchor.
+        const vaultRef = adminDb.doc(fullPath);
+        batch.delete(vaultRef);
+        
+        // C. Delete Settings Document
+        const settingsRef = adminDb.doc(Paths.getSettingsPath(fullPath));
+        batch.delete(settingsRef);
     }
 
-    // 3. Delete from Legacy 'barangays' collection (Old Arch / Hybrid)
-    // Sometimes tenantId matches the doc ID in 'barangays'
-    await adminDb.collection('barangays').doc(tenantId).delete();
+    await batch.commit();
 
-    // 4. Cleanup Users? (Optional)
-    // We could query users where tenantId == ... and update them.
+    // Note: Firestore does not support recursive delete of subcollections via SDK in one go.
+    // The subcollections (residents, assets) will become "orphaned" (unreachable via UI) 
+    // but technically still exist until a Cloud Function sweeps them.
+    // For this admin dashboard, breaking the link (Directory & Root) is sufficient to "delete" it from view.
 
     return NextResponse.json({ success: true, message: 'Tenant deleted successfully.' });
 

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2, Copy, ExternalLink } from "lucide-react";
+import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react";
 import Link from 'next/link';
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
@@ -49,6 +49,7 @@ export default function AdminDashboardPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<Barangay | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 1. Fetch Global Stats (Scalable)
   const statsRef = useMemoFirebase(() => {
@@ -150,8 +151,36 @@ export default function AdminDashboardPage() {
   ];
 
   const handleDelete = async (id: string) => {
-      // Implementation pending API update
-      toast({ title: "Action queued", description: "Delete functionality is being migrated to new vault structure." });
+      if (!firestore) return;
+      setIsDeleting(true);
+
+      try {
+          const auth = await import('firebase/auth').then(m => m.getAuth());
+          const token = await auth.currentUser?.getIdToken();
+
+          const response = await fetch('/api/admin/delete-tenant', {
+             method: 'POST',
+             headers: { 
+                 'Content-Type': 'application/json',
+                 'Authorization': `Bearer ${token}`
+             },
+             body: JSON.stringify({ tenantId: id })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+              throw new Error(data.error || 'Failed to delete tenant');
+          }
+
+          toast({ title: "Tenant Deleted", description: `Vault ${id} has been securely removed.` });
+          setSelectedTenant(null);
+      } catch (e: any) {
+          console.error(e);
+          toast({ variant: "destructive", title: "Error", description: e.message || "Failed to delete tenant." });
+      } finally {
+          setIsDeleting(false);
+      }
   };
 
   const copyToClipboard = async (text: string) => {
@@ -446,8 +475,9 @@ export default function AdminDashboardPage() {
                         <div className="flex justify-between gap-2 pt-2 border-t mt-4">
                              <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-                                        <Trash2 className="h-4 w-4 mr-2" /> Delete Tenant
+                                    <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" disabled={isDeleting}>
+                                        {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />} 
+                                        Delete Tenant
                                     </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
@@ -459,8 +489,8 @@ export default function AdminDashboardPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDelete(selectedTenant.id)} className="bg-destructive hover:bg-destructive/90">
-                                            Delete Permanently
+                                        <AlertDialogAction onClick={() => handleDelete(selectedTenant.id)} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                                            {isDeleting ? "Deleting..." : "Delete Permanently"}
                                         </AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
