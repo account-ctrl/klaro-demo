@@ -22,16 +22,40 @@ const RESPONDER_ROLES = [
 ];
 
 export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
-    const responderList = responders.filter(u => {
-        const isResponderRole = RESPONDER_ROLES.includes(u.position);
-        const isSystemResponder = u.systemRole === 'Responder' || u.systemRole === 'Admin' || u.systemRole === 'Super Admin' || u.systemRole === 'Encoder';
-        const positionLower = u.position ? u.position.toLowerCase() : '';
-        const isTanod = positionLower.includes('tanod');
-        const isKagawad = positionLower.includes('kagawad');
-        const isResponder = positionLower.includes('responder');
+    // Correctly filter responders based on user prompt
+    // 1. Must have a defined role (position or systemRole)
+    // 2. Filter logic:
+    //    - Has a position that is in the RESPONDER_ROLES list
+    //    - OR has 'Responder' in their systemRole
+    //    - OR has 'Tanod', 'Kagawad', or 'Responder' (case-insensitive) in their position string
+    
+    const responderList = useMemo(() => {
+        if (!responders) return [];
+        return responders.filter(u => {
+            const position = u.position || '';
+            const systemRole = u.systemRole || '';
+            
+            // Check direct match in predefined list
+            const isPredefinedResponder = RESPONDER_ROLES.includes(position);
+            
+            // Check for keywords in position (flexible matching)
+            const positionLower = position.toLowerCase();
+            const hasResponderKeyword = positionLower.includes('tanod') || 
+                                        positionLower.includes('kagawad') || 
+                                        positionLower.includes('responder') ||
+                                        positionLower.includes('driver') ||
+                                        positionLower.includes('ambulance') ||
+                                        positionLower.includes('health worker') ||
+                                        positionLower.includes('bhw');
 
-        return isResponderRole || isSystemResponder || isTanod || isKagawad || isResponder;
-    });
+            // Check system role
+            const isSystemResponder = systemRole === 'Responder';
+
+            // Must satisfy at least one condition AND generally be an active user (optional but good practice)
+            // Assuming we list all regardless of 'status' for visibility, but badge shows status.
+            return isPredefinedResponder || hasResponderKeyword || isSystemResponder;
+        });
+    }, [responders]);
 
     return (
         <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden mb-4 pointer-events-auto flex-shrink-0">

@@ -11,8 +11,7 @@ import type { ScheduleEvent } from '@/lib/types';
 import { EditEvent } from './event-actions';
 import { useToast } from '@/hooks/use-toast';
 import { EventClickArg, DateSelectArg } from '@fullcalendar/core';
-
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenant } from '@/providers/tenant-provider';
 
 const categoryColors = {
     'Blotter': '#ef4444', // red-500
@@ -33,6 +32,7 @@ interface CalendarViewProps {
 export function CalendarView({ events, onDateSelect }: CalendarViewProps) {
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { tenantPath } = useTenant();
     const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
 
@@ -69,8 +69,10 @@ export function CalendarView({ events, onDateSelect }: CalendarViewProps) {
     };
 
     const handleEditEvent = (data: ScheduleEvent) => {
-        if (!firestore || !data.eventId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/schedule_events/${data.eventId}`);
+        if (!firestore || !data.eventId || !tenantPath) return;
+        
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/schedule_events/${data.eventId}`);
         const { eventId, ...dataToUpdate } = data;
         updateDocumentNonBlocking(docRef, dataToUpdate);
         toast({ title: "Event Updated", description: `"${data.title}" has been updated.`});
@@ -78,8 +80,10 @@ export function CalendarView({ events, onDateSelect }: CalendarViewProps) {
     };
 
     const handleDeleteEvent = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/schedule_events/${id}`);
+        if (!firestore || !tenantPath) return;
+        
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/schedule_events/${id}`);
         deleteDocumentNonBlocking(docRef);
         toast({ variant: 'destructive', title: "Event Deleted" });
         setEditModalOpen(false);

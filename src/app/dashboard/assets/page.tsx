@@ -2,16 +2,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useFixedAssets, useAssetBookings, useAssetsRef, BARANGAY_ID } from '@/hooks/use-assets';
+import { useFixedAssets, useAssetBookings, useAssetsRef } from '@/hooks/use-assets';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useFirestore } from '@/firebase';
 import { serverTimestamp, doc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { FixedAsset, MaintenanceLog } from '@/lib/types';
 import { AssetTabs } from '@/components/dashboard/assets/asset-tabs';
 import { AssetModals, initialAssetForm } from '@/components/dashboard/assets/asset-modals';
+import { useTenant } from '@/providers/tenant-provider';
 
 export default function AssetsPage() {
     const firestore = useFirestore();
+    const { tenantPath } = useTenant();
     const { data: assets, isLoading: isLoadingAssets } = useFixedAssets();
     const { data: bookings } = useAssetBookings();
     const assetsRef = useAssetsRef('fixed_assets');
@@ -92,8 +94,9 @@ export default function AssetsPage() {
         };
 
         try {
-            if (isEditMode && currentAssetId && firestore) {
-                 const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${currentAssetId}`);
+            if (isEditMode && currentAssetId && firestore && tenantPath) {
+                 const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+                 const docRef = doc(firestore, `${safePath}/fixed_assets/${currentAssetId}`);
                  await setDocumentNonBlocking(docRef, dataToSave, { merge: true });
                  toast({ title: "Asset Updated", description: `${assetForm.name} updated successfully.` });
             } else if (assetsRef) {
@@ -111,8 +114,10 @@ export default function AssetsPage() {
     };
 
     const handleDeleteAsset = async (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${id}`);
+        if (!firestore || !tenantPath) return;
+        
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/fixed_assets/${id}`);
         try {
             await deleteDocumentNonBlocking(docRef);
             toast({ title: "Asset Deleted", description: "The asset has been removed from inventory." });
@@ -207,8 +212,9 @@ export default function AssetsPage() {
                 status: 'Approved' // Default status
             };
 
-            if (isEditBooking && newBooking.bookingId) {
-                const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/asset_bookings/${newBooking.bookingId}`);
+            if (isEditBooking && newBooking.bookingId && firestore && tenantPath) {
+                const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+                const docRef = doc(firestore, `${safePath}/asset_bookings/${newBooking.bookingId}`);
                 await setDocumentNonBlocking(docRef, bookingData, { merge: true });
                 toast({ title: "Booking Updated", description: "Booking details updated successfully." });
             } else {
@@ -225,8 +231,10 @@ export default function AssetsPage() {
     };
 
     const handleDeleteBooking = async (bookingId: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/asset_bookings/${bookingId}`);
+        if (!firestore || !tenantPath) return;
+        
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/asset_bookings/${bookingId}`);
         try {
             await deleteDocumentNonBlocking(docRef);
             toast({ title: "Booking Deleted", description: "The booking has been successfully deleted." });
@@ -261,8 +269,9 @@ export default function AssetsPage() {
             });
 
             // Also update the asset's next maintenance due date
-            if (firestore) {
-                const assetDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/fixed_assets/${maintenanceForm.assetId}`);
+            if (firestore && tenantPath) {
+                const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+                const assetDocRef = doc(firestore, `${safePath}/fixed_assets/${maintenanceForm.assetId}`);
                 await setDocumentNonBlocking(assetDocRef, { 
                     nextMaintenanceDue: nextMaintenanceDue,
                     status: 'Maintenance' // Or based on a form field if we added one

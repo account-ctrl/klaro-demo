@@ -10,20 +10,21 @@ import { ActivitiesList } from "./activities-list";
 import { AddEvent, EventFormValues } from './event-actions';
 import { useToast } from '@/hooks/use-toast';
 import { DateSelectArg } from '@fullcalendar/core';
-
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenant } from '@/providers/tenant-provider';
 
 export default function SchedulerPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { tenantPath } = useTenant();
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [isAddModalOpen, setAddModalOpen] = useState(false);
     
     // Fetch events here to share between components
     const eventsCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, `/barangays/${BARANGAY_ID}/schedule_events`);
-    }, [firestore]);
+        if (!firestore || !tenantPath) return null;
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return collection(firestore, `${safePath}/schedule_events`);
+    }, [firestore, tenantPath]);
 
     const { data: scheduleEvents, isLoading } = useCollection<ScheduleEvent>(eventsCollectionRef);
 

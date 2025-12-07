@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useOrdinances, useLegislativeRef, BARANGAY_ID } from '@/hooks/use-legislative';
+import { useOrdinances, useLegislativeRef } from '@/hooks/use-legislative';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useFirestore } from '@/firebase';
 import { serverTimestamp, doc } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import OrdinanceEditor from './editor/ordinance-editor';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Editor } from '@tiptap/react';
 import { DraftTools } from './editor/draft-tools';
+import { useTenant } from '@/providers/tenant-provider';
 
 type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'> & {
     relatedViolation?: string;
@@ -56,6 +57,7 @@ export default function LegislativePage() {
     const { data: ordinances, isLoading } = useOrdinances();
     const ordinancesRef = useLegislativeRef('ordinances');
     const { toast } = useToast();
+    const { tenantPath } = useTenant();
     
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -141,8 +143,9 @@ export default function LegislativePage() {
             status: 'Active' as const, 
         };
 
-        if (isEditMode && currentOrdinanceId && firestore) {
-            const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
+        if (isEditMode && currentOrdinanceId && firestore && tenantPath) {
+            const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+            const docRef = doc(firestore, `${safePath}/ordinances/${currentOrdinanceId}`);
             setDocumentNonBlocking(docRef, dataToSave, { merge: true });
             
             toast({
@@ -177,8 +180,9 @@ export default function LegislativePage() {
             penaltyAmount: Number(formData.penaltyAmount) || 0,
         };
 
-        if (currentOrdinanceId && firestore) {
-             const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${currentOrdinanceId}`);
+        if (currentOrdinanceId && firestore && tenantPath) {
+             const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+             const docRef = doc(firestore, `${safePath}/ordinances/${currentOrdinanceId}`);
              setDocumentNonBlocking(docRef, draftData, { merge: true });
              toast({ title: "Draft Updated", description: "Your draft has been updated." });
         } else {
@@ -196,8 +200,10 @@ export default function LegislativePage() {
     }
 
     const handleDelete = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/ordinances/${id}`);
+        if (!firestore || !tenantPath) return;
+        
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        const docRef = doc(firestore, `${safePath}/ordinances/${id}`);
         deleteDocumentNonBlocking(docRef);
         toast({
             title: "Ordinance Deleted",

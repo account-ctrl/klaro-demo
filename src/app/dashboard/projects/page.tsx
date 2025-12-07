@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -25,9 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AddProject, EditProject, DeleteProject, ProjectFormValues } from './project-actions';
 import { Button } from '@/components/ui/button';
 import { ProjectsTable } from './projects-table';
-
-const BARANGAY_ID = 'barangay_san_isidro';
-
+import { useTenant } from '@/providers/tenant-provider';
 
 const ProjectStatusBadge = ({ status }: { status: Project["status"] }) => {
   const variant: "default" | "secondary" | "outline" | "destructive" = {
@@ -99,12 +98,14 @@ export default function ProjectsPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant();
   const [view, setView] = React.useState<'card' | 'list'>('card');
 
   const projectsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/projects`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/projects`);
+  }, [firestore, tenantPath]);
 
   const { data: projects, isLoading } = useCollection<Project>(projectsCollectionRef);
   
@@ -134,8 +135,10 @@ export default function ProjectsPage() {
   };
 
   const handleEdit = (updatedRecord: Project) => {
-    if (!firestore || !updatedRecord.projectId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/projects/${updatedRecord.projectId}`);
+    if (!firestore || !updatedRecord.projectId || !tenantPath) return;
+    
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/projects/${updatedRecord.projectId}`);
     const { projectId, ...dataToUpdate } = updatedRecord;
 
     Object.keys(dataToUpdate).forEach(key => {
@@ -150,8 +153,9 @@ export default function ProjectsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/projects/${id}`);
+    if (!firestore || !tenantPath) return;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/projects/${id}`);
     deleteDocumentNonBlocking(docRef);
     toast({ variant: 'destructive', title: 'Project Deleted', description: 'The project has been permanently deleted.'});
   };
