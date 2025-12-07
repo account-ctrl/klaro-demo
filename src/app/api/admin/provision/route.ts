@@ -12,15 +12,19 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Construct the Tenant Path using the Helper (or manual slugify if helper not available)
+    // 1. Generate Slugs
     const provinceSlug = slugify(province);
     const citySlug = slugify(city);
     const barangaySlug = slugify(barangayName);
     
-    const vaultPath = `provinces/${provinceSlug}/cities/${citySlug}/barangays/${barangaySlug}`;
+    // 2. Construct Paths
+    // Vault Path: provinces/cavite/cities/bacoor/barangays/brgy-genesis
+    const vaultPath = Paths.getVaultRoot(province, city, barangayName);
+    
+    // Tenant Slug (Unique ID for the directory): bacoor-brgy-genesis
     const tenantSlug = `${citySlug}-${barangaySlug}`;
 
-    // 2. Auth: Create User
+    // 3. Auth: Create User
     let uid;
     try {
         const userRecord = await adminAuth.createUser({
@@ -38,28 +42,31 @@ export async function POST(req: Request) {
         }
     }
 
-    // 3. Set Custom Claims
+    // 4. Set Custom Claims
+    // Critical: This binds the user to the specific vault path in Security Rules
     await adminAuth.setCustomUserClaims(uid, {
         tenantPath: vaultPath,
         tenantId: tenantSlug,
         role: 'captain'
     });
 
-    // 4. Transactional Write
+    // 5. Transactional Write (Atomic Operation)
     await adminDb.runTransaction(async (t) => {
-        const directoryRef = adminDb.collection('tenant_directory').doc(tenantSlug);
+        // References
+        const directoryRef = adminDb.collection(Paths.TenantDirectory).doc(tenantSlug);
         const tenantRef = adminDb.doc(vaultPath);
-        const settingsRef = adminDb.doc(`${vaultPath}/settings/general`);
-        const userProfileRef = adminDb.collection('users').doc(uid); 
+        const settingsRef = adminDb.doc(Paths.getSettingsPath(vaultPath));
+        const userProfileRef = adminDb.collection(Paths.Users).doc(uid); 
 
-        // Step A: Directory
+        // Step A: Directory (Global Lookup)
         t.set(directoryRef, {
             fullPath: vaultPath,
             adminEmail: adminEmail,
             province,
             city,
             barangay: barangayName,
-            tenantId: tenantSlug
+            tenantId: tenantSlug,
+            updatedAt: Timestamp.now()
         }, { merge: true });
 
         // Step B: Vault Root Metadata
@@ -72,7 +79,7 @@ export async function POST(req: Request) {
             plan: 'free'
         }, { merge: true });
 
-        // Step C: Pre-filled Settings (Crucial for Dashboard UX)
+        // Step C: Pre-filled Settings
         t.set(settingsRef, {
             barangayName: barangayName,
             location: {
@@ -86,7 +93,7 @@ export async function POST(req: Request) {
             createdAt: Timestamp.now()
         }, { merge: true });
 
-        // Step D: Update User Profile in Firestore
+        // Step D: Update User Profile (Global)
         t.set(userProfileRef, {
             email: adminEmail,
             fullName: adminName,
