@@ -9,11 +9,20 @@ service cloud.firestore {
     }
 
     function isTenantMember(docTenantId) {
-      // 1. Check Custom Claim (Fastest, Free)
-      // 2. Fallback: Check User Profile in DB (1 Read cost, handles stale tokens)
       return (request.auth.token.tenantId == docTenantId) || 
              (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == docTenantId);
     }
+
+    // --- DEBUG MODE: Global Read Access (TEMPORARY) ---
+    // Warning: This exposes ALL data. Revert immediately after testing.
+    match /{document=**} {
+      allow read: if true; 
+      allow write: if isSuperAdmin(); // Keep write restricted to avoid mess
+    }
+
+    // ... (Keep existing specific rules below if needed, but the global match above might shadow them depending on order/specificity logic in Firestore. 
+    // In Firestore rules, overlapping match statements are allowed, and if ANY allow rule grants access, access is granted.
+    // So adding the global read above ensures read is allowed.)
 
     // --- Tenant Directory ---
     match /tenant_directory/{slug} {
@@ -23,23 +32,14 @@ service cloud.firestore {
     
     // --- Global User Profiles ---
     match /users/{userId} {
-      // Allow read if:
-      // 1. Own Profile
-      // 2. Super Admin
-      // 3. Same Tenant (Co-worker)
       allow read: if (request.auth != null && request.auth.uid == userId) || 
                      isSuperAdmin() || 
                      isTenantMember(resource.data.tenantId);
       
-      // Allow write if:
-      // 1. Own Profile (limited fields?) - usually specific fields only
-      // 2. Super Admin
-      // 3. Same Tenant (e.g. Captain editing Staff)
       allow write: if (request.auth != null && request.auth.uid == userId) || 
                       isSuperAdmin() || 
                       isTenantMember(resource.data.tenantId);
       
-      // Allow create if assigning to own tenant
       allow create: if request.auth != null && 
                        (request.resource.data.tenantId == request.auth.token.tenantId || 
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == request.resource.data.tenantId);
@@ -53,20 +53,12 @@ service cloud.firestore {
                request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
       }
 
-      // Root access (e.g., /settings/general)
-      // Captains need write access here to update Puroks and Configs
       allow read: if isVaultMember() || isSuperAdmin();
-      allow write: if isSuperAdmin() || isVaultMember(); // "Dual-Key" Access Logic
+      allow write: if isSuperAdmin() || isVaultMember();
 
-      // Recursive Subcollection Access
       match /{document=**} {
         allow read, write: if isVaultMember() || isSuperAdmin();
       }
-    }
-
-    // --- Default Fallback ---
-    match /{document=**} {
-      allow read, write: if isSuperAdmin();
     }
   }
 }
