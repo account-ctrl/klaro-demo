@@ -52,13 +52,19 @@ export default function LoginPage() {
                         return;
                     }
 
-                    // Success Redirect
-                    if (role === 'captain' || role === 'admin') {
-                        router.push('/dashboard');
-                    } else {
-                        // Default fallback
-                        router.push('/dashboard');
+                    // STRICT BARRIER: Must have 'captain' or 'admin' role
+                    if (role !== 'captain' && role !== 'admin') {
+                         await auth.signOut();
+                         toast({
+                             variant: "destructive",
+                             title: "Access Denied",
+                             description: "This account is not authorized to access the Admin Dashboard. Please contact your administrator."
+                         });
+                         return;
                     }
+
+                    // Success Redirect
+                    router.push('/dashboard');
                 }
             } catch (error: any) {
                 console.error(error);

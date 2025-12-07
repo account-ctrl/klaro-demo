@@ -15,9 +15,14 @@ export function HeaderProfile() {
   const user = auth?.currentUser;
 
   const handleLogout = async () => {
-    if (auth) {
-        await signOut(auth);
-        router.push('/secure-superadmin-login'); 
+    try {
+        if (auth) {
+            await signOut(auth);
+            // Force a hard redirect to clear client-side state
+            window.location.href = '/secure-superadmin-login';
+        }
+    } catch (error) {
+        console.error("Logout failed", error);
     }
   };
 
