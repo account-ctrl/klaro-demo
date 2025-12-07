@@ -1,19 +1,20 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye } from "lucide-react";
-import { getProvinces, getCitiesMunicipalities, Province, CityMunicipality } from '@/lib/data/psgc';
+import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Mail } from "lucide-react";
+import { getProvinces, getCitiesMunicipalities, fetchBarangays, Province, CityMunicipality, Barangay as PSGCBarangay } from '@/lib/data/psgc';
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
+import Link from 'next/link';
 
 // Define the shape of our Firestore Barangay Document
-type Barangay = {
+type TenantBarangay = {
     id: string; // Document ID (slug)
     name: string;
     city: string;
@@ -29,6 +30,10 @@ export default function JurisdictionsPage() {
   const [selectedProvince, setSelectedProvince] = useState<Province | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityMunicipality | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // State for official PSGC list
+  const [masterBarangays, setMasterBarangays] = useState<PSGCBarangay[]>([]);
+  const [isLoadingMaster, setIsLoadingMaster] = useState(false);
 
   const firestore = useFirestore();
 
@@ -49,28 +54,74 @@ export default function JurisdictionsPage() {
   }, [cities, searchQuery, selectedProvince]);
 
 
-  // Real Firestore Data Fetching for Barangays
-  const barangaysQuery = useMemoFirebase(() => {
+  // Real Firestore Data Fetching for Tenants
+  const tenantsQuery = useMemoFirebase(() => {
       if (!firestore || !selectedCity || !selectedProvince) return null;
       return query(
           collection(firestore, 'barangays'),
           where('city', '==', selectedCity.name),
           where('province', '==', selectedProvince.name)
-          // Note: 'status' ordering might require a composite index, so we sort client-side for simplicity if needed
       );
   }, [firestore, selectedCity, selectedProvince]);
 
-  const { data: realBarangays, isLoading } = useCollection<Barangay>(barangaysQuery);
+  const { data: tenantBarangays, isLoading: isLoadingTenants } = useCollection<TenantBarangay>(tenantsQuery);
 
-  // Merge Real Data with Mock logic for "Untapped" (Sales Targets)
-  // In a real production app, we would have a master list of all 42k barangays and join them.
-  // For this demo, we will show the "Real" ones created via Onboarding, and maybe some placeholders if empty?
-  // The prompt asked for "Live Data". So we should prioritize what's in DB.
-  
-  const filteredBarangays = useMemo(() => {
-      if (!realBarangays) return [];
-      return realBarangays.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [realBarangays, searchQuery]);
+  // Fetch Master List when City is selected
+  useEffect(() => {
+      if (selectedCity) {
+          setIsLoadingMaster(true);
+          fetchBarangays(selectedCity.code)
+            .then(data => {
+                setMasterBarangays(data.sort((a, b) => a.name.localeCompare(b.name)));
+                setIsLoadingMaster(false);
+            })
+            .catch(() => setIsLoadingMaster(false));
+      } else {
+          setMasterBarangays([]);
+      }
+  }, [selectedCity]);
+
+
+  // MERGE LOGIC: Master List + Tenant List
+  const mergedBarangays = useMemo(() => {
+      if (!selectedCity) return [];
+      
+      return masterBarangays.map(official => {
+          // Find matching tenant
+          // Note: PSGC names might differ slightly (e.g., "Poblacion" vs "Brgy. Poblacion"). 
+          // Simple includes/match for now.
+          const tenant = tenantBarangays?.find(t => 
+              t.name.toLowerCase() === official.name.toLowerCase() || 
+              t.name.toLowerCase().includes(official.name.toLowerCase())
+          );
+
+          if (tenant) {
+              return {
+                  ...tenant,
+                  isOfficial: true,
+                  psgcCode: official.code
+              };
+          }
+
+          // Return Untapped
+          return {
+              id: `untapped-${official.code}`,
+              name: official.name,
+              city: selectedCity.name,
+              province: selectedProvince?.name,
+              status: 'Untapped',
+              population: 0,
+              quality: 0,
+              lastActivity: null,
+              psgcCode: official.code,
+              isOfficial: true
+          } as any; // Cast to satisfy type mix
+      });
+  }, [masterBarangays, tenantBarangays, selectedCity, selectedProvince]);
+
+  const filteredMergedBarangays = useMemo(() => {
+      return mergedBarangays.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [mergedBarangays, searchQuery]);
 
 
   // Navigation Handlers
@@ -208,7 +259,11 @@ export default function JurisdictionsPage() {
                         </TableHeader>
                         <TableBody>
                             {filteredCities.map((city) => (
-                                <TableRow key={city.code} className="hover:bg-slate-50 transition-colors">
+                                <TableRow 
+                                    key={city.code} 
+                                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                                    onClick={() => handleSelectCity(city)}
+                                >
                                     <TableCell className="font-medium">
                                         {city.name}
                                         {city.isCapital && <Badge variant="secondary" className="ml-2 text-[10px]">Capital</Badge>}
@@ -238,7 +293,10 @@ export default function JurisdictionsPage() {
                                             variant="ghost" 
                                             size="sm" 
                                             className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                            onClick={() => handleSelectCity(city)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSelectCity(city);
+                                            }}
                                         >
                                             View Barangays <ChevronRight className="ml-1 h-3 w-3" />
                                         </Button>
@@ -288,12 +346,14 @@ export default function JurisdictionsPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {isLoading ? (
-                            <div className="text-center py-10 text-slate-500">Loading live data...</div>
-                        ) : filteredBarangays.length === 0 ? (
+                        {isLoadingMaster || isLoadingTenants ? (
+                            <div className="text-center py-10 text-slate-500 flex flex-col items-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-2"></div>
+                                Loading PSGC data...
+                            </div>
+                        ) : filteredMergedBarangays.length === 0 ? (
                             <div className="text-center py-10">
-                                <p className="text-slate-500">No active tenants found for this jurisdiction.</p>
-                                <p className="text-xs text-slate-400">All barangays are currently marked as "Untapped".</p>
+                                <p className="text-slate-500">No barangays found.</p>
                             </div>
                         ) : (
                             <Table>
@@ -308,7 +368,7 @@ export default function JurisdictionsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredBarangays.map((brgy) => (
+                                    {filteredMergedBarangays.map((brgy) => (
                                         <TableRow key={brgy.id} className="hover:bg-slate-50">
                                             <TableCell className="font-medium text-slate-900">{brgy.name}</TableCell>
                                             <TableCell>
@@ -323,28 +383,33 @@ export default function JurisdictionsPage() {
                                                     {brgy.status}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="font-mono text-slate-600">{brgy.population.toLocaleString()}</TableCell>
+                                            <TableCell className="font-mono text-slate-600">{brgy.population > 0 ? brgy.population.toLocaleString() : '-'}</TableCell>
                                             <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Progress value={brgy.quality} className={`h-1.5 w-16 ${brgy.quality > 80 ? '[&>div]:bg-green-500' : brgy.quality > 50 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'}`} />
-                                                    <span className="text-xs text-slate-500">{brgy.quality}%</span>
-                                                </div>
+                                                {brgy.quality > 0 ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Progress value={brgy.quality} className={`h-1.5 w-16 ${brgy.quality > 80 ? '[&>div]:bg-green-500' : brgy.quality > 50 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'}`} />
+                                                        <span className="text-xs text-slate-500">{brgy.quality}%</span>
+                                                    </div>
+                                                ) : <span className="text-xs text-slate-400">N/A</span>}
                                             </TableCell>
                                             <TableCell className="text-xs text-slate-500">
-                                                {brgy.lastActivity ? 'Active recently' : 'No activity'}
+                                                {brgy.lastActivity ? 'Active recently' : '-'}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 {brgy.status === 'Live' ? (
                                                     <Button variant="ghost" size="sm" className="h-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 group">
                                                         <Eye className="h-3.5 w-3.5 mr-1" /> Inspect
                                                     </Button>
-                                                ) : brgy.status === 'Onboarding' ? (
-                                                    <Button variant="outline" size="sm" className="h-8 text-blue-600 border-blue-200 hover:bg-blue-50">
-                                                        Assist
-                                                    </Button>
                                                 ) : (
-                                                    <Button variant="ghost" size="sm" className="h-8 text-slate-400" disabled>
-                                                        Invite
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-8 text-amber-600 hover:bg-amber-50"
+                                                        asChild
+                                                    >
+                                                        <Link href={`/onboarding?province=${encodeURIComponent(selectedProvince?.name ?? '')}&city=${encodeURIComponent(selectedCity.name)}&barangay=${encodeURIComponent(brgy.name)}`}>
+                                                            <PlusCircle className="h-3.5 w-3.5 mr-1" /> Provision
+                                                        </Link>
                                                     </Button>
                                                 )}
                                             </TableCell>

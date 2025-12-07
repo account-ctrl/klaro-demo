@@ -21,6 +21,20 @@ export type CityMunicipality = {
   psgc10DigitCode: string;
 };
 
+export type Barangay = {
+    code: string;
+    name: string;
+    oldName?: string;
+    subMunicipalityCode?: boolean;
+    cityCode?: string;
+    municipalityCode?: string;
+    districtCode?: boolean;
+    provinceCode?: string;
+    regionCode?: string;
+    islandGroupCode?: string;
+    psgc10DigitCode?: string;
+}
+
 export const getProvinces = (): Province[] => {
   return provinces as Province[];
 };
@@ -41,4 +55,15 @@ export const getCityMunicipalityName = (code: string) => {
 export const getProvinceName = (code: string) => {
     const province = (provinces as Province[]).find(p => p.code === code);
     return province ? province.name : code;
+}
+
+export const fetchBarangays = async (cityCode: string): Promise<Barangay[]> => {
+    try {
+        const res = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays/`);
+        if (!res.ok) throw new Error('Failed to fetch');
+        return await res.json();
+    } catch (e) {
+        console.error("Error fetching barangays:", e);
+        return [];
+    }
 }
