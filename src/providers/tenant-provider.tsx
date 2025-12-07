@@ -40,13 +40,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       // 1. Wait for Auth & Firestore
       if (!auth?.currentUser || !firestore) {
          if (auth && !auth.currentUser) {
+             // User is not logged in
              if (isMounted) setIsLoading(false);
          }
          return;
       }
 
       try {
-        const tokenResult = await auth.currentUser.getIdTokenResult();
+        // FORCE REFRESH: This is critical after provisioning.
+        // The custom claims (role: admin, tenantPath) are set by the backend,
+        // but the client's existing token doesn't have them yet.
+        // We must force a refresh to get the new claims.
+        const tokenResult = await auth.currentUser.getIdTokenResult(true);
         const role = tokenResult.claims.role;
 
         // --- PRIORITY 1: Super Admin Context Switching (URL Override) ---

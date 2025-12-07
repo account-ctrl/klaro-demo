@@ -11,17 +11,26 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Loader2, PlayCircle, FastForward } from 'lucide-react';
 import { SimulateProvisioningDialog } from './SimulateProvisioningDialog';
+import { useAuth } from '@/firebase';
 
 export function OnboardingSimulator() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const auth = useAuth(); // Hook to access auth state
 
   const handleStartSimulation = async () => {
     setLoading(true);
-    // Simulate a delay for "generating" the user persona
-    await new Promise(resolve => setTimeout(resolve, 1500));
     
+    // SAFETY: Ensure user is logged out before starting simulation
+    // This prevents "merging" the simulation account with an existing active session
+    // which causes the "Unknown Tenant" bug on redirection.
+    if (auth && auth.currentUser) {
+        await auth.signOut();
+        // Short delay to ensure sign out propagates
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     // Generate a random mock profile
     const randomId = Math.floor(Math.random() * 1000);
     const mockProfile = {
