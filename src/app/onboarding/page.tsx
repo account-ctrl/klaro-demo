@@ -31,7 +31,7 @@ import {
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuth, initiateEmailSignUp } from '@/firebase';
 import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 // --- Schemas ---
@@ -46,6 +46,8 @@ const officialsSchema = z.object({
   officials: z.array(z.object({
     name: z.string().min(2, "Name is required."),
     role: z.enum(['Captain', 'Secretary', 'Treasurer', 'Councilor']),
+    email: z.string().email("Invalid email").optional(),
+    password: z.string().min(6, "Password must be at least 6 characters").optional(),
   })).min(1, "Please add at least one official."),
 });
 
@@ -124,6 +126,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const firestore = useFirestore();
+  const auth = useAuth();
 
   // State to hold collected data across steps
   const [profileData, setProfileData] = useState<ProfileFormValues | null>(null);
@@ -167,7 +170,7 @@ export default function OnboardingPage() {
 
   const officialsForm = useForm<OfficialsFormValues>({
     resolver: zodResolver(officialsSchema),
-    defaultValues: { officials: [{ name: '', role: 'Captain' }] },
+    defaultValues: { officials: [{ name: '', role: 'Captain', email: '', password: '' }] },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -228,7 +231,7 @@ export default function OnboardingPage() {
     // Fire off the visual logs
     sequence.forEach((log, index) => {
         delay += Math.random() * 800 + 500;
-        setTimeout(() => {
+        setTimeout(async () => {
             setLogs(prev => [...prev, log]);
             
             // Trigger actual writes at specific steps to simulate work
@@ -251,20 +254,48 @@ export default function OnboardingPage() {
 
             if (index === 5) {
                 // Create Officials Docs
-                officialsData.officials.forEach((official) => {
-                    const userId = `user-${Math.random().toString(36).substr(2, 9)}`;
-                    const userRef = doc(firestore, 'users', userId);
-                    setDoc(userRef, {
-                        userId: userId,
-                        fullName: official.name,
-                        position: official.role,
-                        barangayId: tenantId,
-                        systemRole: official.role === 'Captain' ? 'Admin' : 'Encoder',
-                        email: `${official.name.toLowerCase().replace(/\s/g, '.')}@klarogov.ph`, // Mock email
-                        status: 'Active',
-                        createdAt: serverTimestamp()
-                    }).catch(console.error);
-                });
+                for (const official of officialsData.officials) {
+                    if (official.email && official.password && official.role === 'Captain') {
+                         try {
+                            // Create actual authentication user for the Captain
+                             if (auth) {
+                                 await initiateEmailSignUp(auth, official.email, official.password);
+                                 // After sign up, the user is automatically signed in.
+                                 // We need to create the user profile document for them.
+                                 if (auth.currentUser) {
+                                     const userRef = doc(firestore, 'users', auth.currentUser.uid);
+                                     await setDoc(userRef, {
+                                         userId: auth.currentUser.uid,
+                                         fullName: official.name,
+                                         position: official.role,
+                                         barangayId: tenantId,
+                                         systemRole: 'Admin',
+                                         email: official.email,
+                                         status: 'Active',
+                                         createdAt: serverTimestamp()
+                                     });
+                                 }
+                             }
+                         } catch (error) {
+                             console.error("Error creating user:", error);
+                             setLogs(prev => [...prev, "ERROR: Failed to create user account."]);
+                         }
+                    } else {
+                        // Create non-login records for other officials
+                        const userId = `user-${Math.random().toString(36).substr(2, 9)}`;
+                        const userRef = doc(firestore, 'users', userId);
+                        setDoc(userRef, {
+                            userId: userId,
+                            fullName: official.name,
+                            position: official.role,
+                            barangayId: tenantId,
+                            systemRole: official.role === 'Captain' ? 'Admin' : 'Encoder',
+                            email: official.email || `${official.name.toLowerCase().replace(/\s/g, '.')}@klarogov.ph`,
+                            status: 'Active',
+                            createdAt: serverTimestamp()
+                        }).catch(console.error);
+                    }
+                }
             }
 
             if (index === sequence.length - 1) {
@@ -421,6 +452,25 @@ export default function OnboardingPage() {
                                         <FormMessage />
                                     </FormItem>
                                     )} />
+
+                                    {officialsForm.watch(`officials.${index}.role`) === 'Captain' && (
+                                        <>
+                                            <FormField name={`officials.${index}.email`} control={officialsForm.control} render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs text-zinc-500 uppercase">Email (For Login)</FormLabel>
+                                                    <FormControl><Input placeholder="official@barangay.gov.ph" {...field} className="bg-zinc-950 border-zinc-700" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                             <FormField name={`officials.${index}.password`} control={officialsForm.control} render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs text-zinc-500 uppercase">Password</FormLabel>
+                                                    <FormControl><Input type="password" placeholder="******" {...field} className="bg-zinc-950 border-zinc-700" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </>
+                                    )}
                                 </div>
                                 <Button type="button" variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400 mt-6" onClick={() => remove(index)} disabled={fields.length <= 1}>
                                     <Trash2 className="h-4 w-4" />

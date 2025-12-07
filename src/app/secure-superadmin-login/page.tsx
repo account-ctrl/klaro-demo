@@ -68,6 +68,7 @@ function SuperAdminLoginCard() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="bg-slate-950 border-slate-800 text-white pl-9 focus-visible:ring-amber-500"
+                                suppressHydrationWarning
                             />
                         </div>
                     </div>
@@ -83,12 +84,19 @@ function SuperAdminLoginCard() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="bg-slate-950 border-slate-800 text-white pl-9 focus-visible:ring-amber-500"
+                                suppressHydrationWarning
                             />
                         </div>
                     </div>
                     
                     <div className="pt-2">
-                        <Button type="submit" size="lg" className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold" disabled={isPending}>
+                        <Button 
+                            type="submit" 
+                            size="lg" 
+                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold" 
+                            disabled={isPending}
+                            suppressHydrationWarning
+                        >
                             {isPending ? <Loader2 className="mr-2 animate-spin h-4 w-4" /> : null}
                             {isPending ? 'Authenticating Secure Session...' : 'Initialize Command Center'}
                         </Button>
