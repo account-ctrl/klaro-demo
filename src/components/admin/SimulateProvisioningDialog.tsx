@@ -19,6 +19,7 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
         province: string;
         city: string;
         barangayName: string;
+        region: string;
     } | null>(null);
     const { toast } = useToast();
     const router = useRouter();
@@ -28,6 +29,7 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
         barangayName: '',
         city: '',
         province: '',
+        region: '',
         captainName: ''
     });
 
@@ -40,6 +42,7 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
             barangayName: `Brgy. Test-${randomAdj}-${randomNum}`,
             city: 'Sandbox City',
             province: 'Test Province',
+            region: 'Region I',
             captainName: `Capt. John Doe ${randomNum}`
         });
     };
@@ -52,7 +55,8 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
             setCreatedTenantData({
                 province: formData.province,
                 city: formData.city,
-                barangayName: formData.barangayName
+                barangayName: formData.barangayName,
+                region: formData.region
             });
         } catch (error) {
             console.error(error);
@@ -64,7 +68,7 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
     const handleLaunchJourney = () => {
         if (!createdTenantData) return;
         
-        const url = `/onboarding?province=${encodeURIComponent(createdTenantData.province)}&city=${encodeURIComponent(createdTenantData.city)}&barangay=${encodeURIComponent(createdTenantData.barangayName)}&simulationMode=true`;
+        const url = `/onboarding?province=${encodeURIComponent(createdTenantData.province)}&city=${encodeURIComponent(createdTenantData.city)}&barangay=${encodeURIComponent(createdTenantData.barangayName)}&region=${encodeURIComponent(createdTenantData.region)}&simulationMode=true`;
         
         setOpen(false);
         // Force refresh or just standard push?
@@ -111,6 +115,10 @@ export function SimulateProvisioningDialog({ className }: { className?: string }
                                     <Label>Province</Label>
                                     <Input value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} />
                                 </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Region</Label>
+                                <Input value={formData.region} onChange={e => setFormData({...formData, region: e.target.value})} placeholder="e.g. Region IV-A (CALABARZON)" />
                             </div>
                         </div>
 
