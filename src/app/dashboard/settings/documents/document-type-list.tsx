@@ -13,9 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { FileText, Tag, CircleDollarSign, CheckSquare, RefreshCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-
-// In a real multi-tenant app, this would come from the user's session/claims or route.
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenantContext } from '@/lib/hooks/useTenant';
 
 type CertificateTypeWithId = CertificateType & { id?: string };
 
@@ -23,11 +21,12 @@ export default function DocumentTypeList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
+    const { tenantPath } = useTenantContext();
 
     const docTypesCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, `/barangays/${BARANGAY_ID}/certificate_types`);
-    }, [firestore]);
+        if (!firestore || !tenantPath) return null;
+        return collection(firestore, `${tenantPath}/certificate_types`);
+    }, [firestore, tenantPath]);
     
     const { data: documentTypes, isLoading } = useCollection<CertificateType>(docTypesCollectionRef);
 
@@ -46,22 +45,22 @@ export default function DocumentTypeList() {
 
     const handleEdit = (updatedDocType: CertificateTypeWithId) => {
         const docId = updatedDocType.id || updatedDocType.certTypeId;
-        if (!firestore || !docId) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_types/${docId}`);
+        if (!firestore || !docId || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/certificate_types/${docId}`);
         const { certTypeId, id, ...dataToUpdate } = updatedDocType;
         updateDocumentNonBlocking(docRef, { ...dataToUpdate });
         toast({ title: "Document Type Updated", description: `The record for ${updatedDocType.name} has been updated.`});
     };
 
     const handleDelete = (id: string) => {
-        if (!firestore) return;
-        const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_types/${id}`);
+        if (!firestore || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/certificate_types/${id}`);
         deleteDocumentNonBlocking(docRef);
         toast({ variant: "destructive", title: "Document Type Deleted", description: "The document type has been permanently deleted." });
     };
 
     const handleLoadDefaults = async () => {
-        if (!firestore) return;
+        if (!firestore || !tenantPath) return;
 
         const sampleDocTypes = [
             { name: 'Barangay Clearance', code: 'BC-001', fee: 100, validityInMonths: 6, requirements: ['Valid ID', 'Community Tax Certificate (Cedula)'] },
@@ -73,7 +72,7 @@ export default function DocumentTypeList() {
         try {
             const batch = writeBatch(firestore);
             sampleDocTypes.forEach((docType) => {
-                const newDocRef = doc(collection(firestore, `/barangays/${BARANGAY_ID}/certificate_types`));
+                const newDocRef = doc(collection(firestore, `${tenantPath}/certificate_types`));
                 batch.set(newDocRef, {
                     ...docType,
                     certTypeId: newDocRef.id,
@@ -88,14 +87,14 @@ export default function DocumentTypeList() {
     };
 
     const handleClearAll = async () => {
-        if (!firestore || !documentTypes) return;
+        if (!firestore || !documentTypes || !tenantPath) return;
         
         try {
             const batch = writeBatch(firestore);
             documentTypes.forEach((docType) => {
                 const docId = (docType as CertificateTypeWithId).id || docType.certTypeId;
                 if (docId) {
-                    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/certificate_types/${docId}`);
+                    const docRef = doc(firestore, `${tenantPath}/certificate_types/${docId}`);
                     batch.delete(docRef);
                 }
             });
