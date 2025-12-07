@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Trash2, FileText, CheckCircle2, Loader2 } from "lucide-react";
+import { Map as MapIcon, ChevronRight, Search, Building2, Users, ArrowLeft, ShieldCheck, Database, Eye, PlusCircle, Trash2, FileText, CheckCircle2, Loader2, Link as LinkIcon, Copy } from "lucide-react";
 import { getProvinces, getCitiesMunicipalities, fetchBarangays, Province, CityMunicipality, Barangay as PSGCBarangay } from '@/lib/data/psgc';
 import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase, useAuth } from '@/firebase';
@@ -31,6 +31,7 @@ import {
     DialogTitle,
     DialogDescription as DialogDesc
 } from "@/components/ui/dialog";
+import { getRegionByProvince } from '@/lib/data/psgc';
 
 // Define the shape of our Firestore Barangay Document
 type TenantBarangay = {
@@ -201,6 +202,27 @@ export default function JurisdictionsPage() {
       } finally {
           setIsDeleting(false);
       }
+  };
+
+  const generateOnboardingLink = (barangayName: string) => {
+      if (!selectedProvince || !selectedCity) return '';
+      
+      const region = getRegionByProvince(selectedProvince.code);
+      const params = new URLSearchParams({
+          province: selectedProvince.name,
+          city: selectedCity.name,
+          barangay: barangayName,
+          region: region
+      });
+      
+      // In production, use window.location.origin
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      return `${baseUrl}/onboarding?${params.toString()}`;
+  };
+
+  const copyLinkToClipboard = (link: string) => {
+      navigator.clipboard.writeText(link);
+      toast({ title: "Link Copied", description: "Onboarding link copied to clipboard." });
   };
 
 
@@ -482,16 +504,27 @@ export default function JurisdictionsPage() {
                                                         </AlertDialog>
                                                     </>
                                                 ) : (
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        className="h-8 text-amber-600 hover:bg-amber-50"
-                                                        asChild
-                                                    >
-                                                        <Link href={`/onboarding?province=${encodeURIComponent(selectedProvince?.name ?? '')}&city=${encodeURIComponent(selectedCity.name)}&barangay=${encodeURIComponent(brgy.name)}`}>
-                                                            <PlusCircle className="h-3.5 w-3.5 mr-1" /> Provision
-                                                        </Link>
-                                                    </Button>
+                                                    <div className="flex gap-2">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-8 text-slate-500 hover:bg-slate-100"
+                                                            onClick={() => copyLinkToClipboard(generateOnboardingLink(brgy.name))}
+                                                            title="Copy Onboarding Link"
+                                                        >
+                                                            <LinkIcon className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-8 text-amber-600 hover:bg-amber-50"
+                                                            asChild
+                                                        >
+                                                            <Link href={`/onboarding?province=${encodeURIComponent(selectedProvince?.name ?? '')}&city=${encodeURIComponent(selectedCity.name)}&barangay=${encodeURIComponent(brgy.name)}`}>
+                                                                <PlusCircle className="h-3.5 w-3.5 mr-1" /> Provision
+                                                            </Link>
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </TableCell>
                                         </TableRow>
