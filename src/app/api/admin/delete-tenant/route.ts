@@ -30,8 +30,11 @@ export async function POST(req: Request) {
     const dirSnap = await dirRef.get();
     
     let fullPath = null;
+    let adminEmail = null;
     if (dirSnap.exists) {
-        fullPath = dirSnap.data()?.fullPath;
+        const data = dirSnap.data();
+        fullPath = data?.fullPath;
+        adminEmail = data?.adminEmail;
     } else {
         console.warn(`[WARN] Tenant Directory entry not found for ${tenantId}. Proceeding with best-effort cleanup.`);
     }
@@ -43,14 +46,30 @@ export async function POST(req: Request) {
         .where('tenantId', '==', tenantId)
         .get();
 
-    const uidsToDelete: string[] = [];
+    const uidsToDelete: Set<string> = new Set();
     usersSnap.forEach(doc => {
-        uidsToDelete.push(doc.id); // Firestore Doc ID matches Auth UID
+        uidsToDelete.add(doc.id); // Firestore Doc ID matches Auth UID
     });
 
-    if (uidsToDelete.length > 0) {
+    // Fallback: If no users found in Firestore or partial data, try to find admin by email from Directory
+    // This handles "Zombie Users" who exist in Auth but lost their Firestore profile.
+    if (adminEmail) {
+        try {
+            const user = await adminAuth.getUserByEmail(adminEmail);
+            if (!uidsToDelete.has(user.uid)) {
+                 uidsToDelete.add(user.uid);
+                 console.log(`[DESTROY] Found orphaned Auth user via directory email: ${adminEmail} -> ${user.uid}`);
+            }
+        } catch (e) {
+            // User might already be deleted or email changed
+            console.log(`[DESTROY] Checked for admin email ${adminEmail} but user not found (clean).`);
+        }
+    }
+
+    if (uidsToDelete.size > 0) {
         // Bulk Delete from Firebase Auth
-        const deleteResult = await adminAuth.deleteUsers(uidsToDelete);
+        const uidsArray = Array.from(uidsToDelete);
+        const deleteResult = await adminAuth.deleteUsers(uidsArray);
         console.log(`[AUTH] Successfully deleted ${deleteResult.successCount} users. Failed: ${deleteResult.failureCount}`);
         
         if (deleteResult.failureCount > 0) {
@@ -101,7 +120,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
         success: true, 
         message: 'Tenant and all associated data permanently destroyed.',
-        usersDeleted: uidsToDelete.length
+        usersDeleted: uidsToDelete.size
     });
 
   } catch (error: any) {

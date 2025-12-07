@@ -12,6 +12,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    console.log(`[PROVISION] Starting provisioning for ${barangayName}, ${city}, ${province}`);
+
     // 1. Generate Slugs
     const provinceSlug = slugify(province);
     const citySlug = slugify(city);
@@ -24,8 +26,12 @@ export async function POST(req: Request) {
     // Tenant Slug (Unique ID for the directory): bacoor-brgy-genesis
     const tenantSlug = `${citySlug}-${barangaySlug}`;
 
+    console.log(`[PROVISION] Generated paths - Vault: ${vaultPath}, TenantSlug: ${tenantSlug}`);
+
     // 3. Auth: Create User
     let uid;
+    let isNewUser = true;
+
     try {
         const userRecord = await adminAuth.createUser({
             email: adminEmail,
@@ -33,11 +39,24 @@ export async function POST(req: Request) {
             displayName: adminName,
         });
         uid = userRecord.uid;
+        console.log(`[PROVISION] Created new Auth user: ${uid}`);
     } catch (e: any) {
         if (e.code === 'auth/email-already-exists') {
+             console.log(`[PROVISION] User ${adminEmail} already exists. Fetching UID...`);
              const user = await adminAuth.getUserByEmail(adminEmail);
              uid = user.uid;
+             isNewUser = false;
+
+             // Critical: Update the password to match the new provisioning request
+             // otherwise the admin cannot login with the credentials they just provided.
+             await adminAuth.updateUser(uid, {
+                 password: password,
+                 displayName: adminName
+             });
+             console.log(`[PROVISION] Updated existing Auth user credentials for: ${uid}`);
+
         } else {
+            console.error(`[PROVISION] Auth creation failed:`, e);
             throw e;
         }
     }
@@ -49,6 +68,7 @@ export async function POST(req: Request) {
         tenantId: tenantSlug,
         role: 'captain'
     });
+    console.log(`[PROVISION] Set custom claims for ${uid}`);
 
     // 5. Transactional Write (Atomic Operation)
     await adminDb.runTransaction(async (t) => {
@@ -95,6 +115,7 @@ export async function POST(req: Request) {
         }, { merge: true });
 
         // Step D: Update User Profile (Global)
+        // If it's a "zombie" user, we need to make sure this is recreated.
         t.set(userProfileRef, {
             email: adminEmail,
             fullName: adminName,
@@ -105,6 +126,8 @@ export async function POST(req: Request) {
         }, { merge: true });
     });
 
+    console.log(`[PROVISION] Transaction committed successfully.`);
+
     return NextResponse.json({ 
         success: true, 
         message: 'Provisioning complete.',
@@ -113,7 +136,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error("Provisioning Error:", error);
+    console.error("[PROVISION ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
