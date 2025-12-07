@@ -8,6 +8,55 @@ import type { Timestamp } from 'firebase/firestore';
  */
 export type WithId<T> = T & { id: string };
 
+// --- UPDATED TENANT SETTINGS (For Multi-tenant Architecture) ---
+export type TenantSettings = {
+    // Identity
+    barangayName: string;
+    location?: { // Structured Location
+        city: string;
+        province: string;
+        region?: string;
+        zipCode?: string;
+    };
+    // Legacy flat fields (for backward compat)
+    name?: string;
+    city?: string;
+    province?: string;
+    region?: string;
+    zipCode?: string;
+
+    // Contact
+    barangayHallAddress?: string;
+    contactNumber?: string;
+    email?: string;
+
+    // Branding
+    logoUrl?: string;
+    cityLogoUrl?: string;
+    sealUrl?: string;
+
+    // Administration (Added for Purok Support)
+    puroks?: string[]; // Array of Purok Names
+
+    // System Config
+    settings?: {
+        themeColor?: string;
+        allowPublicRequests?: boolean;
+        contactEmail?: string;
+        contactPhone?: string;
+        paperSize?: 'A4' | 'Letter';
+        pickupSmsTemplate?: string;
+        sosSmsTemplate?: string;
+    };
+    
+    captainProfile?: {
+        name: string;
+        email: string;
+    };
+
+    createdAt?: Timestamp;
+};
+
 export type Purok = {
     purokId: string;
     name: string;
@@ -51,6 +100,7 @@ export type Resident = {
     dateOfBirth: string; // ISO Date string (dob)
     gender: 'Male' | 'Female' | 'Other';
     address?: string;
+    purokId?: string; // Added for explicit Purok linking
     status?: 'Active' | 'Moved Out' | 'Deceased';
     middleName?: string;
     suffix?: string;
@@ -80,6 +130,7 @@ export type User = {
     email: string;
     password_hash?: string;
     status: 'Active' | 'Inactive' | 'Pending';
+    tenantId?: string; // Added for multi-tenant linkage
 };
 
 export type BlotterCase = {

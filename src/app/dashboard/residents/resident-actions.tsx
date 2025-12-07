@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -43,14 +43,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, FilePen, Trash2 } from 'lucide-react';
-import type { Resident, Household } from '@/lib/types';
+import { PlusCircle, FilePen, Trash2, MapPin } from 'lucide-react';
+import type { Resident, Household, Purok } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ResidentActivity } from './resident-activity';
+import { useTenantContext } from '@/lib/hooks/useTenant'; // Use secure context for fetching puroks
+import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
+import { collection, orderBy, query } from 'firebase/firestore';
 
 export type ResidentFormValues = Omit<Resident, 'residentId'>;
 
@@ -65,28 +68,40 @@ type ResidentFormProps = {
 };
 
 const defaultResidentData: ResidentFormValues = {
-    firstName: "Juana",
-    lastName: "Dela Cruz",
-    dateOfBirth: "1990-05-15",
-    gender: "Female",
-    address: "123 Rizal St, Purok 2, Quezon City",
+    firstName: "",
+    lastName: "",
+    middleName: "",
+    suffix: "",
+    dateOfBirth: "",
+    gender: "Male",
+    address: "",
+    purokId: "", // Added Purok Field
     status: "Active",
-    middleName: "Santos",
-    civilStatus: "Married",
+    civilStatus: "Single",
     nationality: "Filipino",
     isVoter: true,
     is4ps: false,
     isPwd: false,
-    occupation: "Home Maker",
-    contactNumber: "09171234567",
-    email: "resident@demo.com",
-    householdId: "HH-1719602400000"
+    occupation: "",
+    contactNumber: "",
+    email: "",
+    householdId: "NO_HOUSEHOLD"
 };
 
 function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps) {
+  const firestore = useFirestore();
+  const { tenantPath } = useTenantContext();
   const [formData, setFormData] = useState<ResidentFormValues>(
     record ?? defaultResidentData
   );
+
+  // Fetch Puroks dynamically
+  const puroksRef = useMemoFirebase(() => {
+      if (!firestore || !tenantPath) return null;
+      return query(collection(firestore, `${tenantPath}/puroks`), orderBy('name'));
+  }, [firestore, tenantPath]);
+
+  const { data: puroks } = useCollection<Purok>(puroksRef);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
@@ -97,7 +112,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
     setFormData((prev) => ({ ...prev, [id]: checked }));
   };
   
-  const handleSelectChange = (id: 'status' | 'gender' | 'civilStatus' | 'householdId', value: string) => {
+  const handleSelectChange = (id: 'status' | 'gender' | 'civilStatus' | 'householdId' | 'purokId', value: string) => {
     setFormData((prev) => ({ ...prev, [id]: value }));
   }
 
@@ -124,17 +139,17 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
               <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" value={formData.firstName} onChange={handleChange} required />
+                      <Input id="firstName" value={formData.firstName} onChange={handleChange} required placeholder="Juan" />
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" value={formData.lastName} onChange={handleChange} required />
+                      <Input id="lastName" value={formData.lastName} onChange={handleChange} required placeholder="Dela Cruz" />
                   </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                       <Label htmlFor="middleName">Middle Name</Label>
-                      <Input id="middleName" value={formData.middleName} onChange={handleChange} />
+                      <Input id="middleName" value={formData.middleName} onChange={handleChange} placeholder="Santos" />
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="suffix">Suffix</Label>
@@ -178,16 +193,38 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
               </div>
                <div className="space-y-2">
                   <Label htmlFor="occupation">Occupation</Label>
-                  <Input id="occupation" value={formData.occupation} onChange={handleChange} />
+                  <Input id="occupation" value={formData.occupation} onChange={handleChange} placeholder="e.g. Teacher, Farmer" />
               </div>
           </div>
           
           {/* Residency & Location */}
           <div className="space-y-4">
-              <h4 className="font-semibold text-primary">Residency & Location</h4>
+              <h4 className="font-semibold text-primary flex items-center gap-2">
+                  <MapPin className="h-4 w-4" /> Residency & Location
+              </h4>
+              
               <div className="space-y-2">
-                  <Label htmlFor="address">Full Address</Label>
-                  <Textarea id="address" value={formData.address} onChange={handleChange} placeholder="House No., Street, Purok, City, Province..."/>
+                  <Label htmlFor="purokId">Purok / Zone</Label>
+                   <Select onValueChange={(value) => handleSelectChange('purokId', value)} value={formData.purokId}>
+                        <SelectTrigger id="purokId">
+                            <SelectValue placeholder="Select Purok" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {puroks && puroks.map(p => (
+                                <SelectItem key={p.purokId} value={p.purokId}>
+                                    {p.name}
+                                </SelectItem>
+                            ))}
+                            {(!puroks || puroks.length === 0) && (
+                                <SelectItem value="no_purok" disabled>No Puroks Found (Configure in Settings)</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+              </div>
+
+              <div className="space-y-2">
+                  <Label htmlFor="address">Street Address</Label>
+                  <Textarea id="address" value={formData.address} onChange={handleChange} placeholder="House No., Street Name, Landmarks..."/>
               </div>
               <div className="space-y-2">
                   <Label htmlFor="householdId">Household</Label>
@@ -196,7 +233,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
                             <SelectValue placeholder="Assign to a household" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="NO_HOUSEHOLD">None</SelectItem>
+                            <SelectItem value="NO_HOUSEHOLD">None (Head of new household)</SelectItem>
                             {households.map(hh => (
                                 <SelectItem key={hh.householdId} value={hh.householdId}>
                                     {hh.name}
@@ -239,11 +276,11 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
               <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                       <Label htmlFor="contactNumber">Contact Number</Label>
-                      <Input id="contactNumber" value={formData.contactNumber} onChange={handleChange} />
+                      <Input id="contactNumber" value={formData.contactNumber} onChange={handleChange} placeholder="09..." />
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="email">Email Address</Label>
-                      <Input id="email" type="email" value={formData.email} onChange={handleChange} />
+                      <Input id="email" type="email" value={formData.email} onChange={handleChange} placeholder="optional@email.com" />
                   </div>
               </div>
               <div className="space-y-2">

@@ -53,9 +53,12 @@ service cloud.firestore {
                request.auth.token.tenantPath == /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
       }
 
+      // Root access (e.g., /settings/general)
+      // Captains need write access here to update Puroks and Configs
       allow read: if isVaultMember() || isSuperAdmin();
-      allow write: if isSuperAdmin() || isVaultMember();
+      allow write: if isSuperAdmin() || isVaultMember(); // "Dual-Key" Access Logic
 
+      // Recursive Subcollection Access
       match /{document=**} {
         allow read, write: if isVaultMember() || isSuperAdmin();
       }

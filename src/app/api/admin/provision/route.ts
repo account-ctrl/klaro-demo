@@ -79,7 +79,7 @@ export async function POST(req: Request) {
             plan: 'free'
         }, { merge: true });
 
-        // Step C: Pre-filled Settings
+        // Step C: Pre-filled Settings (Including empty Puroks array)
         t.set(settingsRef, {
             barangayName: barangayName,
             location: {
@@ -90,6 +90,7 @@ export async function POST(req: Request) {
                 name: adminName,
                 email: adminEmail,
             },
+            puroks: [], // Initializing Puroks array
             createdAt: Timestamp.now()
         }, { merge: true });
 
