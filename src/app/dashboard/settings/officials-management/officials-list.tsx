@@ -34,77 +34,149 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useTenantContext } from '@/lib/hooks/useTenant'; // Use secure context
 
 export default function OfficialsList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
+    const { tenantPath, tenantId } = useTenantContext(); // SECURE CONTEXT
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
-    // The new schema stores users at the root level, not per-barangay
+    // FIX: Do NOT use '/users' (Global). Use the tenant-scoped collection.
+    // However, officials might need login access, so they are hybrid.
+    // PATTERN: 
+    // 1. Create a shadow profile in the tenant vault for UI listing (this component).
+    // 2. The actual Auth user is global, but mapped via 'tenantId'.
+    //
+    // For this "List" component, we should read from the Tenant Vault's 'officials' subcollection if it exists,
+    // OR filter the global 'users' collection by 'tenantId'.
+    //
+    // SaaS Best Practice: Store "Staff" in the tenant's own DB path for isolation, 
+    // and sync critical fields to the global 'users' collection for Auth.
+    //
+    // CURRENT IMPLEMENTATION (Global Query):
     const officialsCollectionRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, '/users');
-    }, [firestore]);
+        if (!firestore || !tenantId) return null;
+        // Query global users filtered by THIS tenant.
+        // This ensures Captains only see THEIR staff.
+        const usersRef = collection(firestore, 'users');
+        const q = import('firebase/firestore').then(({ query, where }) => 
+             query(usersRef, where('tenantId', '==', tenantId))
+        );
+        return q;
+    }, [firestore, tenantId]);
 
-    const { data: officials, isLoading } = useCollection<Official>(officialsCollectionRef);
+    // Note: useCollection handles the promise from useMemoFirebase if customized, 
+    // but standard hook might expect a direct query. Let's fix the query construction.
+    const [officials, setOfficials] = useState<Official[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    React.useEffect(() => {
+        if(!firestore || !tenantId) return;
+        
+        // Manual subscription to ensure complex query works
+        const { collection, query, where, onSnapshot } = require('firebase/firestore');
+        const q = query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
+        
+        const unsubscribe = onSnapshot(q, (snapshot: any) => {
+            const data = snapshot.docs.map((doc: any) => ({ ...doc.data(), userId: doc.id })) as Official[];
+            setOfficials(data);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [firestore, tenantId]);
+
 
     const handleAdd = (newOfficial: OfficialFormValues) => {
-        if (!officialsCollectionRef || !user) return;
+        if (!firestore || !tenantId) return;
+        
+        // 1. We create a placeholder user document.
+        // In a real app, you'd trigger a Cloud Function to send an invite email.
+        const usersRef = collection(firestore, 'users');
         
         const docToAdd: Partial<Official> = {
             ...newOfficial,
+            tenantId: tenantId, // CRITICAL: Bind to current tenant
+            status: 'Active',
+            createdAt: serverTimestamp() as any
         };
 
-        addDocumentNonBlocking(officialsCollectionRef, docToAdd)
+        addDocumentNonBlocking(usersRef, docToAdd)
             .then(docRef => {
                 if (docRef) {
                     updateDocumentNonBlocking(docRef, { userId: docRef.id });
                 }
             });
 
-        toast({ title: "Official Added", description: `${newOfficial.fullName} has been added.`});
+        toast({ title: "Official Added", description: `${newOfficial.fullName} has been added to the roster.`});
     };
 
     const handleEdit = (updatedOfficial: Official) => {
         if (!firestore || !updatedOfficial.userId) return;
-        const docRef = doc(firestore, `/users/${updatedOfficial.userId}`);
+        
+        // Verify ownership (Client-side check, Rules backend check)
+        if (updatedOfficial.tenantId !== tenantId) {
+             toast({ variant: "destructive", title: "Error", description: "You cannot edit users from another tenant." });
+             return;
+        }
+
+        const docRef = doc(firestore, 'users', updatedOfficial.userId);
         const { userId, ...dataToUpdate } = updatedOfficial;
         updateDocumentNonBlocking(docRef, { ...dataToUpdate });
-        toast({ title: "Official Updated", description: `The record for ${updatedOfficial.fullName} has been updated.`});
+        toast({ title: "Official Updated", description: `Record updated.`});
     };
 
-    const handleDelete = (id: string, name: string) => {
+    const handleDelete = async (id: string, name: string) => {
         if (!firestore) return;
-        const docRef = doc(firestore, `/users/${id}`);
-        deleteDocumentNonBlocking(docRef);
-        toast({ variant: "destructive", title: "Official Deleted", description: `The record for ${name} has been permanently deleted.` });
+        
+        // Best Practice: Don't actually delete the user doc immediately if they have history.
+        // Soft delete (disable) is better for audit trails.
+        // But if we strictly want to remove them from the list:
+        
+        // 1. Call API to disable Auth (if they have a login)
+        // 2. Delete Firestore Doc
+        
+        try {
+            // For now, simple doc delete (assuming cloud function cleans up auth)
+            // Or better: Update status to 'Inactive' / 'Deleted'
+            
+            // OPTION A: Soft Delete (Recommended)
+            // const docRef = doc(firestore, 'users', id);
+            // updateDocumentNonBlocking(docRef, { status: 'Archived', tenantId: `${tenantId}_archived` });
+            
+            // OPTION B: Hard Delete (As requested)
+            const docRef = doc(firestore, 'users', id);
+            deleteDocumentNonBlocking(docRef);
+            
+            toast({ title: "Official Removed", description: `${name} has been removed.` });
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to remove official." });
+        }
     };
 
     const handleLoadDefaults = async () => {
-        if (!firestore) return;
+        if (!firestore || !tenantId) return;
 
         const sampleOfficials = [
-            { fullName: 'Juan Dela Cruz', position: 'Punong Barangay (Barangay Captain)', email: 'kapitan@barangay.gov.ph', systemRole: 'Super Admin', status: 'Active' },
-            { fullName: 'Maria Clara', position: 'Barangay Secretary', email: 'sec@barangay.gov.ph', systemRole: 'Admin', status: 'Active' },
-            { fullName: 'Crisostomo Ibarra', position: 'Barangay Treasurer', email: 'treasurer@barangay.gov.ph', systemRole: 'Admin', status: 'Active' },
-            { fullName: 'Sisa Baliwag', position: 'Sangguniang Barangay Member (Barangay Kagawad)', committee: 'Committee on Health & Sanitation', email: 'kagawad1@barangay.gov.ph', systemRole: 'Encoder', status: 'Active' },
-            { fullName: 'Basilio Dimasalang', position: 'Sangguniang Barangay Member (Barangay Kagawad)', committee: 'Committee on Peace and Order & Public Safety', email: 'kagawad2@barangay.gov.ph', systemRole: 'Responder', status: 'Active' },
-            { fullName: 'Pedro Penduko', position: 'Barangay Tanod (BPSO - Barangay Public Safety Officer)', email: 'tanod1@barangay.gov.ph', systemRole: 'Responder', status: 'Active' },
+            { fullName: 'Sample Secretary', position: 'Barangay Secretary', email: `sec.${tenantId.substring(0,5)}@demo.gov`, systemRole: 'Admin', status: 'Active' },
+            { fullName: 'Sample Treasurer', position: 'Barangay Treasurer', email: `treas.${tenantId.substring(0,5)}@demo.gov`, systemRole: 'Admin', status: 'Active' },
         ];
 
         try {
             const batch = writeBatch(firestore);
             sampleOfficials.forEach((official) => {
-                const newDocRef = doc(collection(firestore, '/users'));
+                const newDocRef = doc(collection(firestore, 'users'));
                 batch.set(newDocRef, {
                     ...official,
                     userId: newDocRef.id,
+                    tenantId: tenantId, // Bind to Tenant
                     password_hash: 'default', 
                 });
             });
             await batch.commit();
-            toast({ title: "Sample Data Loaded", description: "Default officials and staff have been added." });
+            toast({ title: "Defaults Loaded", description: "Sample officials added." });
         } catch (error) {
             console.error("Error loading defaults:", error);
             toast({ variant: "destructive", title: "Error", description: "Failed to load sample data." });
@@ -116,21 +188,29 @@ export default function OfficialsList() {
         
         try {
             const batch = writeBatch(firestore);
+            let count = 0;
             officials.forEach((official) => {
-                if (official.userId !== user?.uid) {
-                    const docRef = doc(firestore, `/users/${official.userId}`);
+                // Protect the current user from deleting themselves
+                if (official.userId !== user?.uid && official.tenantId === tenantId) {
+                    const docRef = doc(firestore, 'users', official.userId);
                     batch.delete(docRef);
+                    count++;
                 }
             });
-            await batch.commit();
-            toast({ variant: "destructive", title: "Data Cleared", description: "All officials (except yourself) have been removed." });
+            
+            if(count > 0) {
+                await batch.commit();
+                toast({ title: "Cleared", description: `${count} officials removed.` });
+            } else {
+                toast({ title: "No Action", description: "No other officials to remove." });
+            }
         } catch (error) {
              console.error("Error clearing data:", error);
              toast({ variant: "destructive", title: "Error", description: "Failed to clear data." });
         }
     }
     
-    if (isLoading) {
+    if (loading) {
         return (
              <div className="space-y-4">
                 <div className="flex justify-end">
@@ -186,8 +266,14 @@ export default function OfficialsList() {
         </div>
         
         {!officials || officials.length === 0 ? (
-             <div className="text-muted-foreground col-span-full text-center py-10">
-                No officials found. Click "Add Official" or "Load Samples" to get started.
+             <div className="text-muted-foreground col-span-full text-center py-10 bg-slate-50 border border-dashed rounded-lg">
+                <div className="flex flex-col items-center gap-2">
+                    <Avatar className="h-16 w-16 bg-slate-200 text-slate-400">
+                        <AvatarFallback><List className="h-8 w-8" /></AvatarFallback>
+                    </Avatar>
+                    <h3 className="font-semibold text-lg text-slate-700">No Officials Listed</h3>
+                    <p className="max-w-sm text-sm">This tenant has no registered officials yet. Add your staff to grant them access.</p>
+                </div>
             </div>
         ) : (
             viewMode === 'card' ? (
@@ -197,7 +283,7 @@ export default function OfficialsList() {
                             key={official.userId} 
                             official={official}
                             onEdit={handleEdit}
-                            onDelete={handleDelete}
+                            onDelete={(id) => handleDelete(id, official.fullName)}
                             positions={officialsAndStaff} 
                             committees={committeeAssignments} 
                             systemRoles={systemRoles} 

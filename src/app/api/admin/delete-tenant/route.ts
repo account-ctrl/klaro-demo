@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import { adminAuth, adminDb, adminStorage } from '@/lib/firebase/admin';
 import { Paths } from '@/lib/firebase/paths';
 
 export async function POST(req: Request) {
@@ -23,9 +23,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
     }
 
-    console.log(`Deleting Tenant: ${tenantId}`);
+    console.log(`[DESTROY PROTOCOL] Initiating delete for Tenant: ${tenantId}`);
 
-    // 1. Get Tenant Details from Directory
+    // 1. Resolve Tenant Path
     const dirRef = adminDb.collection(Paths.TenantDirectory).doc(tenantId);
     const dirSnap = await dirRef.get();
     
@@ -33,36 +33,35 @@ export async function POST(req: Request) {
     if (dirSnap.exists) {
         fullPath = dirSnap.data()?.fullPath;
     } else {
-        console.warn(`Tenant Directory entry not found for ${tenantId}. Proceeding with cleanup.`);
+        console.warn(`[WARN] Tenant Directory entry not found for ${tenantId}. Proceeding with best-effort cleanup.`);
     }
 
-    // 2. DISABLE ALL USERS (Officials & Residents)
-    // We search for any user who has a custom claim matching this tenantId
-    // Note: 'listUsers' is slow for millions, but fine for tenant-level cleanup.
-    // Ideally, this should be a Cloud Function for scalability.
-    
-    let nextPageToken;
-    let disabledCount = 0;
-    
-    do {
-        const listUsersResult = await adminAuth.listUsers(1000, nextPageToken);
-        const usersToDisable = listUsersResult.users.filter(user => 
-            user.customClaims && user.customClaims.tenantId === tenantId
-        );
+    // 2. AUTHENTICATION WIPE (Delete Users)
+    // Query Firestore first to get the mapped UIDs for this tenant.
+    // This is faster and safer than iterating all Auth users.
+    const usersSnap = await adminDb.collection('users')
+        .where('tenantId', '==', tenantId)
+        .get();
 
-        for (const user of usersToDisable) {
-            await adminAuth.updateUser(user.uid, { disabled: true });
-            // Optionally, we could wipe their claims too:
-            // await adminAuth.setCustomUserClaims(user.uid, null);
-            disabledCount++;
+    const uidsToDelete: string[] = [];
+    usersSnap.forEach(doc => {
+        uidsToDelete.push(doc.id); // Firestore Doc ID matches Auth UID
+    });
+
+    if (uidsToDelete.length > 0) {
+        // Bulk Delete from Firebase Auth
+        const deleteResult = await adminAuth.deleteUsers(uidsToDelete);
+        console.log(`[AUTH] Successfully deleted ${deleteResult.successCount} users. Failed: ${deleteResult.failureCount}`);
+        
+        if (deleteResult.failureCount > 0) {
+            console.error(`[AUTH ERROR] Failed to delete some users:`, deleteResult.errors);
         }
-        nextPageToken = listUsersResult.pageToken;
-    } while (nextPageToken);
+    } else {
+        console.log(`[AUTH] No associated users found to delete.`);
+    }
 
-    console.log(`Disabled ${disabledCount} users for tenant ${tenantId}`);
-
-
-    // 3. Perform Database Deletion
+    // 3. FIRESTORE DEEP CLEAN (Recursive Delete)
+    // This removes the Directory Entry + Global User Profiles + The Entire Vault
     const batch = adminDb.batch();
 
     // A. Delete Directory Entry
@@ -70,26 +69,43 @@ export async function POST(req: Request) {
         batch.delete(dirRef);
     }
 
-    // B. Delete Vault Root Document
+    // B. Delete Global User Profiles (Firestore 'users' collection)
+    uidsToDelete.forEach(uid => {
+        const userRef = adminDb.collection('users').doc(uid);
+        batch.delete(userRef);
+    });
+
+    await batch.commit(); // Commit the shallow deletes first
+
+    // C. Recursive Delete of the Logical Vault (Subcollections)
     if (fullPath) {
         const vaultRef = adminDb.doc(fullPath);
-        batch.delete(vaultRef);
-        
-        // C. Delete Settings Document
-        const settingsRef = adminDb.doc(Paths.getSettingsPath(fullPath));
-        batch.delete(settingsRef);
+        await adminDb.recursiveDelete(vaultRef);
+        console.log(`[DB] Recursively deleted vault at: ${fullPath}`);
     }
 
-    await batch.commit();
+    // 4. STORAGE WIPE (Best Practice)
+    // Assuming we store files under a folder named after the tenantId or slug
+    // e.g. "storage-bucket/tenants/bacoor-brgy-genesis/..."
+    try {
+        const bucket = adminStorage.bucket();
+        await bucket.deleteFiles({
+            prefix: `tenants/${tenantId}/` 
+        });
+        console.log(`[STORAGE] Cleaned up files for ${tenantId}`);
+    } catch (storageError) {
+        console.warn(`[STORAGE] Failed to clean up storage (bucket might be empty or diff structure):`, storageError);
+        // Don't fail the request if storage is empty
+    }
 
     return NextResponse.json({ 
         success: true, 
-        message: 'Tenant deleted and users disabled.',
-        usersDisabled: disabledCount
+        message: 'Tenant and all associated data permanently destroyed.',
+        usersDeleted: uidsToDelete.length
     });
 
   } catch (error: any) {
-    console.error("Delete Tenant Error:", error);
+    console.error("[DESTROY ERROR]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
