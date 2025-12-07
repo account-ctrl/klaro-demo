@@ -26,7 +26,7 @@ import { FixedAsset } from "@/lib/types";
 import { QRCodeSVG } from "qrcode.react";
 import {
   LOCATION_OPTIONS,
-  OFFICIAL_ROSTER,
+  officialsAndStaff,
 } from "@/lib/data";
 import { AlertTriangle } from "lucide-react";
 
@@ -189,13 +189,13 @@ export function AssetModals({
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="custodian" className="text-right">Custodian</Label>
-                <Select onValueChange={(val) => setAssetForm({...assetForm, custodianId: val, custodianName: OFFICIAL_ROSTER.find(o=>o.id === val)?.name || ''})} value={assetForm.custodianId}>
+                <Select onValueChange={(val) => setAssetForm({...assetForm, custodianId: val, custodianName: val})} value={assetForm.custodianId}>
                     <SelectTrigger className="col-span-3">
                         <SelectValue placeholder="Assign a person" />
                     </SelectTrigger>
                     <SelectContent>
-                        {OFFICIAL_ROSTER.map(person => (
-                            <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>
+                        {officialsAndStaff.map((person, index) => (
+                            <SelectItem key={index} value={person}>{person}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>

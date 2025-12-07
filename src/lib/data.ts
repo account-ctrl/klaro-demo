@@ -97,3 +97,24 @@ export const adminNavItems = [
     { name: "Jurisdictions", href: "/admin/jurisdictions", icon: Map },
     { name: "Global Settings", href: "/admin/settings", icon: Settings },
 ];
+
+export const LOCATION_OPTIONS = [
+    "Barangay Hall",
+    "Health Center",
+    "Day Care Center",
+    "Multi-Purpose Hall",
+    "Covered Court",
+    "Outpost 1",
+    "Outpost 2",
+    "Material Recovery Facility (MRF)",
+    "Storage Room",
+    "Mobile / In Transit"
+];
+
+export const OFFICIAL_ROSTER = [
+    { id: "1", name: "Hon. Juan Dela Cruz", role: "Punong Barangay" },
+    { id: "2", name: "Hon. Maria Santos", role: "Barangay Kagawad" },
+    { id: "3", name: "Tanod Chief Pedro Penduko", role: "Chief Tanod" },
+    { id: "4", name: "Sec. Ana Reyes", role: "Barangay Secretary" },
+    { id: "5", name: "Treas. Luis Manzano", role: "Barangay Treasurer" }
+];
