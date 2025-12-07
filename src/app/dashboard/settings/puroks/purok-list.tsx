@@ -48,20 +48,8 @@ export default function PurokList() {
         return collection(firestore, `${tenantPath}/puroks`);
     }, [firestore, tenantPath]);
     
-    // FIX: Use Global Users Query with Tenant Filter (Same as Officials List)
-    const officialsQuery = useMemoFirebase(() => {
-        if (!firestore || !tenantId) return null;
-        const q = import('firebase/firestore').then(({ collection, query, where }) => 
-             query(collection(firestore, 'users'), where('tenantId', '==', tenantId))
-        );
-        return q;
-    }, [firestore, tenantId]);
-
     const { data: puroks, isLoading: isLoadingPuroks } = useCollection<Purok>(puroksCollectionRef);
     
-    // Manual officials fetch to handle the complex query promise if needed, 
-    // or assume useCollection handles promise (it usually does not).
-    // Let's implement the safer pattern used in OfficialsList.
     const [officials, setOfficials] = useState<Official[]>([]);
     const [isLoadingOfficials, setIsLoadingOfficials] = useState(true);
 
