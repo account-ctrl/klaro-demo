@@ -9,7 +9,7 @@ type LogoProps = {
 
 export function Logo({ className }: LogoProps) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
+    <div className={cn("flex items-center gap-3 text-foreground", className)}>
       <div className="relative h-10 w-10 shrink-0">
         <Image 
           src="/KlaroGov Logo.png" 
@@ -19,7 +19,7 @@ export function Logo({ className }: LogoProps) {
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
       </div>
-      <h1 className="text-xl font-bold text-foreground transition-opacity duration-200 hidden sm:block">
+      <h1 className="text-xl font-bold transition-opacity duration-200 hidden sm:block text-inherit">
         KlaroGov
       </h1>
     </div>
