@@ -12,9 +12,10 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useRouter } from "next/navigation";
-import { Lock, User, Key, Loader2, AlertOctagon, Terminal } from "lucide-react";
+import { Lock, User, Key, Loader2, AlertOctagon, Terminal, ArrowLeft, Mail } from "lucide-react";
 import { useAuth, initiateEmailSignIn } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import Image from 'next/image';
 
 export default function SecureAdminLoginPage() {
@@ -24,6 +25,7 @@ export default function SecureAdminLoginPage() {
     const [isPending, startTransition] = React.useTransition();
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
+    const [isRecoveryMode, setIsRecoveryMode] = React.useState(false);
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,6 +67,37 @@ export default function SecureAdminLoginPage() {
         });
     };
 
+    const handleRecovery = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!auth) return;
+
+        startTransition(async () => {
+            try {
+                // Send password reset email
+                await sendPasswordResetEmail(auth, email);
+                
+                // Generic success message to prevent user enumeration
+                toast({
+                    title: "Recovery Protocol Initiated",
+                    description: "If an account exists for this email, a secure recovery link has been dispatched to your inbox.",
+                    className: "bg-[#0A1124] border-[#1F2937] text-slate-200"
+                });
+                
+                // Optional: Return to login after a delay
+                setTimeout(() => setIsRecoveryMode(false), 2000);
+
+            } catch (error: any) {
+                // Log internal error but show same generic success message to user for security
+                console.error("Recovery Error (Internal):", error);
+                toast({
+                    title: "Recovery Protocol Initiated",
+                    description: "If an account exists for this email, a secure recovery link has been dispatched to your inbox.",
+                    className: "bg-[#0A1124] border-[#1F2937] text-slate-200"
+                });
+            }
+        });
+    };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#050A18] p-4 font-sans">
         {/* Subtle radial gradient for depth */}
@@ -84,51 +117,99 @@ export default function SecureAdminLoginPage() {
                     </div>
                     <span className="font-bold text-lg text-white tracking-tight flex items-center">KlaroGov</span>
                 </div>
-                <CardTitle className="text-xl font-bold tracking-tight text-white">System Authority</CardTitle>
+                <CardTitle className="text-xl font-bold tracking-tight text-white">
+                    {isRecoveryMode ? 'Access Recovery' : 'System Authority'}
+                </CardTitle>
                 <CardDescription className="text-slate-500 text-xs mt-1">
-                    Restricted Access Level 5
+                    {isRecoveryMode ? 'Emergency Credential Reset' : 'Restricted Access Level 5'}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 pb-8 px-8">
-                <form onSubmit={handleLogin} className="space-y-5">
-                    <div className="space-y-2">
-                        <Label htmlFor="email" className="text-slate-400 text-xs font-medium">Identity Token</Label>
-                        <div className="relative">
-                            <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                            <Input 
-                                id="email" 
-                                type="email" 
-                                placeholder="sys_admin_root" 
-                                required 
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="pl-10 bg-[#0F172A] border-[#1E293B] text-slate-200 placeholder:text-slate-600 focus-visible:ring-orange-500/50 focus-visible:border-orange-500 h-10 text-sm"
-                            />
+                {isRecoveryMode ? (
+                    // RECOVERY FORM
+                    <form onSubmit={handleRecovery} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="space-y-2">
+                            <Label htmlFor="recovery-email" className="text-slate-400 text-xs font-medium">Verified Email Address</Label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                                <Input 
+                                    id="recovery-email" 
+                                    type="email" 
+                                    placeholder="admin@klarogov.ph" 
+                                    required 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="pl-10 bg-[#0F172A] border-[#1E293B] text-slate-200 placeholder:text-slate-600 focus-visible:ring-orange-500/50 focus-visible:border-orange-500 h-10 text-sm"
+                                />
+                            </div>
                         </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="password" className="text-slate-400 text-xs font-medium">Security Key</Label>
-                        <div className="relative">
-                            <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                            <Input 
-                                id="password" 
-                                type="password" 
-                                required 
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••••••"
-                                className="pl-10 bg-[#0F172A] border-[#1E293B] text-slate-200 placeholder:text-slate-600 focus-visible:ring-orange-500/50 focus-visible:border-orange-500 h-10 text-sm font-sans tracking-widest"
-                            />
+                        <Button 
+                            type="submit" 
+                            className="w-full bg-[#EA780E] hover:bg-[#D66A05] text-white font-semibold text-sm h-10 mt-2 transition-all shadow-[0_0_15px_rgba(234,120,14,0.3)] hover:shadow-[0_0_20px_rgba(234,120,14,0.5)] border-0" 
+                            disabled={isPending}
+                        >
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Send Recovery Link"}
+                        </Button>
+                        <Button 
+                            type="button"
+                            variant="ghost"
+                            className="w-full text-slate-500 hover:text-slate-300 text-xs mt-2 hover:bg-transparent"
+                            onClick={() => setIsRecoveryMode(false)}
+                        >
+                            <ArrowLeft className="mr-2 h-3 w-3" /> Return to Secure Login
+                        </Button>
+                    </form>
+                ) : (
+                    // LOGIN FORM
+                    <form onSubmit={handleLogin} className="space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-slate-400 text-xs font-medium">Identity Token</Label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                                <Input 
+                                    id="email" 
+                                    type="email" 
+                                    placeholder="sys_admin_root" 
+                                    required 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="pl-10 bg-[#0F172A] border-[#1E293B] text-slate-200 placeholder:text-slate-600 focus-visible:ring-orange-500/50 focus-visible:border-orange-500 h-10 text-sm"
+                                />
+                            </div>
                         </div>
-                    </div>
-                    <Button 
-                        type="submit" 
-                        className="w-full bg-[#EA780E] hover:bg-[#D66A05] text-white font-semibold text-sm h-10 mt-2 transition-all shadow-[0_0_15px_rgba(234,120,14,0.3)] hover:shadow-[0_0_20px_rgba(234,120,14,0.5)] border-0" 
-                        disabled={isPending}
-                    >
-                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Initialize Command Center"}
-                    </Button>
-                </form>
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <Label htmlFor="password" className="text-slate-400 text-xs font-medium">Security Key</Label>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsRecoveryMode(true)}
+                                    className="text-[10px] text-amber-600/80 hover:text-amber-500 hover:underline transition-colors"
+                                >
+                                    Forgot Credentials?
+                                </button>
+                            </div>
+                            <div className="relative">
+                                <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                                <Input 
+                                    id="password" 
+                                    type="password" 
+                                    required 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••••••"
+                                    className="pl-10 bg-[#0F172A] border-[#1E293B] text-slate-200 placeholder:text-slate-600 focus-visible:ring-orange-500/50 focus-visible:border-orange-500 h-10 text-sm font-sans tracking-widest"
+                                />
+                            </div>
+                        </div>
+                        <Button 
+                            type="submit" 
+                            className="w-full bg-[#EA780E] hover:bg-[#D66A05] text-white font-semibold text-sm h-10 mt-2 transition-all shadow-[0_0_15px_rgba(234,120,14,0.3)] hover:shadow-[0_0_20px_rgba(234,120,14,0.5)] border-0" 
+                            disabled={isPending}
+                        >
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Initialize Command Center"}
+                        </Button>
+                    </form>
+                )}
 
                 <div className="text-center text-[10px] text-slate-600 leading-tight pt-4 border-t border-[#1E293B]">
                     Unauthorized access attempts are logged and reported to the National Bureau of Investigation (NBI) Cybercrime Division.
