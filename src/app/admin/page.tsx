@@ -8,7 +8,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Activity, Database, Users, Server, ArrowUpRight, ShieldCheck, AlertCircle, Clock, Map as MapIcon, BarChart3, PieChart, Layers, Search, Eye, Trash2, FileText, CheckCircle2, Copy, ExternalLink, Loader2, Monitor } from "lucide-react";
 import Link from 'next/link';
 import { Progress } from "@/components/ui/progress";
-import { useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useDoc, useAuth } from '@/firebase';
 import { collection, query, orderBy, limit, doc, deleteDoc } from 'firebase/firestore';
 import {
     Dialog,
@@ -47,28 +47,29 @@ type Barangay = {
 
 export default function AdminDashboardPage() {
   const firestore = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<Barangay | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // 1. Fetch Global Stats (Scalable)
   const statsRef = useMemoFirebase(() => {
-     if (!firestore) return null;
+     if (!firestore || !auth?.currentUser) return null;
      return doc(firestore, 'system', 'stats');
-  }, [firestore]);
+  }, [firestore, auth?.currentUser]);
   
   const { data: globalStats, error: statsError } = useDoc<{ totalPopulation: number, totalHouseholds: number, activeTenants: number }>(statsRef);
 
 
   // 2. Fetch Recent Tenants
   const barangaysQuery = useMemoFirebase(() => {
-      if (!firestore) return null;
+      if (!firestore || !auth?.currentUser) return null;
       return query(
           collection(firestore, 'tenant_directory'),
           orderBy('tenantId', 'asc'), // Using tenantId for now, 'createdAt' might need to be added to directory index
           limit(50) 
       );
-  }, [firestore]);
+  }, [firestore, auth?.currentUser]);
 
   // Note: We need to map the Directory schema to the Dashboard UI schema
   const { data: directoryEntries, isLoading, error: listError } = useCollection<any>(barangaysQuery);

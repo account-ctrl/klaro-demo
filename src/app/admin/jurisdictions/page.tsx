@@ -83,13 +83,13 @@ export default function JurisdictionsPage() {
   // Data Fetching: Prioritize 'tenant_directory' (New Arch), fallback/merge 'barangays' (Legacy) logic implied.
   // Actually, let's just query 'tenant_directory' as the source of truth for "Provisioned Vaults".
   const tenantsQuery = useMemoFirebase(() => {
-      if (!firestore || !selectedCity || !selectedProvince) return null;
+      if (!firestore || !auth?.currentUser || !selectedCity || !selectedProvince) return null;
       return query(
           collection(firestore, 'tenant_directory'),
           where('city', '==', selectedCity.name),
           where('province', '==', selectedProvince.name)
       );
-  }, [firestore, selectedCity, selectedProvince]);
+  }, [firestore, auth?.currentUser, selectedCity, selectedProvince]);
 
   const { data: tenantBarangays, isLoading: isLoadingTenants } = useCollection<TenantBarangay>(tenantsQuery);
 
