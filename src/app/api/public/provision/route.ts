@@ -5,13 +5,12 @@ import { adminDb } from '@/lib/firebase/admin';
 
 export async function POST(req: Request) {
   try {
-    const { province, city, barangay, region, adminProfile, inviteToken } from await req.json();
+    const { province, city, barangay, region, adminProfile, inviteToken } = await req.json();
 
     if (!province || !city || !barangay || !inviteToken) {
         return NextResponse.json({ error: 'Missing required fields or invite token' }, { status: 400 });
     }
 
-    // Corrected to check the 'invite_tokens' collection.
     const tokenRef = adminDb.collection('invite_tokens').doc(inviteToken);
     const tokenSnap = await tokenRef.get();
 
@@ -24,7 +23,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'This invite has already been used.' }, { status: 403 });
     }
     
-    // Check if token is expired
     if (tokenData?.expiresAt && tokenData.expiresAt.toDate() < new Date()) {
         return NextResponse.json({ error: 'This invite link has expired.' }, { status: 403 });
     }
@@ -44,7 +42,13 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error("[PUBLIC PROVISION ERROR]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Enhanced error handling to ensure a JSON response is always sent.
+    console.error("[PUBLIC PROVISION CRITICAL ERROR]", error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown server error occurred.";
+    const errorCode = error.code || 'UNKNOWN_ERROR_CODE';
+    return NextResponse.json({ 
+        error: `Server Error: ${errorMessage}`, 
+        code: errorCode 
+    }, { status: 500 });
   }
 }
