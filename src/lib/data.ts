@@ -1,120 +1,77 @@
 
-import {
-    Activity,
-    AlertTriangle,
-    Archive,
-    Calendar,
-    FileText,
-    Heart,
-    Home,
-    LayoutDashboard,
-    Megaphone,
-    PawPrint,
-    Settings,
-    Shield,
-    Users,
-    Vote,
-    ScrollText,
-    Truck,
-    Briefcase
-} from "lucide-react";
+import { Timestamp } from 'firebase/firestore';
+import { Resident, Blotter, Official, Program, Announcement, FinancialRecord, CaseType, DocumentRequest } from '@/lib/types';
+import { generateResidents } from '@/lib/placeholder-data/residents';
+import { generateBlotterRecords } from '@/lib/placeholder-data/blotter';
+import { generateFinancialRecords } from '@/lib/placeholder-data/financials';
+import { generateDocumentRequests } from '@/lib/placeholder-data/documents';
+import { sampleOfficials } from '@/app/dashboard/settings/officials-management/_data';
+import { samplePrograms } from '@/app/dashboard/settings/programs/_data';
+import { ANNOUNCEMENT_TEMPLATES as sampleAnnouncements } from '@/app/dashboard/announcements/announcement-actions';
+import { sampleCaseTypes } from '@/app/dashboard/blotter/case-types';
 
-// --- Official Position Constants (Sync across app) ---
+export const DEMO_CONFIG = {
+  ENABLED: process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
+  MAX_RESIDENTS: 50,
+  MAX_HOUSEHOLDS: 20,
+  MAX_BLOTTER: 20,
+};
 
-export const officialsAndStaff = [
-    "Punong Barangay (Captain)",
-    "Sangguniang Barangay Member (Barangay Kagawad)",
-    "SK Chairperson",
-    "Barangay Secretary",
-    "Barangay Treasurer",
-    "Barangay Record Keeper",
-    "Admin Staff / Clerk",
-    "Barangay Tanod (Executive Officer)",
-    "Barangay Tanod (Member)",
-    "Lupon Tagapamayapa Member",
-    "BHW (Barangay Health Worker)",
-    "BNS (Barangay Nutrition Scholar)",
-    "Day Care Worker",
-    "Utility Worker / Street Sweeper",
-    "Driver / Operator"
+
+export const getInitialData = (count: number) => {
+    const residents = generateResidents(count);
+    const blotterRecords = generateBlotterRecords(count, residents);
+    const financialRecords = generateFinancialRecords(count);
+    const documentRequests = generateDocumentRequests(count, residents);
+
+    return {
+        residents,
+        blotterRecords,
+        officials: sampleOfficials,
+        programs: samplePrograms,
+        announcements: sampleAnnouncements,
+        financialRecords,
+        caseTypes: sampleCaseTypes,
+        documentRequests
+    };
+};
+
+
+export const LOCATION_OPTIONS = ["Outside Barangay", "Barangay Vicinity"];
+
+export const GENDER_OPTIONS = ["Male", "Female", "Other"];
+
+export const CIVIL_STATUS_OPTIONS = ["Single", "Married", "Widowed", "Separated"];
+
+// Financial Categories
+export const incomeCategories = [
+    { label: "Internal Revenue Allotment (IRA)", value: "IRA" },
+    { label: "Real Property Tax (RPT)", value: "RPT" },
+    { label: "Business Permit Fees", value: "Business Permit" },
+    { label: "Community Tax (Cedula)", value: "Cedula" },
+    { label: "Barangay Clearance Fees", value: "Clearance Fee" },
+    { label: "Donations / Grants", value: "Donation" },
+    { label: "Other Income", value: "Other" }
 ];
 
-export const committeeAssignments = [
-    "Committee on Peace and Order",
-    "Committee on Appropriations / Finance",
-    "Committee on Health and Sanitation",
-    "Committee on Education and Culture",
-    "Committee on Women and Family",
-    "Committee on Youth and Sports Development",
-    "Committee on Infrastructure / Public Works",
-    "Committee on Environmental Protection",
-    "Committee on Agriculture / Livelihood",
-    "Committee on Human Rights",
-    "Committee on Rules and Privileges"
+export const expenseCategories = [
+    { label: "Personal Services (Salaries)", value: "Personal Services" },
+    { label: "Maintenance & Other Operating Expenses (MOOE)", value: "MOOE" },
+    { label: "Capital Outlay", value: "Capital Outlay" },
+    { label: "Sangguniang Kabataan (SK) Fund", value: "SK Fund" },
+    { label: "Gender and Development (GAD)", value: "GAD" },
+    { label: "Disaster Risk Reduction (BDRRM)", value: "BDRRM" },
+    { label: "Senior Citizens Fund", value: "Senior Fund" },
+    { label: "Projects / Programs", value: "Project" },
+    { label: "Other Expenses", value: "Other" }
 ];
 
-export const systemRoles = [
-    "Super Admin", // Developer
-    "Admin", // Captain/Secretary
-    "Encoder", // Staff
-    "Responder", // Tanod/Health Worker
-    "Viewer" // Limited access
-];
-
-// --- Navigation Menus ---
-
-export const navItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Residents", href: "/dashboard/residents", icon: Users },
-    { name: "Households", href: "/dashboard/households", icon: Home },
-    { name: "Blotter & Justice", href: "/dashboard/blotter", icon: Shield },
-    { name: "Certificates", href: "/dashboard/documents", icon: FileText },
-    { name: "Health & Medicine", href: "/dashboard/ehealth", icon: Heart }, // Updated Path
-    { name: "Legislative", href: "/dashboard/legislative", icon: ScrollText }, // New Phase 2
-    { name: "Emergency & 911", href: "/dashboard/emergency", icon: AlertTriangle },
-    { name: "Assets & Fleet", href: "/dashboard/assets", icon: Truck }, // New Phase 3
-    { name: "Treasury", href: "/dashboard/financials", icon: Vote },
-    { name: "Projects", href: "/dashboard/projects", icon: Briefcase }, // New Phase 2
-    { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone },
-    { name: "Calendar", href: "/dashboard/scheduler", icon: Calendar },
-    { name: "Animal Registry", href: "/dashboard/pets", icon: PawPrint },
-    { name: "Activity Logs", href: "/dashboard/activity", icon: Activity },
-    { name: "Settings", href: "/dashboard/settings", icon: Settings },
-];
-
-export const residentNavItems = [
-    { name: "My Dashboard", href: "/resident/dashboard", icon: LayoutDashboard },
-    { name: "My Requests", href: "/resident/my-requests", icon: FileText },
-    { name: "Community Board", href: "/resident/announcements", icon: Megaphone },
-    { name: "Barangay Officials", href: "/resident/directory", icon: Users },
-    { name: "My Profile", href: "/resident/profile", icon: Settings },
-];
-
-export const adminNavItems = [
-    { name: "Command Center", href: "/admin", icon: LayoutDashboard },
-    { name: "Tenant Health", href: "/admin/health", icon: Activity },
-    { name: "Billing & Plans", href: "/admin/billing", icon: Vote },
-    { name: "Jurisdictions", href: "/admin/jurisdictions", icon: Map },
-    { name: "Global Settings", href: "/admin/settings", icon: Settings },
-];
-
-export const LOCATION_OPTIONS = [
-    "Barangay Hall",
-    "Health Center",
-    "Day Care Center",
-    "Multi-Purpose Hall",
-    "Covered Court",
-    "Outpost 1",
-    "Outpost 2",
-    "Material Recovery Facility (MRF)",
-    "Storage Room",
-    "Mobile / In Transit"
-];
-
-export const OFFICIAL_ROSTER = [
-    { id: "1", name: "Hon. Juan Dela Cruz", role: "Punong Barangay" },
-    { id: "2", name: "Hon. Maria Santos", role: "Barangay Kagawad" },
-    { id: "3", name: "Tanod Chief Pedro Penduko", role: "Chief Tanod" },
-    { id: "4", name: "Sec. Ana Reyes", role: "Barangay Secretary" },
-    { id: "5", name: "Treas. Luis Manzano", role: "Barangay Treasurer" }
+// Fund Sources
+export const fundSources = [
+    { label: "General Fund", value: "General Fund" },
+    { label: "Sangguniang Kabataan (SK) Fund", value: "Sangguniang Kabataan (SK) Fund" },
+    { label: "Gender and Development (GAD) Fund", value: "Gender and Development (GAD) Fund" },
+    { label: "Calamity / DRRM Fund", value: "Calamity / DRRM Fund" },
+    { label: "Senior Citizen Fund", value: "Senior Citizen Fund" },
+    { label: "External / Grant", value: "External / Grant" }
 ];

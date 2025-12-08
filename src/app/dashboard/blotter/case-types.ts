@@ -51,3 +51,5 @@ export const caseTypes: CaseTypeGroups = {
          { label: "For Police Referral / Recording Only", value: "For Police Referral / Recording Only", severity: "Referral Only", description: "Serious crimes (e.g., Murder, Rape, Drugs) that cannot be settled at the barangay level but must be logged before being turned over to the PNP." },
     ]
 };
+
+export const sampleCaseTypes = caseTypes;
