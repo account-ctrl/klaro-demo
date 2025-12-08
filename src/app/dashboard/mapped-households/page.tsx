@@ -211,17 +211,18 @@ export default function MappedHouseholdsPage() {
             status: 'Verified'
         });
 
-        // 2. Update Resident Document (Sync bidirectional link)
+        // 2. Update Resident Document (Bidirectional Link + Address Sync)
         if (resident && resident.id) { // Use document ID for update
              const rDocRef = doc(firestore, `${safePath}/residents/${resident.id}`);
              updateDocumentNonBlocking(rDocRef, {
-                 householdId: selectedHousehold.householdId // Use the custom ID field for the link
+                 householdId: selectedHousehold.householdId, // Link resident to household
+                 address: selectedHousehold.address // AUTO-FILL address from household data
              });
         }
 
         setIsAssignOpen(false);
         setResidentToAssign('');
-        toast({ title: "Resident Assigned", description: "Household head updated and resident linked." });
+        toast({ title: "Resident Assigned", description: "Household head updated, resident linked, and address synced." });
     };
 
     const handleUnassignResident = (id: string) => {
