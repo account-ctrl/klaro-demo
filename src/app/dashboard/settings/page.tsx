@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -36,6 +37,7 @@ import ProgramsList from './programs/programs-list';
 import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import { updateDoc } from 'firebase/firestore';
 import { getRegionName } from '@/lib/data/psgc'; // Use Region Utility
+import TerritoryEditor from '@/components/settings/TerritoryEditor';
 
 const profileFormSchema = z.object({
   barangayName: z.string().min(1, "Barangay name is required"),
@@ -197,6 +199,20 @@ export default function SettingsPage() {
             }
         });
     }
+    
+    async function onTerritorySave(boundary: {lat: number, lng: number}[]) {
+        if (!docRef) return;
+        
+        try {
+            await updateDoc(docRef, {
+                'territory.boundary': boundary
+            });
+            toast({ title: "Boundary Saved", description: "Your jurisdiction boundary has been updated." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Error", description: "Failed to save boundary.", variant: "destructive" });
+        }
+    }
 
   if (isLoading) {
       return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
@@ -212,9 +228,10 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="profile">Barangay Profile</TabsTrigger>
           <TabsTrigger value="puroks">Puroks</TabsTrigger>
+          <TabsTrigger value="territory">Territory</TabsTrigger>
           <TabsTrigger value="officials">Officials &amp; Staff</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="programs">Programs</TabsTrigger>
@@ -402,6 +419,20 @@ export default function SettingsPage() {
                 <PurokList />
             </CardContent>
            </Card>
+        </TabsContent>
+        <TabsContent value="territory">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Territorial Jurisdiction</CardTitle>
+                    <CardDescription>Define the official map boundary of your barangay.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <TerritoryEditor 
+                        initialBoundary={profile?.territory?.boundary} 
+                        onSave={onTerritorySave}
+                    />
+                </CardContent>
+            </Card>
         </TabsContent>
         <TabsContent value="officials">
            <Card>

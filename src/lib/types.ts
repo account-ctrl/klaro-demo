@@ -37,6 +37,11 @@ export type TenantSettings = {
 
     // Administration (Added for Purok Support)
     puroks?: string[]; // Array of Purok Names
+    
+    // Territory
+    territory?: {
+        boundary: {lat: number, lng: number}[];
+    };
 
     // System Config
     settings?: {
