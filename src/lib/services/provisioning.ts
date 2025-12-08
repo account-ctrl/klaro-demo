@@ -13,134 +13,79 @@ export interface ProvisionData {
         email: string;
         password?: string;
     };
-    inviteToken?: string; // Optional: Used for auditing which invite triggered this
+    inviteToken?: string;
 }
 
 export async function provisionTenant(data: ProvisionData) {
     const { province, city, barangay, region, adminProfile } = data;
-
-    console.log(`[PROVISION ENGINE] Starting: ${barangay}, ${city}`);
-
-    // 1. Path Consistency
-    const vaultPath = Paths.getVaultRoot(province, city, barangay);
     const tenantSlug = `${slugify(city)}-${slugify(barangay)}`;
-    const tenantRef = adminDb.doc(vaultPath);
-    const directoryRef = adminDb.collection(Paths.TenantDirectory).doc(tenantSlug);
-    const settingsRef = adminDb.doc(Paths.getSettingsPath(vaultPath));
+    const vaultPath = Paths.getVaultRoot(province, city, barangay);
 
-    // 2. Auth Creation (Idempotent)
-    let uid;
     try {
-        const userRecord = await adminAuth.createUser({
-            email: adminProfile.email,
-            password: adminProfile.password,
-            displayName: adminProfile.name,
-        });
-        uid = userRecord.uid;
-        console.log(`[PROVISION ENGINE] New Auth User: ${uid}`);
-    } catch (authError: any) {
-        if (authError.code === 'auth/email-already-exists') {
-            console.log(`[PROVISION ENGINE] User exists. Updating...`);
-            const user = await adminAuth.getUserByEmail(adminProfile.email);
-            uid = user.uid;
-            
-            // Sync password if provided (Important for recovery/retry)
-            if (adminProfile.password) {
-                await adminAuth.updateUser(uid, {
-                    password: adminProfile.password,
-                    displayName: adminProfile.name
-                });
+        console.log(`[PROVISION ENGINE] Starting: ${barangay}, ${city}`);
+        
+        // --- 1. Auth Creation ---
+        let uid;
+        try {
+            const userRecord = await adminAuth.createUser({
+                email: adminProfile.email,
+                password: adminProfile.password,
+                displayName: adminProfile.name,
+            });
+            uid = userRecord.uid;
+            console.log(`[PROVISION ENGINE] New Auth User: ${uid}`);
+        } catch (authError: any) {
+            if (authError.code === 'auth/email-already-exists') {
+                const user = await adminAuth.getUserByEmail(adminProfile.email);
+                uid = user.uid;
+                console.log(`[PROVISION ENGINE] User ${uid} exists. Updating...`);
+                if (adminProfile.password) {
+                    await adminAuth.updateUser(uid, { password: adminProfile.password, displayName: adminProfile.name });
+                }
+            } else {
+                throw authError; // Rethrow other auth errors
             }
-        } else {
-            throw authError;
         }
-    }
 
-    // 3. RBAC Enforcement (The Security Core)
-    // We enforce 'admin' role here. This matches the Security Rules:
-    // allow write: if request.auth.token.role == 'admin' && request.auth.token.tenantPath == ...
-    await adminAuth.setCustomUserClaims(uid, {
-        tenantPath: vaultPath,
-        tenantId: tenantSlug,
-        role: 'admin' 
-    });
-    console.log(`[PROVISION ENGINE] Claims Synced: role=admin, path=${vaultPath}`);
-
-    // 4. Atomic Database Write
-    await adminDb.runTransaction(async (t) => {
-        // A. Directory (Global Lookup)
-        t.set(directoryRef, {
-            fullPath: vaultPath,
-            province,
-            city,
-            barangay,
-            region: region || '',
-            tenantId: tenantSlug,
-            adminEmail: adminProfile.email,
-            updatedAt: Timestamp.now(),
-            status: 'active'
-        }, { merge: true });
-
-        // B. Vault Metadata
-        t.set(tenantRef, {
-            name: barangay,
-            city: city,
-            province: province,
-            region: region || '',
-            status: 'active',
-            createdAt: Timestamp.now(),
-            plan: 'free' // Default plan
-        }, { merge: true });
-
-        // C. Tenant Settings (For Dashboard Access)
-        t.set(settingsRef, {
-            barangayName: barangay,
-            location: {
-                province,
-                city,
-                region: region || ''
-            },
-            captainProfile: {
-                name: adminProfile.name,
-                email: adminProfile.email
-            },
-            puroks: [], // Empty array for fresh start
-            createdAt: Timestamp.now()
-        }, { merge: true });
-
-        // D. User Profile (For Sidebar/Header Display)
-        const userRef = adminDb.collection(Paths.Users).doc(uid);
-        t.set(userRef, {
-            uid: uid,
-            email: adminProfile.email,
-            fullName: adminProfile.name,
-            role: 'admin', // Syncs with Auth Claim
-            systemRole: 'Admin', // Display Label
-            position: 'Punong Barangay (Captain)', // Default Title
+        // --- 2. RBAC Enforcement ---
+        await adminAuth.setCustomUserClaims(uid, {
             tenantPath: vaultPath,
             tenantId: tenantSlug,
-            status: 'Active',
-            updatedAt: Timestamp.now()
-        }, { merge: true });
-        
-        // E. Audit Log (If invite token used)
-        if (data.inviteToken) {
-             const inviteRef = adminDb.collection('onboarding_invites').doc(data.inviteToken);
-             t.update(inviteRef, { 
-                 status: 'used', 
-                 usedBy: adminProfile.email,
-                 usedAt: Timestamp.now(),
-                 tenantCreated: tenantSlug
-             });
-        }
-    });
+            role: 'admin' 
+        });
+        console.log(`[PROVISION ENGINE] Claims Synced for ${uid}`);
 
-    console.log(`[PROVISION ENGINE] Success: ${tenantSlug}`);
+        // --- 3. Atomic Database Write ---
+        await adminDb.runTransaction(async (t) => {
+            const directoryRef = adminDb.collection(Paths.TenantDirectory).doc(tenantSlug);
+            const tenantRef = adminDb.doc(vaultPath);
+            const settingsRef = adminDb.doc(Paths.getSettingsPath(vaultPath));
+            const userRef = adminDb.collection(Paths.Users).doc(uid);
 
-    return {
-        success: true,
-        tenantSlug,
-        vaultPath,
-        uid
-    };
+            t.set(directoryRef, { fullPath: vaultPath, province, city, barangay, region: region || '', tenantId: tenantSlug, adminEmail: adminProfile.email, updatedAt: Timestamp.now(), status: 'active' }, { merge: true });
+            t.set(tenantRef, { name: barangay, city, province, region: region || '', status: 'active', createdAt: Timestamp.now(), plan: 'free' }, { merge: true });
+            t.set(settingsRef, { barangayName: barangay, location: { province, city, region: region || '' }, captainProfile: { name: adminProfile.name, email: adminProfile.email }, puroks: [], createdAt: Timestamp.now() }, { merge: true });
+            t.set(userRef, { uid, email: adminProfile.email, fullName: adminProfile.name, role: 'admin', systemRole: 'Admin', position: 'Punong Barangay (Captain)', tenantPath: vaultPath, tenantId: tenantSlug, status: 'Active', updatedAt: Timestamp.now() }, { merge: true });
+
+            // --- 4. Mark Invite Token as Used (Corrected) ---
+            if (data.inviteToken) {
+                 const inviteRef = adminDb.collection('invite_tokens').doc(data.inviteToken); // CORRECTED COLLECTION
+                 t.update(inviteRef, { 
+                     used: true, // Field name from generator
+                     usedBy: adminProfile.email,
+                     usedAt: Timestamp.now(),
+                     tenantCreated: tenantSlug
+                 });
+                 console.log(`[PROVISION ENGINE] Marked token ${data.inviteToken} as used.`);
+            }
+        });
+
+        console.log(`[PROVISION ENGINE] Success: ${tenantSlug}`);
+        return { success: true, tenantSlug, vaultPath, uid };
+
+    } catch (error) {
+        console.error(`[PROVISION ENGINE] FATAL ERROR for ${tenantSlug}:`, error);
+        // This will be caught by the API route and returned as a proper JSON error
+        throw new Error(`Failed to provision tenant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 }

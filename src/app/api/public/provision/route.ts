@@ -5,35 +5,37 @@ import { adminDb } from '@/lib/firebase/admin';
 
 export async function POST(req: Request) {
   try {
-    const { province, city, barangay, region, adminProfile, inviteToken } = await req.json();
+    const { province, city, barangay, region, adminProfile, inviteToken } from await req.json();
 
-    // 1. Validation (Strict)
     if (!province || !city || !barangay || !inviteToken) {
         return NextResponse.json({ error: 'Missing required fields or invite token' }, { status: 400 });
     }
 
-    // 2. Gatekeeper: Validate Invite Token
-    // We strictly enforce that a valid, unused token is present for public onboarding.
-    const inviteRef = adminDb.collection('onboarding_invites').doc(inviteToken);
-    const inviteSnap = await inviteRef.get();
+    // Corrected to check the 'invite_tokens' collection.
+    const tokenRef = adminDb.collection('invite_tokens').doc(inviteToken);
+    const tokenSnap = await tokenRef.get();
 
-    if (!inviteSnap.exists) {
+    if (!tokenSnap.exists) {
         return NextResponse.json({ error: 'Invalid invite token.' }, { status: 403 });
     }
 
-    const inviteData = inviteSnap.data();
-    if (inviteData?.status !== 'pending') {
-        return NextResponse.json({ error: 'This invite has already been used or expired.' }, { status: 403 });
+    const tokenData = tokenSnap.data();
+    if (tokenData?.used) {
+        return NextResponse.json({ error: 'This invite has already been used.' }, { status: 403 });
+    }
+    
+    // Check if token is expired
+    if (tokenData?.expiresAt && tokenData.expiresAt.toDate() < new Date()) {
+        return NextResponse.json({ error: 'This invite link has expired.' }, { status: 403 });
     }
 
-    // 3. Call the Unified Engine
     const result = await provisionTenant({
         province,
         city,
         barangay,
         region,
         adminProfile,
-        inviteToken // Pass the token so the engine can mark it as used
+        inviteToken
     });
 
     return NextResponse.json({ 
