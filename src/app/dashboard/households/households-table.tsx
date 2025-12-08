@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -83,8 +84,8 @@ export function HouseholdsTable() {
   });
 
 
-  const handleAdd = (newRecord: HouseholdFormValues) => {
-    if (!householdsCollectionRef || !user || !residents) return;
+  const handleAdd = async (newRecord: HouseholdFormValues) => {
+    if (!householdsCollectionRef || !user || !residents || !firestore || !tenantPath) return;
     
     const head = residents.find(r => r.residentId === newRecord.household_head_id);
     if (!head) {
@@ -98,7 +99,20 @@ export function HouseholdsTable() {
       householdId: `HH-${Date.now()}`,
       createdAt: serverTimestamp() as any,
     };
-    addDocumentNonBlocking(householdsCollectionRef, docToAdd);
+    
+    // Add Household
+    await addDocumentNonBlocking(householdsCollectionRef, docToAdd);
+
+    // Update Head of Household's Resident Profile
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const residentDocId = (head as any).id || head.residentId;
+    const residentDocRef = doc(firestore, `${safePath}/residents/${residentDocId}`);
+    
+    await updateDocumentNonBlocking(residentDocRef, { 
+        householdId: docToAdd.householdId,
+        is_head_of_family: true 
+    });
+
     toast({ title: 'Household Added', description: `Household "${docToAdd.name}" has been created.` });
   };
 

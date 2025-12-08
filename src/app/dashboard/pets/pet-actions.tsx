@@ -191,11 +191,39 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
   useEffect(() => {
     if (formData.ownerResidentId) {
         const owner = residents.find(r => r.residentId === formData.ownerResidentId);
-        if(owner && owner.householdId) {
-            setFormData(prev => ({...prev, householdId: owner.householdId}));
+        if(owner) {
+            // Priority 1: Check if resident record has linked household
+            if (owner.householdId) {
+                 setFormData(prev => ({...prev, householdId: owner.householdId || ''}));
+            } 
+            // Priority 2: Check if resident is HEAD of any household (fallback for legacy data)
+            else {
+                const householdAsHead = households.find(h => h.household_head_id === formData.ownerResidentId);
+                if (householdAsHead) {
+                     setFormData(prev => ({...prev, householdId: householdAsHead.householdId}));
+                } else {
+                    // Reset if no household found for this new owner, unless it's the initial load of an existing record which might have loose linking
+                    // But for "Auto-fill", we should probably reset if nothing found.
+                    // Checking against 'record' to avoid clearing existing valid data if there's a disconnect? 
+                    // No, if user selects a new owner, we should re-evaluate.
+                    // If user just opened the form and didn't change owner, this effect might run. 
+                    // But ownerResidentId is initial state.
+                    
+                    // Let's only set if we found something, or if we definitely want to clear it.
+                    // If we don't set it to empty, it might keep the previous value from previous selection.
+                    
+                    // We need to differentiate between "Initial Load" and "User Change".
+                    // But React effects run on mount too.
+                    
+                    // If record exists and owner is same as record, don't clear householdId (it might be manually set?).
+                    // But here we want AUTO fill.
+                    
+                    setFormData(prev => ({...prev, householdId: ''}));
+                }
+            }
         }
     }
-  }, [formData.ownerResidentId, residents]);
+  }, [formData.ownerResidentId, residents, households]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
