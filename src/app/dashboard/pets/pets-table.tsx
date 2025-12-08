@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   collection,
   doc,
@@ -38,28 +38,32 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const BARANGAY_ID = 'barangay_san_isidro';
+import { useTenant } from '@/providers/tenant-provider'; // Import useTenant
 
 export function PetsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const { tenantPath } = useTenant(); // Get dynamic tenant path
 
+  // Construct dynamic paths
   const petsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/pets`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/pets`);
+  }, [firestore, tenantPath]);
 
   const residentsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/residents`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/residents`);
+  }, [firestore, tenantPath]);
   
   const householdsCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/households`);
-  }, [firestore]);
+    if (!firestore || !tenantPath) return null;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    return collection(firestore, `${safePath}/households`);
+  }, [firestore, tenantPath]);
 
   const { data: pets, isLoading: isLoadingPets } = useCollection<Pet>(petsCollectionRef);
   const { data: residents, isLoading: isLoadingResidents } = useCollection<Resident>(residentsCollectionRef);
@@ -107,8 +111,9 @@ export function PetsTable() {
   };
 
   const handleEdit = (updatedRecord: Pet) => {
-    if (!firestore || !updatedRecord.petId) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/pets/${updatedRecord.petId}`);
+    if (!firestore || !updatedRecord.petId || !tenantPath) return;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/pets/${updatedRecord.petId}`);
     
     const { petId, createdAt, ...dataToUpdate } = updatedRecord;
 
@@ -124,13 +129,14 @@ export function PetsTable() {
   };
 
   const handleDelete = (id: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, `/barangays/${BARANGAY_ID}/pets/${id}`);
+    if (!firestore || !tenantPath) return;
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const docRef = doc(firestore, `${safePath}/pets/${id}`);
     deleteDocumentNonBlocking(docRef);
      toast({ variant: 'destructive', title: 'Pet Record Deleted', description: 'The record has been permanently deleted.' });
   };
   
-  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, residents ?? [], households ?? []), [residents, households]);
+  const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, residents ?? [], households ?? []), [residents, households, handleEdit, handleDelete]);
 
   const isLoading = isLoadingPets || isLoadingResidents || isLoadingHouseholds;
 
