@@ -5,7 +5,7 @@ import { generateResidents } from '@/lib/placeholder-data/residents';
 import { generateBlotterRecords } from '@/lib/placeholder-data/blotter';
 import { generateFinancialRecords } from '@/lib/placeholder-data/financials';
 import { generateDocumentRequests } from '@/lib/placeholder-data/documents';
-import { sampleOfficials } from '@/app/dashboard/settings/officials-management/_data';
+import { sampleOfficials, officialsAndStaff, committeeAssignments, systemRoles } from '@/app/dashboard/settings/officials-management/_data';
 import { samplePrograms } from '@/app/dashboard/settings/programs/_data';
 import { ANNOUNCEMENT_TEMPLATES as sampleAnnouncements } from '@/app/dashboard/announcements/announcement-actions';
 import { sampleCaseTypes } from '@/app/dashboard/blotter/case-types';
@@ -36,6 +36,7 @@ export const getInitialData = (count: number) => {
     };
 };
 
+export { officialsAndStaff, committeeAssignments, systemRoles };
 
 export const LOCATION_OPTIONS = ["Outside Barangay", "Barangay Vicinity"];
 
