@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { useCollection, useFirestore, useMemoFirebase, useAuth } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Added useRouter
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -65,10 +66,14 @@ export default function JurisdictionsPage() {
 
   const [masterBarangays, setMasterBarangays] = useState<PSGCBarangay[]>([]);
   const [isLoadingMaster, setIsLoadingMaster] = useState(false);
+  
+  // Track which barangay is being provisioned to show loading state on specific button
+  const [provisioningId, setProvisioningId] = useState<string | null>(null);
 
   const firestore = useFirestore();
   const auth = useAuth();
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
 
   const provinces = useMemo(() => getProvinces(), []);
   
@@ -179,6 +184,26 @@ export default function JurisdictionsPage() {
       });
   };
 
+  const handleProvision = async (barangay: TenantBarangay) => {
+    setProvisioningId(barangay.id);
+    startTransition(async () => {
+        try {
+            const result = await generateInviteToken({ barangayName: barangay.name, city: barangay.city, province: barangay.province });
+            if (!result.success || !result.token) throw new Error(result.error || "Failed to generate token.");
+            
+            const link = generateOnboardingLink(barangay.name, result.token);
+            // Use router.push to navigate to the generated link
+            // We strip the domain part since router.push expects a relative path or absolute URL
+            // Since our generator makes a full URL, we can just use the path + query
+            const url = new URL(link);
+            router.push(url.pathname + url.search);
+        } catch(error: any) {
+            toast({ variant: "destructive", title: "Error", description: error.message });
+            setProvisioningId(null);
+        }
+    });
+  };
+
   const openInviteDialog = (barangay: TenantBarangay) => {
     setBarangayToInvite(barangay);
     setIsInviteDialogOpen(true);
@@ -264,7 +289,16 @@ export default function JurisdictionsPage() {
                                                         {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                                                     </Button>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:bg-slate-100" onClick={() => openInviteDialog(brgy)} title="Send Onboarding Link"><Mail className="h-4 w-4" /></Button>
-                                                    <Button variant="ghost" size="sm" className="h-8 text-amber-600 hover:bg-amber-50" asChild><Link href={`/onboarding`}><PlusCircle className="h-3.5 w-3.5 mr-1" /> Provision</Link></Button>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-8 text-amber-600 hover:bg-amber-50" 
+                                                        onClick={() => handleProvision(brgy)}
+                                                        disabled={isPending && provisioningId === brgy.id}
+                                                    >
+                                                        {isPending && provisioningId === brgy.id ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5 mr-1" />}
+                                                        Provision
+                                                    </Button>
                                                 </div>
                                             )}
                                         </TableCell>
