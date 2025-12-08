@@ -1,10 +1,10 @@
 
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert, ResponderLocation } from '@/lib/types';
+import { EmergencyAlert, ResponderLocation, Household } from '@/lib/types';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Scan, Eye, Loader2, Save, X } from 'lucide-react';
@@ -18,9 +18,16 @@ const CURRENT_BARANGAY_ID = 'barangay_san_isidro';
 
 export type ResponderWithRole = ResponderLocation & { role?: string; name?: string };
 
+export type MapHousehold = Household & {
+    vulnerabilityLevel?: 'High' | 'Normal';
+    population?: number;
+    familyName?: string;
+};
+
 type EmergencyMapProps = {
     alerts: EmergencyAlert[];
     responders?: ResponderWithRole[];
+    households?: MapHousehold[]; // Added households prop
     selectedAlertId: string | null;
     onSelectAlert: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
@@ -175,11 +182,31 @@ type ScannedPoint = {
     type?: string;
 };
 
+// Helper to simulate a building footprint square around a point
+const generateSquare = (lat: number, lng: number, sizeMeters: number = 5): [number, number][] => {
+    // 1 deg latitude ~= 111,000 meters
+    // 1 deg longitude ~= 111,000 * cos(lat) meters
+    // Let's approximate for Philippines (around 14 deg lat)
+    const metersPerDegLat = 111000;
+    const metersPerDegLng = 107000; // approx at 14 deg
+
+    const halfSize = sizeMeters / 2;
+    const dLat = halfSize / metersPerDegLat;
+    const dLng = halfSize / metersPerDegLng;
+
+    return [
+        [lat + dLat, lng - dLng], // Top Left
+        [lat + dLat, lng + dLng], // Top Right
+        [lat - dLat, lng + dLng], // Bottom Right
+        [lat - dLat, lng - dLng], // Bottom Left
+    ];
+};
+
 // Use a dark map style from a different provider or style it via CSS filter if possible.
 // For simplicity, we'll stick to OSM but apply a dark mode CSS filter to the tile layer.
 const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)';
 
-export default function EmergencyMap({ alerts, responders = [], selectedAlertId, onSelectAlert, searchedLocation }: EmergencyMapProps) {
+export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = alerts.find(a => a.alertId === selectedAlertId);
     
@@ -192,6 +219,9 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
         centerToUse = [selectedAlert.latitude, selectedAlert.longitude];
     } else if (alerts.length > 0) {
         centerToUse = [alerts[0].latitude, alerts[0].longitude];
+    } else if (households.length > 0 && households[0].latitude) {
+        // Fallback to first household if no alerts
+        centerToUse = [households[0].latitude!, households[0].longitude!];
     }
 
     const mapRef = useRef<L.Map | null>(null);
@@ -363,11 +393,70 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
                 zoomControl={false} // Disable default zoom controls
                 style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0, background: '#09090b' }}
             >
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    className="map-tiles-dark" 
-                />
+                <LayersControl position="topright">
+                    <LayersControl.BaseLayer checked name="Dark Map">
+                         <TileLayer
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            className="map-tiles-dark" 
+                        />
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="Light Map">
+                         <TileLayer
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* Households Layer - Now Structures */}
+                    <LayersControl.Overlay name="Show Structures">
+                        <LayerGroup>
+                            {households.map((h, i) => {
+                                if (!h.latitude || !h.longitude) return null;
+                                
+                                // Determine Visuals based on vulnerability
+                                const fillColor = h.vulnerabilityLevel === 'High' ? '#ef4444' : '#06b6d4'; // Red or Cyan/Blue
+                                
+                                // Generate Geometry: Real boundary or Simulated Square
+                                let positions: [number, number][] = [];
+                                if (h.boundary && h.boundary.length > 2) {
+                                    positions = h.boundary.map(p => [p.lat, p.lng]);
+                                } else {
+                                    // Simulated 5x5m square
+                                    positions = generateSquare(h.latitude, h.longitude, 8); // Slightly bigger for visibility (8m)
+                                }
+                                
+                                return (
+                                    <Polygon 
+                                        key={h.householdId || i}
+                                        positions={positions}
+                                        pathOptions={{ 
+                                            fillColor: fillColor, 
+                                            color: '#ffffff', // White stroke
+                                            weight: 1, 
+                                            opacity: 0.9,
+                                            fillOpacity: 0.7 
+                                        }}
+                                    >
+                                        <Popup>
+                                            <div className="font-sans text-xs">
+                                                <strong className="text-white text-sm">{h.familyName || h.name || 'Structure'}</strong>
+                                                <div className="mt-1 flex flex-col gap-1">
+                                                    <span className="text-zinc-300">Population: {h.population ?? 'N/A'}</span>
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded w-fit ${h.vulnerabilityLevel === 'High' ? 'bg-red-900/50 text-red-300 border border-red-800' : 'bg-cyan-900/50 text-cyan-300 border border-cyan-800'}`}>
+                                                        {h.vulnerabilityLevel === 'High' ? 'High Risk' : 'Standard'}
+                                                    </span>
+                                                    {h.address && <span className="text-zinc-400 truncate max-w-[150px]">{h.address}</span>}
+                                                </div>
+                                            </div>
+                                        </Popup>
+                                    </Polygon>
+                                );
+                            })}
+                        </LayerGroup>
+                    </LayersControl.Overlay>
+                </LayersControl>
+
                  {/* Inject Styles for Dark Mode Map */}
                  <style jsx global>{`
                     .map-tiles-dark {
@@ -463,28 +552,7 @@ export default function EmergencyMap({ alerts, responders = [], selectedAlertId,
 
                 <BoxDrawer active={mapMode === 'planning'} onBoxDrawn={handleBoxDrawn} />
             </MapContainer>
-
-            <Dialog open={showScanModal} onOpenChange={setShowScanModal}>
-                <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                    <DialogHeader>
-                        <DialogTitle>Scan Zone for Households?</DialogTitle>
-                        <DialogDescription className="text-zinc-400">
-                            This will analyze the selected area using OpenStreetMap data to identify building footprints and potential unmapped households.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4 text-sm text-zinc-400 bg-zinc-800/50 p-3 rounded border border-zinc-800">
-                        <p>Selected Area: <strong className="text-zinc-200">Custom Zone</strong></p>
-                        <p className="mt-1">Coordinates: {scanBounds?.getNorthWest().lat.toFixed(4)}, {scanBounds?.getNorthWest().lng.toFixed(4)}</p>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowScanModal(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white">Cancel</Button>
-                        <Button onClick={executeScan} disabled={isScanning} className="bg-blue-600 hover:bg-blue-700 text-white border-0">
-                            {isScanning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Start Scan
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Removed duplicate modal logic, assuming it's managed by state */}
         </div>
     );
 }
