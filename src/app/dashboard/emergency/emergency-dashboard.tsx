@@ -417,6 +417,7 @@ export function EmergencyDashboard() {
   
   // State for manual search selection
   const [searchedLocation, setSearchedLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [showStructures, setShowStructures] = useState(true); // Default to true
 
   // Use hooks
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
@@ -537,6 +538,7 @@ export function EmergencyDashboard() {
                 selectedAlertId={selectedAlertId}
                 onSelectAlert={handleAlertSelect}
                 searchedLocation={searchedLocation} 
+                showStructures={showStructures}
             />
              {/* Gradient Overlay for better text readability at edges */}
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
@@ -571,7 +573,10 @@ export function EmergencyDashboard() {
 
         {/* Bottom Left: Controls (Z-Index 10) */}
         <div className="absolute bottom-6 left-6 z-10 pointer-events-none">
-            <MapControls />
+            <MapControls 
+                showStructures={showStructures}
+                onToggleStructures={() => setShowStructures(!showStructures)}
+            />
         </div>
 
         {/* Floating Broadcast Button (Bottom Right) */}

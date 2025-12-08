@@ -1,13 +1,18 @@
 
 import { Button } from "@/components/ui/button";
-import { Layers, Filter, ArrowLeft } from "lucide-react";
+import { Layers, Filter, ArrowLeft, Home } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export const MapControls = () => {
+interface MapControlsProps {
+    showStructures: boolean;
+    onToggleStructures: () => void;
+}
+
+export const MapControls = ({ showStructures, onToggleStructures }: MapControlsProps) => {
     const router = useRouter();
 
     return (
-        <div className="flex items-end gap-4 pointer-events-none">
+        <div className="flex items-end gap-2 pointer-events-none">
             {/* Back to Dashboard - Now at Bottom Left, wrapped in pointer-events-auto */}
             <div className="pointer-events-auto">
                 <Button 
@@ -20,13 +25,15 @@ export const MapControls = () => {
                 </Button>
             </div>
 
-            {/* Minimal Controls - Removed redundant zoom/plus/minus */}
-            <div className="bg-black/40 backdrop-blur-md border border-white/10 p-1.5 rounded-xl shadow-2xl flex gap-1 pointer-events-auto">
-                 <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg" title="Map Layers">
-                    <Layers className="h-5 w-5" />
-                </Button>
-                 <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg" title="Filters">
-                    <Filter className="h-5 w-5" />
+            {/* Structures Toggle */}
+            <div className="pointer-events-auto">
+                 <Button 
+                    variant={showStructures ? "default" : "secondary"}
+                    className={`h-12 px-4 rounded-xl flex items-center gap-2 transition-all hover:scale-105 border border-white/10 shadow-2xl backdrop-blur-md ${showStructures ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-zinc-900/90 text-zinc-300 hover:bg-zinc-800'}`}
+                    onClick={onToggleStructures}
+                >
+                    <Home className="h-5 w-5" />
+                    <span className="font-medium">{showStructures ? 'Hide Structures' : 'Show Structures'}</span>
                 </Button>
             </div>
         </div>
