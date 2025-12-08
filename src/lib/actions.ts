@@ -1,6 +1,6 @@
 'use server';
 
-import { adminDb } from '@/lib/firebase/admin'; // Corrected import path and variable
+import { adminDb } from '@/lib/firebase/admin';
 
 interface SendInviteArgs {
   to: string;
@@ -15,16 +15,15 @@ interface SendInviteArgs {
  */
 export async function sendInvite(
   { to, link, barangay, inviter }: SendInviteArgs
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; msgId?: string }> {
   if (!to || !link || !barangay) {
     return { success: false, error: "Missing required fields for sending invite." };
   }
 
   try {
-    // Use the already initialized adminDb instance
     const mailRef = adminDb.collection('mail');
     
-    await mailRef.add({
+    const res = await mailRef.add({
       to: [to],
       message: {
         subject: `Invitation to Onboard Barangay ${barangay}`,
@@ -49,11 +48,11 @@ export async function sendInvite(
           </div>
         `,
       },
-      createdAt: new Date(), // Helpful for sorting
+      createdAt: new Date(),
     });
 
-    console.log(`Successfully queued invitation email for ${to}`);
-    return { success: true };
+    console.log(`Successfully queued invitation email for ${to}. Doc ID: ${res.id}`);
+    return { success: true, msgId: res.id };
 
   } catch (error) {
     console.error("Error queuing email in Firestore:", error);
