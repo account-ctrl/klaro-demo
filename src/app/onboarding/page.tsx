@@ -45,8 +45,8 @@ const officialsSchema = z.object({
   officials: z.array(z.object({
     name: z.string().min(2, "Name is required."),
     role: z.enum(['Captain', 'Secretary', 'Treasurer', 'Councilor']),
-    email: z.string().email("Invalid email").optional(),
-    password: z.string().min(6, "Password must be at least 6 characters").optional(),
+    email: z.string().email("Invalid email").optional().or(z.literal('')),
+    password: z.string().min(6, "Password must be at least 6 characters").optional().or(z.literal('')),
   })).min(1, "Please add at least one official."),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -164,9 +164,10 @@ function OnboardingPageComponent() {
     const handleSealSubmit = () => setCurrentStep(4);
 
     const handleCommissionStart = async () => {
-        if (!inviteToken) { toast({ title: "Missing Token", description: "Cannot proceed without a valid invite token.", variant: "destructive" }); return; }
-        if (!isCertified) { toast({ title: "Certification Required", description: "Please certify that you are an authorized representative.", variant: "destructive" }); return; }
-        if (!profileData || !officialsData) { toast({ title: "System Error", description: "Missing data or connection.", variant: "destructive" }); return; }
+        if (!inviteToken || !isCertified || !profileData || !officialsData) {
+            // Toast messages for these are handled by button disabled state or initial checks
+            return;
+        }
 
         setIsCommissioning(true);
         setHasError(false);
@@ -183,18 +184,30 @@ function OnboardingPageComponent() {
             const res = await fetch('/api/public/provision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inviteToken, province: profileData.province, city: profileData.city, barangay: profileData.barangayName, region: profileData.region, adminProfile: captain ? { name: captain.name, email: captain.email, password: captain.password } : undefined })
+                body: JSON.stringify({ 
+                    inviteToken, 
+                    province: profileData.province, 
+                    city: profileData.city, 
+                    barangay: profileData.barangayName, 
+                    region: profileData.region, 
+                    adminProfile: captain ? { name: captain.name, email: captain.email, password: captain.password } : undefined,
+                    officials: officialsData.officials // Pass all officials data
+                })
             });
             const data = await res.json();
 
             if (!res.ok) {
-                if (res.status !== 409) { throw new Error(data.error || 'Provisioning failed on server.'); }
-                addLog(">> NOTICE: Vault already exists. Re-linking.");
-                if (data.tenantSlug) setProvisionedTenantId(data.tenantSlug);
-            } else {
-                if (data.tenantSlug) { setProvisionedTenantId(data.tenantSlug); }
-                addLog(">> SUCCESS: Vault Provisioned.");
+                throw new Error(data.error || 'Provisioning failed on server.');
             }
+            
+            if (res.status === 201 || res.status === 200) { // Check for Created or OK
+                 if (data.tenantSlug) { setProvisionedTenantId(data.tenantSlug); }
+                 addLog(">> SUCCESS: Vault Provisioned.");
+            } else if (res.status === 202) { // Check for Accepted (re-linking)
+                 addLog(">> NOTICE: Vault already exists. Re-linking.");
+                 if (data.tenantSlug) setProvisionedTenantId(data.tenantSlug);
+            }
+            
             await delay(1200);
 
             addLog("Initializing Blotter & Health Record schemas..."); await delay(800);
