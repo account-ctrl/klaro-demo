@@ -197,32 +197,43 @@ export default function MappedHouseholdsPage() {
         }
     };
 
-    const handleAssignResident = () => {
-        if (!firestore || !selectedHousehold || !residentToAssign || !tenantPath) return;
-        
-        // 1. Update Household Document
-        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
-        const hDocRef = doc(firestore, `${safePath}/households/${selectedHousehold.id}`);
-        const resident = residents?.find(r => r.residentId === residentToAssign);
-        
-        updateDocumentNonBlocking(hDocRef, {
-            household_head_id: residentToAssign,
-            name: resident ? `${resident.lastName} Family` : 'Family Household',
-            status: 'Verified'
-        });
-
-        // 2. Update Resident Document (Bidirectional Link + Address Sync)
-        if (resident && resident.id) { // Use document ID for update
-             const rDocRef = doc(firestore, `${safePath}/residents/${resident.id}`);
-             updateDocumentNonBlocking(rDocRef, {
-                 householdId: selectedHousehold.householdId, // Link resident to household
-                 address: selectedHousehold.address // AUTO-FILL address from household data
-             });
+    const handleAssignResident = async () => {
+        if (!firestore || !selectedHousehold || !residentToAssign || !tenantPath) {
+            console.error("Assign Error: Missing required data", { selectedHousehold, residentToAssign, tenantPath });
+            return;
         }
+        
+        try {
+            // 1. Update Household Document
+            const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+            const hDocRef = doc(firestore, `${safePath}/households/${selectedHousehold.id}`);
+            const resident = residents?.find(r => r.residentId === residentToAssign);
+            
+            await updateDocumentNonBlocking(hDocRef, {
+                household_head_id: residentToAssign,
+                name: resident ? `${resident.lastName} Family` : 'Family Household',
+                status: 'Verified'
+            });
 
-        setIsAssignOpen(false);
-        setResidentToAssign('');
-        toast({ title: "Resident Assigned", description: "Household head updated, resident linked, and address synced." });
+            // 2. Update Resident Document (Bidirectional Link + Address Sync)
+            if (resident && resident.id) {
+                 const rDocRef = doc(firestore, `${safePath}/residents/${resident.id}`);
+                 console.log("Updating resident address:", selectedHousehold.address);
+                 await updateDocumentNonBlocking(rDocRef, {
+                     householdId: selectedHousehold.householdId, // Link resident to household
+                     address: selectedHousehold.address || '' // AUTO-FILL address from household data
+                 });
+            } else {
+                console.warn("Resident not found or missing ID:", residentToAssign);
+            }
+
+            setIsAssignOpen(false);
+            setResidentToAssign('');
+            toast({ title: "Resident Assigned", description: "Household head updated, resident linked, and address synced." });
+        } catch (error) {
+            console.error("Assignment Failed:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to assign resident." });
+        }
     };
 
     const handleUnassignResident = (id: string) => {
