@@ -35,6 +35,14 @@ export default function ResidentsPage() {
         ...newRecord,
         residentId: residentId
     };
+
+    // Remove undefined fields to prevent Firestore errors
+    Object.keys(finalDoc).forEach(key => {
+        const dataKey = key as keyof typeof finalDoc;
+        if (finalDoc[dataKey] === undefined) {
+            delete finalDoc[dataKey];
+        }
+    });
     
     setDocumentNonBlocking(docRef, finalDoc, { merge: true });
 
