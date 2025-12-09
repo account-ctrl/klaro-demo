@@ -4,7 +4,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert, ResponderLocation, Household } from '@/lib/types';
+import { EmergencyAlert, ResponderLocation, Household, TenantSettings } from '@/lib/types'; // Added TenantSettings
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Scan, Eye, Loader2, Save, X } from 'lucide-react';
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { addDocumentNonBlocking } from '@/firebase'; 
 import { useFirestore } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
+import { MapAutoFocus } from './maps/MapAutoFocus'; // Import the AutoFocus component
 
 const CURRENT_BARANGAY_ID = 'barangay_san_isidro';
 
@@ -32,6 +33,7 @@ type EmergencyMapProps = {
     onSelectAlert: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
     showStructures?: boolean; // New prop
+    settings?: TenantSettings | null; // Added prop
 };
 
 function MapUpdater({ center, zoom = 16 }: { center: [number, number] | null; zoom?: number }) {
@@ -207,12 +209,13 @@ const generateSquare = (lat: number, lng: number, sizeMeters: number = 5): [numb
 // For simplicity, we'll stick to OSM but apply a dark mode CSS filter to the tile layer.
 const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)';
 
-export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation, showStructures = true }: EmergencyMapProps) {
+export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation, showStructures = true, settings }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = alerts.find(a => a.alertId === selectedAlertId);
     
     // Determine the initial center
     // Priority: Searched Location > Selected Alert > First Alert > Default
+    // Note: MapAutoFocus will override this once it resolves the location.
     let centerToUse: [number, number] = defaultCenter;
     if (searchedLocation) {
         centerToUse = [searchedLocation.lat, searchedLocation.lng];
@@ -394,6 +397,9 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                 zoomControl={false} // Disable default zoom controls
                 style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0, background: '#09090b' }}
             >
+                {/* AutoFocus Component */}
+                <MapAutoFocus settings={settings} />
+
                 <LayersControl position="topright">
                     <LayersControl.BaseLayer checked name="Dark Map">
                          <TileLayer

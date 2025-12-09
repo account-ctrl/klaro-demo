@@ -34,6 +34,7 @@ import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, Trash
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
+import { useTenantProfile } from "@/hooks/use-tenant-profile"; // Import profile hook
 
 // Import new components
 import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
@@ -424,7 +425,8 @@ export function EmergencyDashboard() {
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
   const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
   const { data: households, isLoading: isLoadingHouseholds } = useHouseholds(); // Fetch Households
-  
+  const { profile } = useTenantProfile(); // Fetch tenant profile for map settings
+
   const usersCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
   const { data: users } = useCollection<User>(usersCollectionRef);
   
@@ -452,15 +454,9 @@ export function EmergencyDashboard() {
   const mapHouseholds: MapHousehold[] = useMemo(() => {
       if (!households) return [];
       return households.map(h => {
-          // Calculate vulnerability
-          // Find household members if possible, or just use what we have.
-          // Since finding members for all households is expensive if we do it here,
-          // we'll approximate based on known flags if available or default to Normal.
-          // Wait, we have 'residents' loaded. We can check.
-          
           let vulnerabilityLevel: 'High' | 'Normal' = 'Normal';
           let population = 0;
-          let familyName = h.name; // Household usually has name "Dela Cruz Family"
+          let familyName = h.name; 
 
           if (residents) {
               const members = residents.filter(r => r.householdId === h.householdId);
@@ -534,11 +530,12 @@ export function EmergencyDashboard() {
             <EmergencyMap 
                 alerts={alerts ?? []}
                 responders={responders ?? []}
-                households={mapHouseholds} // Pass the processed households
+                households={mapHouseholds} 
                 selectedAlertId={selectedAlertId}
                 onSelectAlert={handleAlertSelect}
                 searchedLocation={searchedLocation} 
                 showStructures={showStructures}
+                settings={profile} // Pass profile settings for AutoFocus
             />
              {/* Gradient Overlay for better text readability at edges */}
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
