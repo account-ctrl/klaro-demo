@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { LayoutGrid, List, PlusCircle, Trash2, RefreshCcw, Loader2 } from 'lucide-react';
+import { LayoutGrid, List, PlusCircle, Trash2, RefreshCcw, Loader2, UserCheck } from 'lucide-react';
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/lib/hooks/useTenant';
+import { useTenantProfile } from '@/hooks/use-tenant-profile'; // Import profile hook
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Paths } from '@/lib/firebase/paths';
 
@@ -40,13 +41,11 @@ export const OfficialsList = () => {
     const { toast } = useToast();
     const firestore = useFirestore();
     const { tenant } = useTenant();
+    const { profile } = useTenantProfile(); // Access tenant profile settings
 
-    // CORRECTED: Use Paths utility to query the VAULT, not global users
     const officialsPath = useMemo(() => {
         if (!tenant) return undefined;
         const root = Paths.getVaultRoot(tenant.province, tenant.city, tenant.barangay);
-        // This targets /provinces/.../officials (or v2/tenants/.../officials) depending on Paths.ts
-        // This subcollection is covered by the Vault Security Rules (isTenantAdmin).
         return `${root}/officials`;
     }, [tenant]);
 
@@ -78,6 +77,45 @@ export const OfficialsList = () => {
             toast({ title: 'Success', description: 'Official has been removed.' });
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to remove official.' });
+        }
+    };
+
+    const handleSyncCaptain = async () => {
+        if (!firestore || !officialsPath || !profile) return;
+        
+        // Logic: Check if "Punong Barangay" exists. If not, add using profile.captainProfile
+        const captainName = profile.captainProfile?.name || profile.name; // Fallback
+        const captainEmail = profile.captainProfile?.email || profile.email;
+
+        if (!captainName) {
+             toast({ variant: 'destructive', title: 'Missing Profile', description: 'No Captain profile found in settings.' });
+             return;
+        }
+
+        const exists = officials?.some(o => o.position === 'Punong Barangay' || o.name === captainName);
+        if (exists) {
+            toast({ title: 'Already Synced', description: 'The Captain is already in the list.' });
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            await add({
+                name: captainName,
+                position: 'Punong Barangay',
+                status: 'Active',
+                email: captainEmail,
+                systemRole: 'Admin',
+                termStart: serverTimestamp() as any, // Use server timestamp
+                termEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 3)),
+            } as any);
+            
+            toast({ title: 'Captain Synced', description: `${captainName} has been added to the officials list.` });
+        } catch (error) {
+            console.error("Sync Error:", error);
+            toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not add Captain.' });
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -130,9 +168,15 @@ export const OfficialsList = () => {
 
         if (!officials || officials.length === 0) {
             return (
-                <div className="text-muted-foreground text-center py-10 bg-slate-50 border border-dashed rounded-lg">
-                    <h3 className="text-lg font-semibold">No Officials Listed</h3>
-                    <p className="text-sm">This tenant has no registered officials yet. Add your staff to grant them access.</p>
+                <div className="text-muted-foreground text-center py-10 bg-slate-50 border border-dashed rounded-lg flex flex-col items-center gap-4">
+                    <div>
+                        <h3 className="text-lg font-semibold">No Officials Listed</h3>
+                        <p className="text-sm">This tenant has no registered officials yet.</p>
+                    </div>
+                    <Button onClick={handleSyncCaptain} variant="default" className="bg-amber-600 hover:bg-amber-700">
+                        <UserCheck className="mr-2 h-4 w-4" />
+                        Sync Captain Profile
+                    </Button>
                 </div>
             );
         }
@@ -223,6 +267,11 @@ export const OfficialsList = () => {
                 </ToggleGroup>
                 
                 <div className="flex gap-2">
+                    {/* Add Sync Button here too for easy access even if list is not empty */}
+                    <Button variant="outline" onClick={handleSyncCaptain} disabled={isProcessing} title="Ensure Captain is in list">
+                        <UserCheck className="mr-2 h-4 w-4" />
+                        Sync Captain
+                    </Button>
                     <Button variant="outline" onClick={handleLoadDefaults} disabled={isProcessing}>
                         <RefreshCcw className="mr-2 h-4 w-4" />
                         Load Samples
