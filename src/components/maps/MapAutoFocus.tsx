@@ -24,13 +24,20 @@ function useAutoFocus(settings?: TenantSettings | null) {
     const hasFetched = useRef(false);
 
     useEffect(() => {
-        if (!settings || hasFetched.current) return;
+        if (!settings) {
+            console.log("[MapAutoFocus] Waiting for settings...");
+            return;
+        }
+        
+        if (hasFetched.current) return;
 
         const resolveLocation = async () => {
+            console.log("[MapAutoFocus] Resolving location for:", settings);
             setIsFetching(true);
             
             // STRATEGY 1: Use Saved Territory (Most Accurate)
             if (settings.territory?.boundary && settings.territory.boundary.length > 0) {
+                console.log("[MapAutoFocus] Using saved territory boundary.");
                 const polygon = settings.territory.boundary.map(p => [p.lat, p.lng] as [number, number]);
                 setBounds(polygon); // Leaflet can fitBounds to a polygon array
                 setIsFetching(false);
@@ -39,13 +46,13 @@ function useAutoFocus(settings?: TenantSettings | null) {
             }
 
             // STRATEGY 2: Nominatim API Lookup (Text-to-Map)
-            const { barangayName, city, province } = settings.location || { 
-                barangayName: settings.name, 
-                city: settings.city, 
-                province: settings.province 
-            };
+            // Robustly resolve location fields, checking all possible paths
+            const barangayName = settings.barangayName || settings.name || settings.location?.barangay || '';
+            const city = settings.city || settings.location?.city || '';
+            const province = settings.province || settings.location?.province || '';
 
             if (!barangayName || !city || !province) {
+                console.warn("[MapAutoFocus] Missing location data:", { barangayName, city, province });
                 setIsFetching(false);
                 return;
             }
@@ -53,6 +60,8 @@ function useAutoFocus(settings?: TenantSettings | null) {
             try {
                 // Attempt 1: Specific Barangay Search
                 const query = `${barangayName}, ${city}, ${province}, Philippines`;
+                console.log(`[MapAutoFocus] Searching Nominatim: ${query}`);
+                
                 let response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`);
                 let data = await response.json();
 
@@ -82,6 +91,7 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     const southWest = [parseFloat(bbox[0]), parseFloat(bbox[2])] as [number, number];
                     const northEast = [parseFloat(bbox[1]), parseFloat(bbox[3])] as [number, number];
                     
+                    console.log(`[MapAutoFocus] Found City: ${result.display_name}`);
                     setBounds([southWest, northEast]);
                     hasFetched.current = true;
                 }
@@ -112,6 +122,7 @@ export function MapAutoFocus({ settings }: AutoFocusProps) {
         if (bounds && !hasZoomed.current) {
             try {
                 // Add padding to ensure the area isn't touching the screen edges
+                console.log("[MapAutoFocus] Fitting bounds:", bounds);
                 map.fitBounds(bounds as L.LatLngBoundsExpression, { 
                     padding: [50, 50],
                     animate: true,
