@@ -9,10 +9,10 @@ import { LayoutGrid, List, PlusCircle, Trash2, RefreshCcw, Loader2, UserCheck } 
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/lib/hooks/useTenant';
-import { useTenantProfile } from '@/hooks/use-tenant-profile'; // Import profile hook
+import { useTenantProfile } from '@/hooks/use-tenant-profile'; 
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useMemoFirebase } from '@/firebase'; // Import useMemoFirebase
 import { Paths } from '@/lib/firebase/paths';
 
 // CORRECTED IMPORTS
@@ -40,16 +40,17 @@ export const OfficialsList = () => {
     const [view, setView] = useState<'card' | 'list'>('card');
     const { toast } = useToast();
     const firestore = useFirestore();
-    const { tenant } = useTenant();
-    const { profile } = useTenantProfile(); // Access tenant profile settings
+    const { tenantPath } = useTenant(); 
+    const { profile } = useTenantProfile(); 
 
-    const officialsPath = useMemo(() => {
-        if (!tenant) return undefined;
-        const root = Paths.getVaultRoot(tenant.province, tenant.city, tenant.barangay);
-        return `${root}/officials`;
-    }, [tenant]);
+    // CORRECTED: Create a CollectionReference, NOT just a string path
+    const officialsCollectionRef = useMemoFirebase(() => {
+        if (!firestore || !tenantPath) return null;
+        const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+        return collection(firestore, `${safePath}/officials`);
+    }, [firestore, tenantPath]);
 
-    const { data: officials, isLoading, add, update, remove, set } = useCollection<Official>(officialsPath);
+    const { data: officials, isLoading, add, update, remove, set } = useCollection<Official>(officialsCollectionRef);
 
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -81,11 +82,16 @@ export const OfficialsList = () => {
     };
 
     const handleSyncCaptain = async () => {
-        if (!firestore || !officialsPath || !profile) return;
+        console.log("Sync Captain Triggered");
+        if (!firestore) { console.log("Missing Firestore"); return; }
+        if (!officialsCollectionRef) { console.log("Missing Officials Path"); return; }
+        if (!profile) { console.log("Missing Profile"); return; }
         
         // Logic: Check if "Punong Barangay" exists. If not, add using profile.captainProfile
         const captainName = profile.captainProfile?.name || profile.name; // Fallback
         const captainEmail = profile.captainProfile?.email || profile.email;
+        
+        console.log("Syncing Profile:", { captainName, captainEmail });
 
         if (!captainName) {
              toast({ variant: 'destructive', title: 'Missing Profile', description: 'No Captain profile found in settings.' });
@@ -120,12 +126,13 @@ export const OfficialsList = () => {
     };
 
     const handleLoadDefaults = async () => {
-        if (!firestore || !officialsPath) return;
+        if (!firestore || !officialsCollectionRef) return;
         setIsProcessing(true);
         try {
             const batch = writeBatch(firestore);
             sampleOfficials.forEach(official => {
-                const docRef = doc(collection(firestore, officialsPath));
+                // Use doc(collectionRef) to create a new doc reference within the collection
+                const docRef = doc(officialsCollectionRef);
                 batch.set(docRef, official);
             });
             await batch.commit();
@@ -139,12 +146,12 @@ export const OfficialsList = () => {
     };
     
     const handleClearAll = async () => {
-        if (!firestore || !officialsPath || !officials) return;
+        if (!firestore || !officialsCollectionRef || !officials) return;
         setIsProcessing(true);
         try {
             const batch = writeBatch(firestore);
             officials.forEach(official => {
-                const docRef = doc(collection(firestore, officialsPath), official.id);
+                const docRef = doc(officialsCollectionRef, official.id);
                 batch.delete(docRef);
             });
             await batch.commit();
