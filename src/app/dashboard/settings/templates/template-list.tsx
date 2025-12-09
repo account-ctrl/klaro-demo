@@ -43,7 +43,8 @@ import { useTenantContext } from '@/lib/hooks/useTenant';
 
 type DocumentTemplateWithId = DocumentTemplate & { id?: string };
 
-export default function TemplateList() {
+// CORRECTED: Changed from 'export default function' to 'export function'
+export function TemplateList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
