@@ -11,8 +11,9 @@ service cloud.firestore {
     }
 
     // Check if the user is a Tenant Admin for the specific path
+    // CORRECTED: Compare against the relative path string, matching what provisioning.ts stores
     function isTenantAdmin(province, city, barangay) {
-      let expectedPath = /databases/$(database)/documents/provinces/$(province)/cities/$(city)/barangays/$(barangay);
+      let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
       return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
     }
 
