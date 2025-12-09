@@ -32,6 +32,12 @@ import { useToast } from '@/hooks/use-toast';
 import pLimit from 'p-limit';
 import { HouseholdMembersSheet } from '../households/household-members-sheet';
 import { useTenant } from '@/providers/tenant-provider';
+import dynamic from 'next/dynamic';
+import { useTenantProfile } from '@/hooks/use-tenant-profile'; // Added import
+
+// Dynamically import MapAutoFocus
+const MapAutoFocus = dynamic(() => import('@/components/maps/MapAutoFocus').then(mod => mod.MapAutoFocus), { ssr: false });
+
 
 // --- Custom Map Components ---
 function BoxDrawer({ active, onBoxDrawn }: { active: boolean, onBoxDrawn: (bounds: L.LatLngBounds) => void }) {
@@ -104,6 +110,7 @@ export default function MappedHouseholdsPage() {
     const { toast } = useToast();
     const { tenantPath } = useTenant();
     const householdsRef = useBarangayRef('households');
+    const { profile } = useTenantProfile(); // Added useTenantProfile hook
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState<'All' | 'Verified' | 'Unverified'>('All');
@@ -338,6 +345,9 @@ export default function MappedHouseholdsPage() {
                 </div>
                 {mapMode === 'scan' && <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-blue-600 text-white text-xs px-4 py-2 rounded-full shadow-lg pointer-events-none">Draw a box to scan for buildings...</div>}
                 <MapContainer center={defaultCenter} zoom={16} style={{ height: '100%', width: '100%', zIndex: 0 }}>
+                    {/* AutoFocus Component - ADDED HERE */}
+                    <MapAutoFocus settings={profile} />
+
                     <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     <MapUpdater center={mapCenter} />
                     {filteredHouseholds.map(h => {
