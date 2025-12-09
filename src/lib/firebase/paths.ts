@@ -28,6 +28,10 @@ export const Paths = {
     getSettingsPath: (vaultPath: string) => {
         return `${vaultPath}/settings/general`;
     },
+    
+    getOfficialsPath: (vaultPath: string) => {
+        return `${vaultPath}/officials`;
+    },
 
     getDirectoryDocPath: (tenantSlug: string) => {
         return `tenant_directory/${tenantSlug}`;
