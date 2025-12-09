@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EditOfficial, DeleteOfficial } from "./officials-actions";
 import { Briefcase, Users, Calendar, CheckSquare } from "lucide-react";
+import { Timestamp } from "firebase/firestore";
 
 type OfficialCardProps = { 
     official: Official;
@@ -28,6 +29,27 @@ const getSystemRoleBadgeVariant = (role: string) => {
     default:
       return "outline";
   }
+};
+
+const formatDate = (dateValue: any): string => {
+    if (!dateValue) return 'N/A';
+    
+    // Handle Firestore Timestamp
+    if (typeof dateValue === 'object' && 'seconds' in dateValue) {
+        return new Date(dateValue.seconds * 1000).toLocaleDateString();
+    }
+    
+    // Handle Date object
+    if (dateValue instanceof Date) {
+        return dateValue.toLocaleDateString();
+    }
+
+    // Handle String (ISO)
+    if (typeof dateValue === 'string') {
+        return dateValue; // Assume it's already readable or ISO
+    }
+
+    return 'Invalid Date';
 };
 
 export function OfficialCard({ 
@@ -76,7 +98,7 @@ export function OfficialCard({
          <div className="flex items-start gap-2">
             <Calendar className="h-4 w-4 mt-1 text-muted-foreground" />
             <div>
-                <p className="text-sm font-semibold">{official.termStart || 'N/A'} to {official.termEnd || 'N/A'}</p>
+                <p className="text-sm font-semibold">{formatDate(official.termStart)} to {formatDate(official.termEnd)}</p>
                 <p className="text-xs text-muted-foreground">Term of Service</p>
             </div>
         </div>
