@@ -25,8 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import React, { useEffect } from 'react';
-// CORRECTED: Use Named Import
+import React, { useEffect, useState } from 'react';
 import { OfficialsList } from './officials-management/officials-list';
 import { Separator } from '@/components/ui/separator';
 import { PurokList } from './puroks/purok-list';
@@ -37,6 +36,13 @@ import { ProgramsList } from './programs/programs-list';
 import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import { updateDoc } from 'firebase/firestore';
 import { getRegionName } from '@/lib/data/psgc'; 
+import dynamic from 'next/dynamic';
+
+// Dynamically import TerritoryEditor to avoid SSR issues with Leaflet
+const TerritoryEditor = dynamic(() => import('@/components/settings/TerritoryEditor'), {
+    ssr: false,
+    loading: () => <div className="h-[400px] bg-slate-100 animate-pulse rounded-lg flex items-center justify-center text-muted-foreground">Loading Map Editor...</div>
+});
 
 const profileFormSchema = z.object({
   barangayName: z.string().min(1, "Barangay name is required"),
@@ -160,6 +166,23 @@ export default function SettingsPage() {
         });
     }
 
+    // New handler for Territory Save
+    const handleSaveTerritory = async (boundary: {lat: number, lng: number}[]) => {
+        if (!docRef) return;
+        try {
+            await updateDoc(docRef, {
+                'territory.boundary': boundary,
+                // Optionally calculate center from boundary
+                // 'territory.center': calculateCenter(boundary) 
+            });
+            // Success toast is handled inside TerritoryEditor or here, 
+            // but TerritoryEditor has its own try/catch block which calls this.
+        } catch (error) {
+            console.error("Failed to save territory:", error);
+            throw error; // Let TerritoryEditor handle the error UI
+        }
+    };
+
     function onFinancialSubmit(data: FinancialFormValues) {
         startFinancialTransition(() => {
             setTimeout(() => {
@@ -210,175 +233,191 @@ export default function SettingsPage() {
           <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
         <TabsContent value="profile">
-          <Card>
-            <CardHeader>
-              <CardTitle>Barangay Identity &amp; Letterhead</CardTitle>
-              <CardDescription>
-                This information populates the header and footer of all generated documents and reports.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...profileForm}>
-                <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-8">
-                  
-                  <div className="space-y-4">
-                     <h4 className="font-semibold text-primary">Official Details</h4>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField
-                          control={profileForm.control}
-                          name="barangayName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Barangay Name</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g., Barangay San Antonio" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={profileForm.control}
-                          name="city"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>City / Municipality</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g., Pasig City"/>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                         <FormField
-                          control={profileForm.control}
-                          name="province"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Province</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g., Metro Manila"/>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                         <FormField
-                          control={profileForm.control}
-                          name="region"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Region</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g., NCR"/>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <FormField
-                          control={profileForm.control}
-                          name="barangayHallAddress"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Barangay Hall Address</FormLabel>
-                              <FormControl>
-                                <Textarea {...field} placeholder="The specific street address used on official forms."/>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      <div className="grid gap-4 sm:grid-cols-2">
-                         <FormField
-                          control={profileForm.control}
-                          name="zipCode"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Zip Code</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                         <FormField
-                            control={profileForm.control}
-                            name="contactNumber"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Official Contact Number</FormLabel>
-                                <FormControl>
-                                    <Input {...field} placeholder="Hotline/Landline for public display"/>
-                                </FormControl>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                            />
-                      </div>
-                       <FormField
-                            control={profileForm.control}
-                            name="email"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Official Email Address</FormLabel>
-                                <FormControl>
-                                    <Input {...field} placeholder="Used for system notifications and public inquiries"/>
-                                </FormControl>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                            />
-                  </div>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                    <CardTitle>Barangay Identity &amp; Letterhead</CardTitle>
+                    <CardDescription>
+                        This information populates the header and footer of all generated documents and reports.
+                    </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    <Form {...profileForm}>
+                        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-8">
+                        
+                        <div className="space-y-4">
+                            <h4 className="font-semibold text-primary">Official Details</h4>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormField
+                                control={profileForm.control}
+                                name="barangayName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Barangay Name</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g., Barangay San Antonio" />
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                                <FormField
+                                control={profileForm.control}
+                                name="city"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>City / Municipality</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g., Pasig City"/>
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormField
+                                control={profileForm.control}
+                                name="province"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Province</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g., Metro Manila"/>
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                                <FormField
+                                control={profileForm.control}
+                                name="region"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Region</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g., NCR"/>
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                            </div>
+                            <FormField
+                                control={profileForm.control}
+                                name="barangayHallAddress"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Barangay Hall Address</FormLabel>
+                                    <FormControl>
+                                        <Textarea {...field} placeholder="The specific street address used on official forms."/>
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormField
+                                control={profileForm.control}
+                                name="zipCode"
+                                render={({ field }) => (
+                                    <FormItem>
+                                    <FormLabel>Zip Code</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                                <FormField
+                                    control={profileForm.control}
+                                    name="contactNumber"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Official Contact Number</FormLabel>
+                                        <FormControl>
+                                            <Input {...field} placeholder="Hotline/Landline for public display"/>
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                    />
+                            </div>
+                            <FormField
+                                    control={profileForm.control}
+                                    name="email"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Official Email Address</FormLabel>
+                                        <FormControl>
+                                            <Input {...field} placeholder="Used for system notifications and public inquiries"/>
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                    />
+                        </div>
 
-                  <Separator />
+                        <Separator />
 
-                  <div className="space-y-4">
-                     <h4 className="font-semibold text-primary">Branding &amp; Logos</h4>
-                     <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField
-                            control={profileForm.control}
-                            name="logoUrl"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Barangay Logo URL (or Base64)</FormLabel>
-                                <FormControl>
-                                    <Input {...field} placeholder="https://... or data:image/..." />
-                                </FormControl>
-                                <FormDescription>URL to a high-resolution PNG/JPG of the barangay logo.</FormDescription>
-                                <FormMessage />
-                                </FormItem>
-                            )}
+                        <div className="space-y-4">
+                            <h4 className="font-semibold text-primary">Branding &amp; Logos</h4>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <FormField
+                                    control={profileForm.control}
+                                    name="logoUrl"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Barangay Logo URL (or Base64)</FormLabel>
+                                        <FormControl>
+                                            <Input {...field} placeholder="https://... or data:image/..." />
+                                        </FormControl>
+                                        <FormDescription>URL to a high-resolution PNG/JPG of the barangay logo.</FormDescription>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={profileForm.control}
+                                    name="cityLogoUrl"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>City/Municipal Logo URL</FormLabel>
+                                        <FormControl>
+                                            <Input {...field} />
+                                        </FormControl>
+                                        <FormDescription>URL to a high-resolution PNG/JPG of the city/municipal logo.</FormDescription>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                        
+                        <Button type="submit" disabled={isProfilePending}>
+                            {isProfilePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Changes
+                        </Button>
+                        </form>
+                    </Form>
+                    </CardContent>
+                </Card>
+                
+                {/* Territory Editor Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Territory & Boundaries</CardTitle>
+                        <CardDescription>Define the physical jurisdiction of your barangay on the map. This is used for mapping households and incidents.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <TerritoryEditor 
+                            initialBoundary={profile?.territory?.boundary} 
+                            onSave={handleSaveTerritory} 
                         />
-                        <FormField
-                            control={profileForm.control}
-                            name="cityLogoUrl"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>City/Municipal Logo URL</FormLabel>
-                                <FormControl>
-                                    <Input {...field} />
-                                </FormControl>
-                                 <FormDescription>URL to a high-resolution PNG/JPG of the city/municipal logo.</FormDescription>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                     </div>
-                  </div>
-                  
-                  <Button type="submit" disabled={isProfilePending}>
-                    {isProfilePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Changes
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+                    </CardContent>
+                </Card>
+            </div>
         </TabsContent>
         <TabsContent value="puroks">
            <Card>
