@@ -33,7 +33,8 @@ import pLimit from 'p-limit';
 import { HouseholdMembersSheet } from '../households/household-members-sheet';
 import { useTenant } from '@/providers/tenant-provider';
 import dynamic from 'next/dynamic';
-import { useTenantProfile } from '@/hooks/use-tenant-profile'; // Added import
+import { useTenantProfile } from '@/hooks/use-tenant-profile'; 
+import { JurisdictionLayer } from '@/components/maps/JurisdictionLayer'; // Import JurisdictionLayer
 
 // Dynamically import MapAutoFocus
 const MapAutoFocus = dynamic(() => import('@/components/maps/MapAutoFocus').then(mod => mod.MapAutoFocus), { ssr: false });
@@ -347,6 +348,8 @@ export default function MappedHouseholdsPage() {
                 <MapContainer center={defaultCenter} zoom={16} style={{ height: '100%', width: '100%', zIndex: 0 }}>
                     {/* AutoFocus Component - ADDED HERE */}
                     <MapAutoFocus settings={profile} />
+                    {/* Jurisdiction Layer - ADDED HERE */}
+                    <JurisdictionLayer settings={profile} />
 
                     <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     <MapUpdater center={mapCenter} />
