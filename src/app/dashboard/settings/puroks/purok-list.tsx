@@ -44,7 +44,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useTenantContext } from '@/lib/hooks/useTenant';
 
-export default function PurokList() {
+// CORRECTED: Changed from 'export default function' to 'export function'
+export function PurokList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();

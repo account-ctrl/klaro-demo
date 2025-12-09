@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -10,9 +10,11 @@ import type { Program } from '@/lib/types';
 import { AddProgram, EditProgram, DeleteProgram, ProgramFormValues } from './program-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { FolderKanban, LayoutGrid, List, FilePen, Trash2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { samplePrograms } from './_data';
+import { RefreshCcw, Trash2, LayoutGrid, List } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Table,
   TableBody,
@@ -21,20 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useTenantContext } from '@/lib/hooks/useTenant';
 
-export default function ProgramsList() {
+type ProgramWithId = Program & { id?: string };
+
+// CORRECTED: Changed from 'export default function' to 'export function'
+export function ProgramsList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
@@ -51,55 +45,77 @@ export default function ProgramsList() {
     const handleAdd = (newProgram: ProgramFormValues) => {
         if (!programsCollectionRef || !user) return;
         
-        const payload = {
-            name: newProgram.name,
-            category: newProgram.category,
-            description: newProgram.description || '',
-            createdAt: serverTimestamp() 
-        };
-        
-        addDocumentNonBlocking(programsCollectionRef, payload)
+        addDocumentNonBlocking(programsCollectionRef, newProgram)
             .then(docRef => {
                 if (docRef) {
                     updateDocumentNonBlocking(docRef, { programId: docRef.id });
                 }
-            })
-            .catch(error => {
-                console.error("Error adding program:", error);
-                toast({ variant: "destructive", title: "Error", description: "Failed to create program." });
             });
 
         toast({ title: "Program Added", description: `${newProgram.name} has been created.`});
     };
 
-    const handleEdit = (updatedProgram: Program) => {
-        if (!firestore || !updatedProgram.programId || !tenantPath) return;
-        const docRef = doc(firestore, `${tenantPath}/programs/${updatedProgram.programId}`);
-        const { programId, ...dataToUpdate } = updatedProgram;
-        updateDocumentNonBlocking(docRef, { ...dataToUpdate })
-            .catch(error => {
-                console.error("Error updating program:", error);
-                toast({ variant: "destructive", title: "Error", description: "Failed to update program." });
-            });
-        toast({ title: "Program Updated", description: `The record for ${updatedProgram.name} has been updated.`});
+    const handleEdit = (updatedProgram: ProgramWithId) => {
+        const progId = updatedProgram.id || updatedProgram.programId;
+        if (!firestore || !progId || !tenantPath) return;
+        const docRef = doc(firestore, `${tenantPath}/programs/${progId}`);
+        const { programId, id, ...dataToUpdate } = updatedProgram;
+        updateDocumentNonBlocking(docRef, { ...dataToUpdate });
+        toast({ title: "Program Updated", description: `Record updated.`});
     };
 
     const handleDelete = (id: string) => {
         if (!firestore || !tenantPath) return;
         const docRef = doc(firestore, `${tenantPath}/programs/${id}`);
-        deleteDocumentNonBlocking(docRef)
-            .catch(error => {
-                console.error("Error deleting program:", error);
-                toast({ variant: "destructive", title: "Error", description: "Failed to delete program." });
-            });
-        toast({ variant: "destructive", title: "Program Deleted", description: "The program has been permanently deleted." });
+        deleteDocumentNonBlocking(docRef);
+        toast({ variant: "destructive", title: "Program Deleted", description: "The program has been removed." });
     };
+
+    const handleLoadDefaults = async () => {
+        if (!firestore || !tenantPath) return;
+
+        try {
+            const batch = writeBatch(firestore);
+            samplePrograms.forEach((prog) => {
+                const newDocRef = doc(collection(firestore, `${tenantPath}/programs`));
+                batch.set(newDocRef, {
+                    ...prog,
+                    programId: newDocRef.id,
+                });
+            });
+            await batch.commit();
+            toast({ title: "Sample Programs Loaded", description: "Default PPAs have been added." });
+        } catch (error) {
+            console.error("Error loading defaults:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to load sample data." });
+        }
+    };
+
+    const handleClearAll = async () => {
+        if (!firestore || !programs || !tenantPath) return;
+        
+        try {
+            const batch = writeBatch(firestore);
+            programs.forEach((prog) => {
+                const progId = (prog as ProgramWithId).id || prog.programId;
+                if (progId) {
+                    const docRef = doc(firestore, `${tenantPath}/programs/${progId}`);
+                    batch.delete(docRef);
+                }
+            });
+            await batch.commit();
+            toast({ variant: "destructive", title: "Data Cleared", description: "All programs have been removed." });
+        } catch (error) {
+             console.error("Error clearing data:", error);
+             toast({ variant: "destructive", title: "Error", description: "Failed to clear data." });
+        }
+    }
     
     if (isLoading) {
         return (
              <div className="space-y-4">
                 <div className="flex justify-end">
-                    <Skeleton className="h-10 w-32" />
+                    <Skeleton className="h-10 w-36" />
                 </div>
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(3)].map((_, i) => (
@@ -114,61 +130,50 @@ export default function ProgramsList() {
     <div className="space-y-6">
         <div className="flex justify-between items-center">
              <div className="flex items-center bg-muted p-1 rounded-lg border">
-                <Button 
-                    variant={viewMode === 'card' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    onClick={() => setViewMode('card')}
-                    className="px-3"
-                >
-                    <LayoutGrid className="h-4 w-4 mr-2" /> Card
-                </Button>
-                <Button 
-                    variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    onClick={() => setViewMode('list')}
-                    className="px-3"
-                >
-                    <List className="h-4 w-4 mr-2" /> List
-                </Button>
+                <ToggleGroup type="single" value={viewMode} onValueChange={(value: 'card' | 'list') => value && setViewMode(value)} size="sm">
+                    <ToggleGroupItem value="card" aria-label="Card view"><LayoutGrid className="h-4 w-4" /></ToggleGroupItem>
+                    <ToggleGroupItem value="list" aria-label="List view"><List className="h-4 w-4" /></ToggleGroupItem>
+                </ToggleGroup>
             </div>
 
             <div className="flex gap-2">
+                <Button variant="outline" onClick={handleLoadDefaults}>
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                    Load Samples
+                </Button>
+                <Button variant="destructive" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={handleClearAll} disabled={!programs || programs.length === 0}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear All
+                </Button>
                 <AddProgram onAdd={handleAdd} />
             </div>
         </div>
         
         {!programs || programs.length === 0 ? (
-             <div className="text-muted-foreground col-span-full text-center py-10">
-                No programs found. Click "New Program" to get started.
+             <div className="text-muted-foreground col-span-full text-center py-10 border border-dashed rounded-lg">
+                No programs listed. Start by adding a PPA or loading samples.
             </div>
         ) : (
             viewMode === 'card' ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {programs.map((program) => (
-                        <Card key={program.programId} className="flex flex-col">
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <CardTitle className="flex items-center gap-2">
-                                        <FolderKanban className="h-5 w-5 text-primary"/>
-                                        {program.name}
-                                    </CardTitle>
-                                    <Badge variant="secondary" className="mt-1">{program.category}</Badge>
-                                </div>
-                                <CardDescription className="line-clamp-3">{program.description || 'No description provided.'}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-grow">
-                                <p className="text-sm text-muted-foreground">ID: <span className="font-mono text-xs">{program.programId}</span></p>
-                            </CardContent>
-                            <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-auto">
-                                <div className="flex w-full gap-2">
-                                    <div className="flex-1">
-                                        <EditProgram record={program} onEdit={handleEdit} />
+                    {programs.map((prog) => {
+                        const progWithId = prog as ProgramWithId;
+                        return (
+                            <Card key={prog.programId}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <CardTitle className="text-lg">{prog.name}</CardTitle>
+                                        <Badge>{prog.category}</Badge>
                                     </div>
-                                    <DeleteProgram recordId={program.programId} onDelete={handleDelete} />
-                                </div>
-                            </CardFooter>
-                        </Card>
-                    ))}
+                                    <CardDescription>{prog.description}</CardDescription>
+                                </CardHeader>
+                                <CardFooter className="flex gap-2 justify-end">
+                                    <EditProgram record={progWithId} onEdit={handleEdit} />
+                                    <DeleteProgram recordId={progWithId.id || progWithId.programId} onDelete={handleDelete} />
+                                </CardFooter>
+                            </Card>
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="border rounded-md">
@@ -182,48 +187,22 @@ export default function ProgramsList() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {programs.map((program) => (
-                                <TableRow key={program.programId}>
-                                    <TableCell className="font-medium flex items-center gap-2">
-                                        <FolderKanban className="h-4 w-4 text-primary" />
-                                        {program.name}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary">{program.category}</Badge>
-                                    </TableCell>
-                                    <TableCell className="max-w-xs truncate">{program.description}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-2">
-                                            {/* Note: EditProgram now renders a trigger button internally */}
-                                            <EditProgram 
-                                                record={program} 
-                                                onEdit={handleEdit} 
-                                            />
-                                            <AlertDialog>
-                                              <AlertDialogTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                              </AlertDialogTrigger>
-                                              <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                  <AlertDialogTitle>Delete Program?</AlertDialogTitle>
-                                                  <AlertDialogDescription>
-                                                    This action cannot be undone. This will permanently delete {program.name}.
-                                                  </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                  <AlertDialogAction onClick={() => handleDelete(program.programId)} className="bg-destructive hover:bg-destructive/90">
-                                                    Delete
-                                                  </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                              </AlertDialogContent>
-                                            </AlertDialog>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {programs.map((prog) => {
+                                const progWithId = prog as ProgramWithId;
+                                return (
+                                    <TableRow key={prog.programId}>
+                                        <TableCell className="font-medium">{prog.name}</TableCell>
+                                        <TableCell><Badge variant="outline">{prog.category}</Badge></TableCell>
+                                        <TableCell className="max-w-xs truncate">{prog.description}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <EditProgram record={progWithId} onEdit={handleEdit} />
+                                                <DeleteProgram recordId={progWithId.id || progWithId.programId} onDelete={handleDelete} />
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>
