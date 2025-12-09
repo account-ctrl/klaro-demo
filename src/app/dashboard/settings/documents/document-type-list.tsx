@@ -17,7 +17,8 @@ import { useTenantContext } from '@/lib/hooks/useTenant';
 
 type CertificateTypeWithId = CertificateType & { id?: string };
 
-export default function DocumentTypeList() {
+// CORRECTED: Changed from 'export default function' to 'export function'
+export function DocumentTypeList() {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
