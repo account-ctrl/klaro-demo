@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -27,17 +26,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import React, { useEffect } from 'react';
-import OfficialsList from './officials-management/officials-list';
+// CORRECTED: Use Named Import
+import { OfficialsList } from './officials-management/officials-list';
 import { Separator } from '@/components/ui/separator';
-import PurokList from './puroks/purok-list';
-import DocumentTypeList from './documents/document-type-list';
-import TemplateList from './templates/template-list';
+import { PurokList } from './puroks/purok-list';
+import { DocumentTypeList } from './documents/document-type-list';
+import { TemplateList } from './templates/template-list';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import ProgramsList from './programs/programs-list';
+import { ProgramsList } from './programs/programs-list';
 import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import { updateDoc } from 'firebase/firestore';
-import { getRegionName } from '@/lib/data/psgc'; // Use Region Utility
-import TerritoryEditor from '@/components/settings/TerritoryEditor';
+import { getRegionName } from '@/lib/data/psgc'; 
 
 const profileFormSchema = z.object({
   barangayName: z.string().min(1, "Barangay name is required"),
@@ -48,7 +47,7 @@ const profileFormSchema = z.object({
   barangayHallAddress: z.string().optional(),
   contactNumber: z.string().optional(),
   email: z.string().email("Invalid email address").optional(),
-  logoUrl: z.string().optional(), // simplified for now (base64 or url)
+  logoUrl: z.string().optional(), 
   cityLogoUrl: z.string().optional(),
 });
 
@@ -108,22 +107,13 @@ export default function SettingsPage() {
         },
     });
 
-    // Hydrate forms when profile loads
     useEffect(() => {
         if (profile) {
-            // NOTE: The provisioning API logic puts data in `profile.settings` or `profile` root?
-            // The `api/admin/provision` puts basic data in `vault/settings/general`
-            // Let's ensure we map it correctly.
-            // Some old logic might put data in root of vault.
-            
-            // If Region is missing in settings, try to infer it if we have province code logic,
-            // or rely on what was saved during onboarding.
-            
             profileForm.reset({
                 barangayName: profile.barangayName || profile.name || "",
                 city: profile.location?.city || profile.city || "",
                 province: profile.location?.province || profile.province || "",
-                region: profile.location?.region || profile.region || "", // Ensure this maps
+                region: profile.location?.region || profile.region || "", 
                 zipCode: profile.location?.zipCode || profile.zipCode || "",
                 barangayHallAddress: profile.barangayHallAddress || "",
                 contactNumber: profile.contactNumber || "",
@@ -146,19 +136,16 @@ export default function SettingsPage() {
         if (!docRef) return;
         startProfileTransition(async () => {
             try {
-                // Update both root metadata and structured location for compatibility
                 await updateDoc(docRef, {
                     barangayName: data.barangayName,
                     'location.city': data.city,
                     'location.province': data.province,
                     'location.region': data.region,
                     'location.zipCode': data.zipCode,
-                    // Legacy/Root fallbacks
                     name: data.barangayName,
                     city: data.city,
                     province: data.province,
                     region: data.region,
-                    // Other fields
                     barangayHallAddress: data.barangayHallAddress,
                     contactNumber: data.contactNumber,
                     email: data.email,
@@ -186,7 +173,6 @@ export default function SettingsPage() {
         if (!docRef) return;
         startSystemTransition(async () => {
             try {
-                // Merge with existing settings
                 await updateDoc(docRef, {
                     'settings.paperSize': data.paperSize,
                     'settings.pickupSmsTemplate': data.pickupSmsTemplate,
@@ -198,20 +184,6 @@ export default function SettingsPage() {
                 toast({ title: "Error", description: "Failed to update system settings.", variant: "destructive" });
             }
         });
-    }
-    
-    async function onTerritorySave(boundary: {lat: number, lng: number}[]) {
-        if (!docRef) return;
-        
-        try {
-            await updateDoc(docRef, {
-                'territory.boundary': boundary
-            });
-            toast({ title: "Boundary Saved", description: "Your jurisdiction boundary has been updated." });
-        } catch (error) {
-            console.error(error);
-            toast({ title: "Error", description: "Failed to save boundary.", variant: "destructive" });
-        }
     }
 
   if (isLoading) {
@@ -228,10 +200,9 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="profile">Barangay Profile</TabsTrigger>
           <TabsTrigger value="puroks">Puroks</TabsTrigger>
-          <TabsTrigger value="territory">Territory</TabsTrigger>
           <TabsTrigger value="officials">Officials &amp; Staff</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="programs">Programs</TabsTrigger>
@@ -419,20 +390,6 @@ export default function SettingsPage() {
                 <PurokList />
             </CardContent>
            </Card>
-        </TabsContent>
-        <TabsContent value="territory">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Territorial Jurisdiction</CardTitle>
-                    <CardDescription>Define the official map boundary of your barangay.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <TerritoryEditor 
-                        initialBoundary={profile?.territory?.boundary} 
-                        onSave={onTerritorySave}
-                    />
-                </CardContent>
-            </Card>
         </TabsContent>
         <TabsContent value="officials">
            <Card>
