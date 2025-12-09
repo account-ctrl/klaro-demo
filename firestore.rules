@@ -11,10 +11,15 @@ service cloud.firestore {
     }
 
     // Check if the user is a Tenant Admin for the specific path
-    // CORRECTED: Compare against the relative path string, matching what provisioning.ts stores
+    // Matches relative path stored in token: "provinces/..."
     function isTenantAdmin(province, city, barangay) {
       let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
       return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
+    }
+    
+    // Check if user is an admin of the tenant specified in the document
+    function isTenantAdminOfDoc(docData) {
+        return request.auth.token.role == 'admin' && request.auth.token.tenantId == docData.tenantId;
     }
 
     // --- GLOBAL RULES ---
@@ -30,9 +35,23 @@ service cloud.firestore {
       allow write: if false; // Only Admin SDK can write
     }
     
-    // 3. Global User Profiles: Users can read their own profile
+    // 3. Global User Profiles
     match /users/{userId} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
+        // Allow read if:
+        // - User is reading their own profile
+        // - Super Admin (covered globally)
+        // - Tenant Admin reading a user that belongs to their tenant
+        allow read: if request.auth != null && (
+            request.auth.uid == userId || 
+            (request.auth.token.role == 'admin' && resource.data.tenantId == request.auth.token.tenantId)
+        );
+        
+        // Allow list queries if filtering by tenantId matching the admin's tenantId
+        allow list: if request.auth != null && 
+                     request.auth.token.role == 'admin' && 
+                     request.query.limit <= 100 &&
+                     resource.data.tenantId == request.auth.token.tenantId;
+
         allow write: if isSuperAdmin(); // Only Super Admins manage roles via API
     }
 
