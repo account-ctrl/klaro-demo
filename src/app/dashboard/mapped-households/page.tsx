@@ -139,8 +139,10 @@ export default function MappedHouseholdsPage() {
 
     const selectedHousehold = useMemo(() => households?.find(h => h.householdId === selectedHouseholdId), [households, selectedHouseholdId]);
 
+    // Use a stable default center or just rely on MapAutoFocus for the initial view.
     const defaultCenter: [number, number] = [14.6760, 121.0437];
-    const mapCenter = selectedHousehold?.latitude && selectedHousehold?.longitude ? [selectedHousehold.latitude, selectedHousehold.longitude] as [number, number] : defaultCenter;
+    // Only set mapCenter if a household is explicitly selected. Otherwise null so MapUpdater doesn't interfere.
+    const mapCenter = selectedHousehold?.latitude && selectedHousehold?.longitude ? [selectedHousehold.latitude, selectedHousehold.longitude] as [number, number] : null;
 
     const handleBoxDrawn = (bounds: L.LatLngBounds) => { setScanBounds(bounds); setShowScanModal(true); setMapMode('view'); };
 
@@ -173,7 +175,7 @@ export default function MappedHouseholdsPage() {
         if (!householdsRef || scannedPoints.length === 0) return;
         setIsSavingScan(true);
         try {
-            const batch = writeBatch(useFirestore());
+            const batch = writeBatch(firestore);
             let count = 0;
             scannedPoints.forEach(point => {
                  const isDuplicate = households?.some(h => Math.abs(h.latitude - point.lat) < 0.0001 && Math.abs(h.longitude - point.lng) < 0.0001);
