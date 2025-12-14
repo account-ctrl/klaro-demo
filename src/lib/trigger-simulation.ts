@@ -47,7 +47,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { EmergencyAlert } from '@/lib/types';
 import { getAuth } from 'firebase/auth';
 
-export const simulateEmergency = async (tenantPath: string) => {
+export const simulateEmergency = async (tenantPath: string, location?: { lat: number; lng: number }) => {
   if (!tenantPath) {
     console.error("Cannot simulate emergency: No tenant path provided.");
     return false;
@@ -57,19 +57,21 @@ export const simulateEmergency = async (tenantPath: string) => {
   const auth = getAuth();
   const user = auth.currentUser;
 
-  // Random coordinates near a central point (approx. Philippines town center)
-  // Base: 14.5995, 120.9842 (Manila)
+  // Default to random coordinates near Manila if no location provided
   const baseLat = 14.5995;
   const baseLng = 120.9842;
   const latOffset = (Math.random() - 0.5) * 0.01;
   const lngOffset = (Math.random() - 0.5) * 0.01;
 
+  const finalLat = location ? location.lat : baseLat + latOffset;
+  const finalLng = location ? location.lng : baseLng + lngOffset;
+
   const alertData: Omit<EmergencyAlert, 'id' | 'alertId'> & { alertId: string } = {
     alertId: `sim-${Date.now()}`,
     residentId: user ? user.uid : `res-${Math.floor(Math.random() * 1000)}`,
     residentName: user?.displayName || `Resident ${Math.floor(Math.random() * 1000)}`,
-    latitude: baseLat + latOffset,
-    longitude: baseLng + lngOffset,
+    latitude: finalLat,
+    longitude: finalLng,
     status: 'New',
     timestamp: serverTimestamp() as any, // Cast for client-side timestamp
     type: 'Medical', // or Fire, Crime, etc.
@@ -84,7 +86,7 @@ export const simulateEmergency = async (tenantPath: string) => {
     const alertsRef = collection(firestore, `${safePath}/emergency_alerts`);
     
     await addDoc(alertsRef, alertData);
-    console.log(`Simulated emergency alert created at ${safePath}/emergency_alerts`);
+    console.log(`Simulated emergency alert created at ${safePath}/emergency_alerts with lat: ${finalLat}, lng: ${finalLng}`);
     return true;
   } catch (error) {
     console.error("Error simulating emergency:", error);
