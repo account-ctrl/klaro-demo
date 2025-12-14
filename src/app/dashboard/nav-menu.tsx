@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Suspense } from 'react';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -65,7 +66,7 @@ const ListItem = React.forwardRef<
 ListItem.displayName = "ListItem"
 
 
-export function NavMenu({ role }: { role: Role }) {
+function NavMenuContent({ role }: { role: Role }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -181,5 +182,13 @@ export function NavMenu({ role }: { role: Role }) {
         </NavigationMenuItem>
       </NavigationMenuList>
     </NavigationMenu>
+  );
+}
+
+export function NavMenu({ role }: { role: Role }) {
+  return (
+    <Suspense fallback={<div>Loading Navigation...</div>}>
+      <NavMenuContent role={role} />
+    </Suspense>
   );
 }
