@@ -45,11 +45,18 @@ export async function updateSystemStats(updates: { population?: number, househol
 
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { EmergencyAlert } from '@/lib/types';
+import { getAuth } from 'firebase/auth';
 
-export const simulateEmergency = async () => {
-  const { firestore, auth } = initializeFirebase();
-  const tenantId = 'barangay-hall'; // Hardcoded for demo
+export const simulateEmergency = async (tenantPath: string) => {
+  if (!tenantPath) {
+    console.error("Cannot simulate emergency: No tenant path provided.");
+    return false;
+  }
   
+  const { firestore } = initializeFirebase();
+  const auth = getAuth();
+  const user = auth.currentUser;
+
   // Random coordinates near a central point (approx. Philippines town center)
   // Base: 14.5995, 120.9842 (Manila)
   const baseLat = 14.5995;
@@ -59,8 +66,8 @@ export const simulateEmergency = async () => {
 
   const alertData: Omit<EmergencyAlert, 'id' | 'alertId'> & { alertId: string } = {
     alertId: `sim-${Date.now()}`,
-    residentId: `res-${Math.floor(Math.random() * 1000)}`,
-    residentName: `Resident ${Math.floor(Math.random() * 1000)}`,
+    residentId: user ? user.uid : `res-${Math.floor(Math.random() * 1000)}`,
+    residentName: user?.displayName || `Resident ${Math.floor(Math.random() * 1000)}`,
     latitude: baseLat + latOffset,
     longitude: baseLng + lngOffset,
     status: 'New',
@@ -71,9 +78,13 @@ export const simulateEmergency = async () => {
   };
 
   try {
-    const alertsRef = collection(firestore, `tenants/${tenantId}/emergency_alerts`);
+    // Construct the path: tenantPath is something like "provinces/cebu/cities/cebu-city/barangays/luz"
+    // So we append "/emergency_alerts"
+    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+    const alertsRef = collection(firestore, `${safePath}/emergency_alerts`);
+    
     await addDoc(alertsRef, alertData);
-    console.log("Simulated emergency alert created");
+    console.log(`Simulated emergency alert created at ${safePath}/emergency_alerts`);
     return true;
   } catch (error) {
     console.error("Error simulating emergency:", error);
