@@ -42,3 +42,41 @@ export async function updateSystemStats(updates: { population?: number, househol
         console.error("Failed to update system stats:", e);
     }
 }
+
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { EmergencyAlert } from '@/lib/types';
+
+export const simulateEmergency = async () => {
+  const { firestore, auth } = initializeFirebase();
+  const tenantId = 'barangay-hall'; // Hardcoded for demo
+  
+  // Random coordinates near a central point (approx. Philippines town center)
+  // Base: 14.5995, 120.9842 (Manila)
+  const baseLat = 14.5995;
+  const baseLng = 120.9842;
+  const latOffset = (Math.random() - 0.5) * 0.01;
+  const lngOffset = (Math.random() - 0.5) * 0.01;
+
+  const alertData: Omit<EmergencyAlert, 'id' | 'alertId'> & { alertId: string } = {
+    alertId: `sim-${Date.now()}`,
+    residentId: `res-${Math.floor(Math.random() * 1000)}`,
+    residentName: `Resident ${Math.floor(Math.random() * 1000)}`,
+    latitude: baseLat + latOffset,
+    longitude: baseLng + lngOffset,
+    status: 'New',
+    timestamp: serverTimestamp() as any, // Cast for client-side timestamp
+    type: 'Medical', // or Fire, Crime, etc.
+    message: 'This is a simulated emergency alert.',
+    contactNumber: '09123456789',
+  };
+
+  try {
+    const alertsRef = collection(firestore, `tenants/${tenantId}/emergency_alerts`);
+    await addDoc(alertsRef, alertData);
+    console.log("Simulated emergency alert created");
+    return true;
+  } catch (error) {
+    console.error("Error simulating emergency:", error);
+    return false;
+  }
+};
