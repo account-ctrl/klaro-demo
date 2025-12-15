@@ -11,15 +11,15 @@ service cloud.firestore {
     }
 
     // Check if the user is a Tenant Admin for the specific path
-    // Matches relative path stored in token: "provinces/..."
     function isTenantAdmin(province, city, barangay) {
       let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
       return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
     }
     
-    // Check if user is an admin of the tenant specified in the document
-    function isTenantAdminOfDoc(docData) {
-        return request.auth.token.role == 'admin' && request.auth.token.tenantId == docData.tenantId;
+    // Check if the user belongs to the tenant (regardless of role)
+    function isTenantUser(province, city, barangay) {
+      let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
+      return request.auth.token.tenantPath == expectedPath;
     }
 
     // --- GLOBAL RULES ---
@@ -29,43 +29,48 @@ service cloud.firestore {
       allow read, write: if isSuperAdmin();
     }
 
-    // 2. Tenant Directory: Public Read (for finding login paths), No Write
+    // 2. Tenant Directory
     match /tenant_directory/{tenantSlug} {
       allow read: if request.auth != null;
-      allow write: if false; // Only Admin SDK can write
+      allow write: if false; 
     }
     
     // 3. Global User Profiles
     match /users/{userId} {
-        // Allow read if:
-        // - User is reading their own profile
-        // - Super Admin (covered globally)
-        // - Tenant Admin reading a user that belongs to their tenant
         allow read: if request.auth != null && (
             request.auth.uid == userId || 
             (request.auth.token.role == 'admin' && resource.data.tenantId == request.auth.token.tenantId)
         );
         
-        // Allow list queries if filtering by tenantId matching the admin's tenantId
         allow list: if request.auth != null && 
                      request.auth.token.role == 'admin' && 
                      request.query.limit <= 100 &&
                      resource.data.tenantId == request.auth.token.tenantId;
 
-        allow write: if isSuperAdmin(); // Only Super Admins manage roles via API
+        allow write: if isSuperAdmin(); 
     }
 
     // --- THE VAULT (Strict Isolation) ---
 
-    // Match the deep path: /provinces/{p}/cities/{c}/barangays/{b}
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
-      // The Barangay Root Document (Read-Only metadata for the tenant admin, managed by API)
-      allow read: if isTenantAdmin(province, city, barangay);
+      // The Barangay Root Document 
+      allow read: if isTenantUser(province, city, barangay); // Allow all tenant users to read the root config
       allow write: if false; 
 
-      // Match ANY document at ANY depth inside the barangay
-      // Only Super Admins (covered by global rule) and Tenant Admins can write
+      // Specific Collections with broader access
+      
+      // Emergency Alerts: Allow any tenant user (e.g. Responders) to read/write
+      match /emergency_alerts/{alertId} {
+        allow read, write: if isTenantUser(province, city, barangay);
+      }
+
+      // Responder Locations: Allow any tenant user to read/write
+      match /responder_locations/{userId} {
+        allow read, write: if isTenantUser(province, city, barangay);
+      }
+
+      // Default: Only Admins
       match /{document=**} {
         allow read, write: if isTenantAdmin(province, city, barangay);
       }
