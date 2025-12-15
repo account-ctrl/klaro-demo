@@ -27,32 +27,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useEmergencyAlerts, useResidents, useBarangayRef, BARANGAY_ID, useResponderLocations, useHouseholds } from '@/hooks/use-barangay-data';
+import { useEmergencyAlerts, useResidents, useBarangayRef, useResponderLocations, useHouseholds } from '@/hooks/use-barangay-data';
 import { collection } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
 import { Siren, MapPin, User as UserIcon, CheckCircle, ShieldCheck, Phone, Trash2, MoreHorizontal, MessageSquare, Users, Truck, Radio, ArrowLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
-import { useTenantProfile } from "@/hooks/use-tenant-profile"; // Import profile hook
+import { useTenantProfile } from "@/hooks/use-tenant-profile";
+import { useTenant } from '@/providers/tenant-provider';
+import { simulateEmergency } from '@/lib/trigger-simulation';
 
 // Import new components
 import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
 import { WeatherHeader } from "./components/weather-header";
 import { MapControls } from "./components/map-controls";
 import { HouseholdSearch } from "./components/household-search";
-import { MapHousehold } from "@/components/emergency-map"; // Import the type
+import { MapHousehold } from "@/components/emergency-map";
 
-// Dynamically import the Map component to avoid SSR issues with Leaflet
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
     loading: () => <div className="h-full w-full flex items-center justify-center bg-zinc-900"><p className="text-zinc-500 font-medium animate-pulse">Initializing Map System...</p></div>
 });
 
-// Utility type to ensure we can access the doc ID
 type EmergencyAlertWithId = EmergencyAlert & { id?: string };
 
-// Roles that are considered "Responders"
 const RESPONDER_ROLES = [
     'Barangay Tanod (BPSO - Barangay Public Safety Officer)',
     'Chief Tanod (Executive Officer)',
@@ -115,12 +114,10 @@ function DispatchResponderDialog({ onDispatch, children }: { onDispatch: (respon
     const [selectedResponder, setSelectedResponder] = useState<string>('');
     const [vehicle, setVehicle] = useState<string>('Patrol Vehicle 1');
     
-    // Fetch users to list as responders
     const firestore = useFirestore();
     const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
     const { data: users } = useCollection<User>(usersCollection);
 
-    // Filter for potential responders:
     const activeResponders = users?.filter(u => {
         const isResponderRole = RESPONDER_ROLES.includes(u.position);
         const isSystemResponder = u.systemRole === 'Responder';
@@ -212,7 +209,6 @@ const getAge = (dateString: string) => {
 }
 
 const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onResolve, onDelete, isOpen, onClose }: { alert: EmergencyAlertWithId; resident: Resident | undefined, onAcknowledge: (id: string) => void; onDispatch: (alertId: string, responderId: string, vehicle: string) => void; onResolve: (id: string, notes: string) => void; onDelete: (id: string) => void; isOpen: boolean; onClose: () => void; }) => {
-    // ... (same as before)
     const timeAgo = useMemo(() => {
         if (!alert.timestamp) return '...';
         return formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true });
@@ -266,7 +262,6 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                 <Separator className="bg-zinc-800" />
                 <ScrollArea className="flex-grow pr-4">
                     <div className="space-y-6 py-4">
-                        {/* Responder Info (if dispatched) */}
                         {alert.responderDetails && (
                             <>
                             <div className="bg-blue-900/20 p-3 rounded-md border border-blue-800">
@@ -294,7 +289,6 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                             </>
                         )}
 
-                        {/* Section A: Resident Profile */}
                         <div className="space-y-3">
                             <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><UserIcon className="h-4 w-4 text-zinc-400" /> Applicant Information</h4>
                             <div className="flex items-center gap-3 pl-6">
@@ -321,7 +315,6 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                         
                         <Separator className="bg-zinc-800" />
                         
-                        {/* Section A.2: Message / Description */}
                         {alert.message && (
                             <div className="space-y-2">
                                 <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-zinc-400" /> Message from Resident</h4>
@@ -333,7 +326,6 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
 
                         <Separator className="bg-zinc-800" />
 
-                        {/* Section B: Location */}
                         <div className="space-y-3">
                             <h4 className="font-semibold text-zinc-200 flex items-center gap-2"><MapPin className="h-4 w-4 text-zinc-400" /> Precise Location</h4>
                             <div className="flex items-start gap-3 pl-6">
@@ -348,7 +340,6 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
 
                         <Separator className="bg-zinc-800" />
                         
-                        {/* Section C: Household Members & Tabular View */}
                         <div className="space-y-3">
                              <div className="w-full">
                                 <h4 className="font-semibold text-zinc-200 flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-zinc-400" /> Household & Related Members</h4>
@@ -416,21 +407,19 @@ export function EmergencyDashboard() {
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // State for manual search selection
   const [searchedLocation, setSearchedLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [showStructures, setShowStructures] = useState(true); // Default to true
+  const [showStructures, setShowStructures] = useState(true);
 
-  // Use hooks
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
   const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
-  const { data: households, isLoading: isLoadingHouseholds } = useHouseholds(); // Fetch Households
-  const { profile } = useTenantProfile(); // Fetch tenant profile for map settings
+  const { data: households, isLoading: isLoadingHouseholds } = useHouseholds();
+  const { profile } = useTenantProfile();
+  const { tenantPath } = useTenant();
 
   const usersCollectionRef = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
   const { data: users } = useCollection<User>(usersCollectionRef);
   
-  // Collection ref for writing
   const alertsCollectionRef = useBarangayRef('emergency_alerts');
   
   const alerts = useMemo(() => {
@@ -450,7 +439,6 @@ export function EmergencyDashboard() {
       return residents.find(r => r.residentId === selectedAlert.residentId);
   }, [selectedAlert, residents])
 
-  // Transform households for map
   const mapHouseholds: MapHousehold[] = useMemo(() => {
       if (!households) return [];
       return households.map(h => {
@@ -482,13 +470,11 @@ export function EmergencyDashboard() {
   const handleAlertSelect = (id: string) => {
       setSelectedAlertId(id);
       setIsModalOpen(true);
-      // Reset search if an alert is selected so map focuses on alert
       setSearchedLocation(null);
   };
 
   const handleSearchSelect = (location: { lat: number; lng: number; label: string; type: 'resident' | 'household' }) => {
       setSearchedLocation({ lat: location.lat, lng: location.lng });
-      // Optionally show a toast or some feedback
       toast({
           title: "Location Found",
           description: `Focusing map on ${location.label}`,
@@ -500,24 +486,119 @@ export function EmergencyDashboard() {
       setSelectedAlertId(null);
   };
 
-  const handleSimulateSOS = () => {
-      // ... (existing logic)
+  const handleSimulateSOS = async () => {
+    if (!tenantPath) {
+        toast({ title: "Error", description: "Tenant context not found.", variant: "destructive" });
+        return;
+    }
+    
+    setIsSimulating(true);
+    const success = await simulateEmergency(tenantPath);
+    setIsSimulating(false);
+
+    if (success) {
+        toast({
+            title: "Simulation Triggered",
+            description: "A mock emergency alert has been broadcasted.",
+        });
+    } else {
+        toast({
+            title: "Simulation Failed",
+            description: "Could not create mock alert.",
+            variant: "destructive"
+        });
+    }
   };
   
-  const handleAcknowledge = (alertId: string) => {
-    // ... (existing logic)
+  const handleAcknowledge = async (alertId: string) => {
+    if (!alertsCollectionRef || !user) return;
+    
+    // We need to find the document ID from the alert ID if they are different,
+    // or assume we query by alertId.
+    // However, the `EmergencyAlertWithId` type implies we have `id` (the doc ID) if we fetched it properly.
+    // The `useBarangayCollection` hook uses `useCollection` which usually attaches `id`.
+    
+    const alert = alerts.find(a => a.alertId === alertId) as EmergencyAlertWithId | undefined;
+    if (!alert || !alert.id) {
+        toast({ title: "Error", description: "Alert document not found.", variant: "destructive" });
+        return;
+    }
+
+    try {
+        await updateDocumentNonBlocking(alertsCollectionRef, alert.id, {
+            status: 'Acknowledged',
+            acknowledgedByUserId: user.userId
+        });
+        toast({ title: "Acknowledged", description: "Alert status updated." });
+    } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to acknowledge alert.", variant: "destructive" });
+    }
   }
 
-  const handleDispatch = (alertId: string, responderId: string, vehicle: string) => {
-      // ... (existing logic)
+  const handleDispatch = async (alertId: string, responderId: string, vehicle: string) => {
+    if (!alertsCollectionRef || !users) return;
+
+    const alert = alerts.find(a => a.alertId === alertId) as EmergencyAlertWithId | undefined;
+    const responder = users.find(u => u.userId === responderId);
+
+    if (!alert || !alert.id || !responder) {
+        toast({ title: "Error", description: "Alert or responder not found.", variant: "destructive" });
+        return;
+    }
+
+    try {
+        await updateDocumentNonBlocking(alertsCollectionRef, alert.id, {
+            status: 'Dispatched',
+            responder_team_id: responderId,
+            responderDetails: {
+                userId: responder.userId,
+                name: responder.fullName,
+                contactNumber: responder.email || 'N/A', // Using email as placeholder if contact number missing in User type
+                vehicleInfo: vehicle
+            }
+        });
+        toast({ title: "Dispatched", description: `${responder.fullName} dispatched.` });
+    } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "Failed to dispatch.", variant: "destructive" });
+    }
   }
 
-  const handleResolve = (alertId: string, notes: string) => {
-      // ... (existing logic)
+  const handleResolve = async (alertId: string, notes: string) => {
+      if (!alertsCollectionRef) return;
+      const alert = alerts.find(a => a.alertId === alertId) as EmergencyAlertWithId | undefined;
+      
+      if (!alert || !alert.id) return;
+
+      try {
+          await updateDocumentNonBlocking(alertsCollectionRef, alert.id, {
+              status: 'Resolved',
+              resolvedAt: serverTimestamp(),
+              notes: notes
+          });
+          toast({ title: "Resolved", description: "Incident closed." });
+          setIsModalOpen(false);
+      } catch (e) {
+          console.error(e);
+          toast({ title: "Error", description: "Failed to resolve.", variant: "destructive" });
+      }
   };
 
-  const handleDelete = (alertId: string) => {
-     // ... (existing logic)
+  const handleDelete = async (alertId: string) => {
+     if (!alertsCollectionRef) return;
+     const alert = alerts.find(a => a.alertId === alertId) as EmergencyAlertWithId | undefined;
+     
+     if (!alert || !alert.id) return;
+
+     try {
+         await deleteDocumentNonBlocking(alertsCollectionRef, alert.id);
+         toast({ title: "Deleted", description: "Alert removed." });
+         setIsModalOpen(false);
+     } catch (e) {
+         console.error(e);
+         toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
+     }
   };
 
   const isLoading = isLoadingAlerts || isLoadingResidents || isLoadingResponders || isLoadingHouseholds;
@@ -525,7 +606,6 @@ export function EmergencyDashboard() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-zinc-950 text-white font-sans">
         
-        {/* Full Screen Map Layer (Z-Index 0) */}
         <div className="absolute inset-0 z-0">
             <EmergencyMap 
                 alerts={alerts ?? []}
@@ -535,18 +615,15 @@ export function EmergencyDashboard() {
                 onSelectAlert={handleAlertSelect}
                 searchedLocation={searchedLocation} 
                 showStructures={showStructures}
-                settings={profile} // Pass profile settings for AutoFocus
+                settings={profile}
             />
-             {/* Gradient Overlay for better text readability at edges */}
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
         </div>
         
-        {/* ... (rest of the layout) */}
         <div className="absolute top-6 left-6 z-10 pointer-events-none">
              <WeatherHeader />
         </div>
 
-        {/* Right Sidebar: Lists (Z-Index 10) */}
         <div className="absolute right-6 top-6 bottom-24 z-10 flex flex-col gap-4 overflow-y-auto pointer-events-none w-80 pr-2">
             <div className="pointer-events-auto">
                 <ActiveAlertFeed 
@@ -563,12 +640,10 @@ export function EmergencyDashboard() {
             </div>
         </div>
 
-        {/* Center Bottom: Household Search (Z-Index 50) */}
         <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-auto">
             <HouseholdSearch onSelectLocation={handleSearchSelect} />
         </div>
 
-        {/* Bottom Left: Controls (Z-Index 10) */}
         <div className="absolute bottom-6 left-6 z-10 pointer-events-none">
             <MapControls 
                 showStructures={showStructures}
@@ -576,7 +651,6 @@ export function EmergencyDashboard() {
             />
         </div>
 
-        {/* Floating Broadcast Button (Bottom Right) */}
         <Button 
             className="absolute bottom-6 right-6 z-50 h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 shadow-[0_0_40px_-10px_rgba(220,38,38,0.7)] border-4 border-red-800 animate-pulse hover:animate-none transition-all scale-100 hover:scale-110 flex items-center justify-center"
             onClick={handleSimulateSOS} 
@@ -586,7 +660,6 @@ export function EmergencyDashboard() {
             <Siren className="h-8 w-8 text-white" />
         </Button>
 
-        {/* Incident Modal */}
         {selectedAlert && (
             <IncidentActionModal 
                 isOpen={isModalOpen}
