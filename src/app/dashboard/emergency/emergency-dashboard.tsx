@@ -245,7 +245,7 @@ const IncidentActionModal = ({ alert, resident, onAcknowledge, onDispatch, onRes
                                 <DropdownMenuContent align="end" className="bg-zinc-800 border-zinc-700">
                                     <DropdownMenuItem 
                                         className="text-red-400 focus:bg-red-900/20 focus:text-red-300" 
-                                        onClick={() => onDelete(alert.id || alert.alertId)}
+                                        onClick={() => onDelete(alert.alertId)}
                                     >
                                         <Trash2 className="mr-2 h-4 w-4" />
                                         Delete Alert
