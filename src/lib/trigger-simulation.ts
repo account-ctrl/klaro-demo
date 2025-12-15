@@ -1,6 +1,9 @@
 
 import { doc, runTransaction } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { EmergencyAlert } from '@/lib/types';
+import { getAuth } from 'firebase/auth';
 
 export async function updateSystemStats(updates: { population?: number, households?: number }) {
     // Ensure Firebase is initialized and get the same instance used elsewhere
@@ -43,10 +46,6 @@ export async function updateSystemStats(updates: { population?: number, househol
     }
 }
 
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { EmergencyAlert } from '@/lib/types';
-import { getAuth } from 'firebase/auth';
-
 export const simulateEmergency = async (tenantPath: string, location?: { lat: number; lng: number }) => {
   if (!tenantPath) {
     console.error("Cannot simulate emergency: No tenant path provided.");
@@ -57,11 +56,14 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
   const auth = getAuth();
   const user = auth.currentUser;
 
-  // Default to random coordinates near Manila if no location provided
-  const baseLat = 14.5995;
-  const baseLng = 120.9842;
-  const latOffset = (Math.random() - 0.5) * 0.01;
-  const lngOffset = (Math.random() - 0.5) * 0.01;
+  // Default to Polomolok, South Cotabato (Client's test area) if no location provided
+  // Fallback to Manila if strictly needed, but client requested Polomolok.
+  const baseLat = 6.2230; 
+  const baseLng = 125.0650;
+  
+  // Small random offset to prevent exact overlapping of multiple simulations
+  const latOffset = (Math.random() - 0.5) * 0.002; // Approx 200m variance
+  const lngOffset = (Math.random() - 0.5) * 0.002;
 
   const finalLat = location ? location.lat : baseLat + latOffset;
   const finalLng = location ? location.lng : baseLng + lngOffset;
@@ -74,7 +76,8 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
     longitude: finalLng,
     status: 'New',
     timestamp: serverTimestamp() as any, // Cast for client-side timestamp
-    type: 'Medical', // or Fire, Crime, etc.
+    type: 'SOS', // Updated to SOS as per user request
+    category: 'Unspecified',
     message: 'This is a simulated emergency alert.',
     contactNumber: '09123456789',
   };
