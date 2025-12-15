@@ -62,13 +62,3 @@ export async function sendInvite(
     return { success: false, error: "An unknown error occurred while sending the invite." };
   }
 }
-
-export async function saveOfficials(data: any) {
-  // Placeholder implementation
-  return { success: true };
-}
-
-export async function generateInsightsAction(data: any) {
-    // Placeholder implementation
-    return { success: true };
-}

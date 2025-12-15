@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
 import {
@@ -243,9 +243,7 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
             isCollapsed ? "w-20" : "w-64"
             )}
         >
-            <Suspense fallback={<div className="p-4"><Skeleton className="h-full w-full" /></div>}>
-                <SidebarNav isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} />
-            </Suspense>
+            <SidebarNav isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} />
         </aside>
       )}
 
