@@ -513,11 +513,6 @@ export function EmergencyDashboard() {
   const handleAcknowledge = async (alertId: string) => {
     if (!alertsCollectionRef || !user) return;
     
-    // We need to find the document ID from the alert ID if they are different,
-    // or assume we query by alertId.
-    // However, the `EmergencyAlertWithId` type implies we have `id` (the doc ID) if we fetched it properly.
-    // The `useBarangayCollection` hook uses `useCollection` which usually attaches `id`.
-    
     const alert = alerts.find(a => a.alertId === alertId) as EmergencyAlertWithId | undefined;
     if (!alert || !alert.id) {
         toast({ title: "Error", description: "Alert document not found.", variant: "destructive" });
@@ -525,7 +520,8 @@ export function EmergencyDashboard() {
     }
 
     try {
-        await updateDocumentNonBlocking(alertsCollectionRef, alert.id, {
+        const alertRef = doc(alertsCollectionRef, alert.id);
+        await updateDocumentNonBlocking(alertRef, {
             status: 'Acknowledged',
             acknowledgedByUserId: user.userId
         });
@@ -548,7 +544,8 @@ export function EmergencyDashboard() {
     }
 
     try {
-        await updateDocumentNonBlocking(alertsCollectionRef, alert.id, {
+        const alertRef = doc(alertsCollectionRef, alert.id);
+        await updateDocumentNonBlocking(alertRef, {
             status: 'Dispatched',
             responder_team_id: responderId,
             responderDetails: {
@@ -572,7 +569,8 @@ export function EmergencyDashboard() {
       if (!alert || !alert.id) return;
 
       try {
-          await updateDocumentNonBlocking(alertsCollectionRef, alert.id, {
+          const alertRef = doc(alertsCollectionRef, alert.id);
+          await updateDocumentNonBlocking(alertRef, {
               status: 'Resolved',
               resolvedAt: serverTimestamp(),
               notes: notes
@@ -592,7 +590,8 @@ export function EmergencyDashboard() {
      if (!alert || !alert.id) return;
 
      try {
-         await deleteDocumentNonBlocking(alertsCollectionRef, alert.id);
+         const alertRef = doc(alertsCollectionRef, alert.id);
+         await deleteDocumentNonBlocking(alertRef);
          toast({ title: "Deleted", description: "Alert removed." });
          setIsModalOpen(false);
      } catch (e) {
