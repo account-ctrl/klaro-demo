@@ -523,7 +523,7 @@ export function EmergencyDashboard() {
         const alertRef = doc(alertsCollectionRef, alert.id);
         await updateDocumentNonBlocking(alertRef, {
             status: 'Acknowledged',
-            acknowledgedByUserId: user.userId
+            acknowledgedByUserId: user.uid // Use user.uid for Firebase Auth User
         });
         toast({ title: "Acknowledged", description: "Alert status updated." });
     } catch (e) {
