@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { captureAccurateLocation } from '@/lib/services/location';
 
 const BARANGAY_ID = 'barangay_san_isidro'; // Hardcoded for demo simplicity
 
@@ -21,7 +22,7 @@ export const useResidentActions = () => {
     const [loading, setLoading] = useState(false);
 
     // A. Emergency Response (SOS)
-    const createAlert = useCallback(async (latitude: number, longitude: number, category: string = 'Unspecified', message: string = '') => {
+    const createAlert = useCallback(async (latitude: number | undefined, longitude: number | undefined, category: string = 'Unspecified', message: string = '') => {
         if (!firestore || !user) {
             toast({ variant: 'destructive', title: 'Error', description: 'System not ready.' });
             return null;
@@ -29,24 +30,51 @@ export const useResidentActions = () => {
 
         setLoading(true);
         try {
+            // CAPTURE ACCURATE LOCATION (REAL GPS)
+            const locationData = await captureAccurateLocation();
+
+            // Validate Location
+            if (locationData.location_source === 'UNAVAILABLE' || locationData.accuracy_m > 2000) {
+                 // Even if unavailable, we might want to proceed but mark it
+                 // However, requirement says: "Reject or mark as invalid if lat/lng missing or accuracy absurd"
+                 // If unavailable, we can still submit but with source UNAVAILABLE
+                 console.warn("SOS Location Unavailable or Inaccurate:", locationData);
+                 if (locationData.location_source === 'UNAVAILABLE') {
+                      toast({ 
+                          variant: 'destructive', 
+                          title: 'Location Warning', 
+                          description: 'GPS unavailable. Sending SOS without precise location.' 
+                      });
+                 }
+            }
+
             const alertsRef = collection(firestore, `/barangays/${BARANGAY_ID}/emergency_alerts`);
             const payload = {
                 status: 'New', // Matches Admin "Active SOS Alerts" filter
                 residentId: user.uid,
                 residentName: user.displayName || 'Anonymous Resident',
-                latitude,
-                longitude,
+                
+                // Use captured location, fallback to provided arguments only if 'MANUAL_FALLBACK' intent (not implemented yet in UI but handled here conceptually)
+                // Actually, requirements say: "Resident SOS must capture device GPS". So we prioritize captured location.
+                latitude: locationData.lat || latitude || 0,
+                longitude: locationData.lng || longitude || 0,
+                
+                // New Fields
+                accuracy_m: locationData.accuracy_m,
+                captured_at: locationData.captured_at ? Timestamp.fromMillis(locationData.captured_at) : serverTimestamp(),
+                location_source: locationData.location_source,
+                location_unavailable_reason: locationData.location_unavailable_reason || null,
+                
                 category,
                 message,
                 timestamp: serverTimestamp(),
-                // Additional fields for admin view compatibility
-                contactNumber: '09123456789', // Demo dummy data if not in profile
+                contactNumber: '09123456789', // Demo dummy data
             };
 
             const docRef = await addDoc(alertsRef, payload);
             toast({ 
                 title: "SOS SENT!", 
-                description: "Alert received by Command Center.", 
+                description: `Alert received. Location accuracy: ±${Math.round(locationData.accuracy_m)}m`, 
                 className: "bg-red-600 text-white border-none"
             });
             return docRef.id;

@@ -1,13 +1,13 @@
 
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { EmergencyAlert, ResponderLocation, Household, TenantSettings } from '@/lib/types'; // Added TenantSettings
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Scan, Eye, Loader2, Save, X } from 'lucide-react';
+import { Scan, Eye, Loader2, Save, X, Navigation } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { addDocumentNonBlocking } from '@/firebase'; 
@@ -486,24 +486,63 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                 
                 {mapMode === 'monitor' && (
                     <>
-                        {alerts.map((alert, index) => (
-                            <Marker 
-                                key={alert.alertId || `alert-${index}`} 
-                                position={[alert.latitude, alert.longitude]}
-                                icon={createPulseIcon(alert.alertId === selectedAlertId, alert.category)}
-                                eventHandlers={{ click: () => onSelectAlert(alert.alertId) }}
-                            >
-                                <Popup>
-                                    <div className="font-sans text-sm">
-                                        <h3 className="font-bold text-white">{alert.residentName}</h3>
-                                        <div className="flex items-center gap-1 mt-1">
-                                            <span className="text-xs font-semibold px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700 text-zinc-300">{alert.category || 'Unspecified'}</span>
-                                            <span className="text-xs text-zinc-400">{alert.status}</span>
-                                        </div>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
+                        {alerts.map((alert, index) => {
+                            const isAccurate = alert.accuracy_m && alert.accuracy_m <= 50;
+                            const hasSource = alert.location_source;
+                            const isGPS = hasSource === 'GPS';
+
+                            return (
+                                <div key={alert.alertId || `alert-${index}`}>
+                                    {/* Accuracy Circle */}
+                                    {alert.accuracy_m && alert.accuracy_m > 0 && (
+                                        <Circle 
+                                            center={[alert.latitude, alert.longitude]}
+                                            radius={alert.accuracy_m}
+                                            pathOptions={{
+                                                color: isGPS ? '#10b981' : '#f59e0b', // Emerald or Amber
+                                                fillColor: isGPS ? '#10b981' : '#f59e0b',
+                                                fillOpacity: 0.1,
+                                                weight: 1,
+                                                dashArray: isGPS ? undefined : '5,5'
+                                            }}
+                                        />
+                                    )}
+                                    <Marker 
+                                        position={[alert.latitude, alert.longitude]}
+                                        icon={createPulseIcon(alert.alertId === selectedAlertId, alert.category)}
+                                        eventHandlers={{ click: () => onSelectAlert(alert.alertId) }}
+                                    >
+                                        <Popup>
+                                            <div className="font-sans text-sm min-w-[200px]">
+                                                <h3 className="font-bold text-white">{alert.residentName}</h3>
+                                                <div className="flex flex-wrap items-center gap-1 mt-1.5 mb-2">
+                                                    <span className="text-xs font-semibold px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700 text-zinc-300">{alert.category || 'Unspecified'}</span>
+                                                    <span className="text-xs text-zinc-400">{alert.status}</span>
+                                                </div>
+                                                
+                                                {/* Location Metadata */}
+                                                <div className="bg-zinc-900/50 p-2 rounded border border-white/5 space-y-1 text-xs">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-zinc-500">Source</span>
+                                                        <span className={`font-mono ${isGPS ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                            {hasSource || 'Unknown'}
+                                                        </span>
+                                                    </div>
+                                                    {alert.accuracy_m && (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-zinc-500">Accuracy</span>
+                                                            <span className="font-mono text-zinc-300">
+                                                                ±{Math.round(alert.accuracy_m)}m
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </Popup>
+                                    </Marker>
+                                </div>
+                            );
+                        })}
 
                         {responders.map((responder, index) => (
                             <Marker
