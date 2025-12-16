@@ -1,7 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { Resident, Household } from "@/lib/types";
+import { Resident, Household, ResidentAddress } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, MoreHorizontal, CheckCircle, XCircle, FilePen, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -75,6 +75,20 @@ const getAge = (dateString: string) => {
     return age;
 }
 
+const formatAddress = (addr: string | ResidentAddress | undefined) => {
+    if (!addr) return 'N/A';
+    if (typeof addr === 'string') return addr;
+    const { mapAddress, purok } = addr;
+    
+    const parts = [];
+    if (mapAddress?.unit) parts.push(mapAddress.unit);
+    if (mapAddress?.blockLot) parts.push(mapAddress.blockLot);
+    if (mapAddress?.street) parts.push(mapAddress.street);
+    if (purok) parts.push(purok);
+    
+    return parts.join(', ');
+};
+
 const BooleanCell = ({ value, onClick, colorClass = "text-green-600" }: { value: boolean | undefined, onClick: () => void, colorClass?: string }) => {
     return (
         <div 
@@ -113,11 +127,13 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
     ),
     enableSorting: false,
     enableHiding: false,
+    size: 40, // Fixed width
   },
   {
       accessorKey: "residentId",
-      header: "Resident ID",
-      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.residentId}</span>,
+      header: "ID",
+      cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.residentId.substring(0,6)}...</span>,
+      size: 80,
   },
   {
     accessorKey: "lastName",
@@ -127,7 +143,7 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Name
+          Resident Name
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       );
@@ -136,38 +152,68 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
         const resident = row.original;
         const fullName = `${resident.firstName} ${resident.lastName} ${resident.suffix || ''}`;
         return (
-            <div className="flex items-center gap-2">
-                <Avatar className="h-8 w-8">
+            <div className="flex items-center gap-3">
+                <Avatar className="h-9 w-9 border-2 border-white shadow-sm">
                     <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${fullName}`} alt={fullName} />
-                    <AvatarFallback>{resident.firstName[0]}{resident.lastName[0]}</AvatarFallback>
+                    <AvatarFallback className="bg-slate-100 text-slate-500 font-bold">{resident.firstName[0]}{resident.lastName[0]}</AvatarFallback>
                 </Avatar>
-                <div className="font-medium">{fullName}</div>
+                <div className="flex flex-col">
+                    <span className="font-semibold text-slate-800">{fullName}</span>
+                    <span className="text-xs text-muted-foreground">{resident.email || 'No email'}</span>
+                </div>
             </div>
         );
     }
   },
    {
     accessorKey: "dateOfBirth",
-    header: "Birth Date / Age",
+    header: "Age",
     cell: ({ row }) => {
         const dob = row.original.dateOfBirth;
-        if (!dob) return 'N/A';
+        if (!dob) return <span className="text-muted-foreground">-</span>;
+        const age = getAge(dob);
         return (
-            <div className="flex flex-col">
-                <span className="text-sm">{dob}</span>
-                <span className="text-xs text-muted-foreground">{getAge(dob)} yrs</span>
+            <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-xs">{age} yo</Badge>
             </div>
         );
-    }
+    },
+    size: 100,
   },
   {
     accessorKey: "gender",
     header: "Gender",
+    cell: ({ row }) => {
+       const gender = row.original.gender;
+       return (
+           <span className={`text-xs font-medium px-2 py-1 rounded-full ${gender === 'Male' ? 'bg-blue-50 text-blue-700' : gender === 'Female' ? 'bg-pink-50 text-pink-700' : 'bg-slate-50 text-slate-600'}`}>
+               {gender}
+           </span>
+       )
+    },
+    size: 100,
   },
   {
     accessorKey: "address",
-    header: "Address",
-    cell: ({ row }) => <div className="truncate max-w-[200px]" title={row.original.address}>{row.original.address}</div>
+    header: "Address / Purok",
+    cell: ({ row }) => {
+        const displayAddr = formatAddress(row.original.address);
+        return <div className="truncate max-w-[250px] text-sm text-slate-600" title={displayAddr}>{displayAddr}</div>
+    }
+  },
+  {
+    accessorKey: "civilStatus",
+    header: "Civil Status",
+    // This column is hidden by default but needed for filtering
+    enableHiding: true, 
+    cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.civilStatus}</span>
+  },
+   {
+    accessorKey: "vulnerability_tags",
+    header: "Tags",
+    // This column is hidden by default but needed for filtering
+    enableHiding: true, 
+    filterFn: 'arrayFilter' as any,
   },
   {
     accessorKey: "isVoter",
@@ -178,6 +224,7 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
             onClick={() => onEdit({...row.original, isVoter: !row.original.isVoter})} 
         />
     ),
+    size: 80,
   },
   {
     accessorKey: "isPwd",
@@ -189,6 +236,7 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
             colorClass="text-blue-600"
         />
     ),
+     size: 80,
   },
   {
     accessorKey: "is4ps",
@@ -200,34 +248,16 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
             colorClass="text-amber-600"
         />
     ),
+     size: 80,
   },
   {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.status;
-      return <Badge variant={status === 'Active' ? 'secondary' : 'outline'}>{status}</Badge>
-    }
-  },
-  {
-    accessorKey: "vulnerability_tags", // Ensure this exists in your type or custom filter accessor
-    header: "Tags",
-    cell: ({ row }) => {
-       const tags = row.original.vulnerability_tags;
-       if (!tags || tags.length === 0) return null;
-       return (
-           <div className="flex gap-1 flex-wrap">
-               {tags.map(t => <Badge key={t} variant="outline" className="text-[10px] h-5 px-1">{t}</Badge>)}
-           </div>
-       )
+      return <Badge className="text-[10px]" variant={status === 'Active' ? 'default' : 'secondary'}>{status}</Badge>
     },
-    filterFn: 'arrayFilter' as any, // Tell react-table to use custom array filter
-  },
-  {
-    // Hidden columns for filtering but available
-    accessorKey: "civilStatus",
-    header: "Civil Status",
-    enableHiding: true, 
+     size: 100,
   },
   {
     id: "actions",
@@ -235,5 +265,6 @@ export const getColumns = (onEdit: (resident: ResidentWithId) => void, onDelete:
       const resident = row.original as ResidentWithId;
       return <ResidentsTableActions resident={resident} onEdit={onEdit} onDelete={onDelete} households={households} />
     },
+    size: 50,
   },
 ];

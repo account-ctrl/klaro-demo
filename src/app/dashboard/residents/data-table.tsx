@@ -76,7 +76,10 @@ export function DataTable<TData extends Resident, TValue>({
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
+    civilStatus: false, // Default hidden based on columns definition, but explicitly managing state here helps
+    vulnerability_tags: false, // Default hidden
+  });
   const [rowSelection, setRowSelection] = React.useState({});
   const [globalFilter, setGlobalFilter] = React.useState("");
 
@@ -104,9 +107,6 @@ export function DataTable<TData extends Resident, TValue>({
         arrayFilter: arrayFilterFn,
     },
   });
-  
-  // Custom filter logic for "vulnerability_tags" (Pregnant is inside this array)
-  // We need to extend the filter capability for the vulnerability_tags column if not explicitly defined in columns def
   
   return (
     <div className="space-y-4">
@@ -165,11 +165,6 @@ export function DataTable<TData extends Resident, TValue>({
                                         placeholder="YYYY" 
                                         className="h-8"
                                         onChange={(event) => {
-                                            // Custom logic needed for dateOfBirth column to filter by year
-                                            // We'll use a custom filter function on the column definition or here if possible
-                                            // For simplicity, let's assume direct string match on dateOfBirth for now, 
-                                            // but better to implement custom filterFn on the column definition in columns.tsx
-                                            // Here we pass the year string to the column filter
                                             table.getColumn("dateOfBirth")?.setFilterValue(event.target.value)
                                         }}
                                          value={(table.getColumn("dateOfBirth")?.getFilterValue() as string) ?? ""}
@@ -255,22 +250,13 @@ export function DataTable<TData extends Resident, TValue>({
                                         />
                                         <Label htmlFor="is4ps" className="font-normal cursor-pointer">4Ps Beneficiary</Label>
                                     </div>
-                                     <div className="flex items-center space-x-2">
-                                        <Checkbox 
-                                            id="isSenior" 
-                                             // Requires computed column or backend support usually, placeholder logic
-                                            disabled 
-                                        />
-                                        <Label htmlFor="isSenior" className="font-normal text-muted-foreground">Senior Citizen</Label>
-                                    </div>
                                     
-                                     {/* New Filter: Pregnant (checking vulnerability_tags array) */}
+                                     {/* Filter for Pregnant via vulnerability_tags */}
                                      <div className="flex items-center space-x-2">
                                         <Checkbox 
                                             id="isPregnant"
                                             checked={(table.getColumn("vulnerability_tags")?.getFilterValue() as string) === 'Pregnant'}
                                             onCheckedChange={(checked) => {
-                                                 // We are filtering an array column 'vulnerability_tags'
                                                 table.getColumn("vulnerability_tags")?.setFilterValue(checked ? 'Pregnant' : undefined)
                                             }}
                                         />

@@ -74,7 +74,20 @@ const defaultResidentData: ResidentFormValues = {
     suffix: "",
     dateOfBirth: "",
     gender: "Male",
-    address: "",
+    address: {
+        purok: "",
+        mapAddress: {
+            street: "",
+            blockLot: "",
+            unit: "",
+            landmark: ""
+        },
+        coordinates: {
+            lat: 0,
+            lng: 0,
+            accuracy_meters: 0
+        }
+    },
     purokId: "", // Added Purok Field
     status: "Active",
     civilStatus: "Single",
@@ -95,6 +108,58 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
     record ?? defaultResidentData
   );
 
+  // Helper to safely access structured address fields
+  const getAddressField = (path: 'street' | 'blockLot' | 'unit' | 'landmark' | 'purok') => {
+      const addr = formData.address;
+      if (typeof addr === 'string') return path === 'street' ? addr : ''; // Fallback for legacy data
+      if (!addr) return '';
+      
+      if (path === 'purok') return addr.purok || '';
+      return addr.mapAddress?.[path] || '';
+  };
+
+  const handleAddressChange = (field: 'street' | 'blockLot' | 'unit' | 'landmark', value: string) => {
+      setFormData(prev => {
+          const currentAddr = typeof prev.address === 'object' && prev.address ? prev.address : {
+              purok: prev.purokId || '', // Fallback to flat ID if exists
+              mapAddress: { street: '', blockLot: '', unit: '', landmark: '' },
+              coordinates: { lat: 0, lng: 0, accuracy_meters: 0 }
+          };
+          
+          return {
+              ...prev,
+              address: {
+                  ...currentAddr,
+                  mapAddress: {
+                      ...currentAddr.mapAddress,
+                      [field]: value
+                  }
+              }
+          };
+      });
+  };
+
+  const handlePurokChange = (value: string) => {
+       // Update both purokId (relational) and address.purok (denormalized)
+       setFormData(prev => {
+          const currentAddr = typeof prev.address === 'object' && prev.address ? prev.address : {
+              purok: '',
+              mapAddress: { street: '', blockLot: '', unit: '', landmark: '' },
+              coordinates: { lat: 0, lng: 0, accuracy_meters: 0 }
+          };
+
+           return {
+               ...prev,
+               purokId: value,
+               address: {
+                   ...currentAddr,
+                   purok: value // Ideally fetch Name, but ID is okay for internal ref
+               }
+           }
+       });
+  };
+
+
   // Fetch Puroks dynamically
   const puroksRef = useMemoFirebase(() => {
       if (!firestore || !tenantPath) return null;
@@ -114,7 +179,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
     setFormData((prev) => ({ ...prev, [id]: checked }));
   };
   
-  const handleSelectChange = (id: 'status' | 'gender' | 'civilStatus' | 'householdId' | 'purokId', value: string) => {
+  const handleSelectChange = (id: 'status' | 'gender' | 'civilStatus' | 'householdId', value: string) => {
     setFormData((prev) => ({ ...prev, [id]: value }));
   }
 
@@ -202,7 +267,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
               </div>
           </div>
           
-          {/* Residency & Location */}
+          {/* Residency & Location (UPDATED SCHEMA) */}
           <div className="space-y-4">
               <h4 className="font-semibold text-primary flex items-center gap-2">
                   <MapPin className="h-4 w-4" /> Residency & Location
@@ -210,7 +275,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
               
               <div className="space-y-2">
                   <Label htmlFor="purokId">Purok / Zone</Label>
-                   <Select onValueChange={(value) => handleSelectChange('purokId', value)} value={formData.purokId}>
+                   <Select onValueChange={handlePurokChange} value={formData.purokId}>
                         <SelectTrigger id="purokId">
                             <SelectValue placeholder="Select Purok" />
                         </SelectTrigger>
@@ -227,10 +292,46 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
                     </Select>
               </div>
 
-              <div className="space-y-2">
-                  <Label htmlFor="address">Street Address</Label>
-                  <Textarea id="address" value={formData.address} onChange={handleChange} placeholder="House No., Street Name, Landmarks..."/>
+              {/* Structured Address Fields */}
+              <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-2 col-span-2">
+                      <Label htmlFor="addr_street">Street Name</Label>
+                      <Input 
+                        id="addr_street" 
+                        value={getAddressField('street')} 
+                        onChange={(e) => handleAddressChange('street', e.target.value)} 
+                        placeholder="Rizal St."
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label htmlFor="addr_block">Block / Lot</Label>
+                      <Input 
+                        id="addr_block" 
+                        value={getAddressField('blockLot')} 
+                        onChange={(e) => handleAddressChange('blockLot', e.target.value)} 
+                        placeholder="Blk 1 Lot 2"
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label htmlFor="addr_unit">Unit / Apt</Label>
+                      <Input 
+                        id="addr_unit" 
+                        value={getAddressField('unit')} 
+                        onChange={(e) => handleAddressChange('unit', e.target.value)} 
+                        placeholder="Apt 4B"
+                      />
+                  </div>
+                   <div className="space-y-2 col-span-2">
+                      <Label htmlFor="addr_landmark">Landmark</Label>
+                      <Input 
+                        id="addr_landmark" 
+                        value={getAddressField('landmark')} 
+                        onChange={(e) => handleAddressChange('landmark', e.target.value)} 
+                        placeholder="Near the old mango tree"
+                      />
+                  </div>
               </div>
+
               <div className="space-y-2">
                   <Label htmlFor="householdId">Household</Label>
                    <Select onValueChange={(value) => handleSelectChange('householdId', value)} value={formData.householdId}>
