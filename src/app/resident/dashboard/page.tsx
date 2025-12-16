@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -6,16 +7,15 @@ import {
   FileText, 
   AlertTriangle, 
   QrCode, 
-  Megaphone, 
-  ArrowRight,
   Siren,
   Loader2,
-  CheckCircle,
   Clock,
   Calendar,
-  ScrollText
+  ScrollText,
+  Megaphone
 } from "lucide-react";
-import { useUser, useCollection } from '@/firebase';
+import { useUser, useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import {
@@ -32,8 +32,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useResidentActions } from '@/hooks/use-resident-actions';
 import { useToast } from "@/hooks/use-toast";
-import { CertificateRequest } from '@/lib/types';
+import { CertificateRequest, Resident } from '@/lib/types';
 import { format } from 'date-fns';
+
+const BARANGAY_ID = 'barangay_san_isidro';
 
 // 1. Action Card Component
 interface ActionCardProps {
@@ -62,6 +64,7 @@ const ActionCard = ({ icon: Icon, label, colorClass, bgClass, onClick }: ActionC
 
 export default function ResidentDashboardPage() {
   const { user } = useUser();
+  const firestore = useFirestore();
   const firstName = user?.displayName?.split(' ')[0] || 'Resident';
   const { 
       createAlert, 
@@ -70,12 +73,14 @@ export default function ResidentDashboardPage() {
       getMyRequestsQuery, 
       getOrdinancesQuery, 
       getHealthSchedulesQuery,
+      getAnnouncementsQuery, // Added query
       loading 
   } = useResidentActions();
   const { toast } = useToast();
 
   // Dialog States
-  const [activeModal, setActiveModal] = useState<'sos' | 'blotter' | 'request' | null>(null);
+  const [activeModal, setActiveModal] = useState<'sos' | 'blotter' | 'request' | 'news' | null>(null);
+  const [sosLoading, setSosLoading] = useState(false); // Specific loader for SOS location fetching
 
   // Form States
   const [sosCategory, setSosCategory] = useState('Medical');
@@ -89,7 +94,14 @@ export default function ResidentDashboardPage() {
 
   // --- DATA FETCHING ---
 
-  // 1. My Requests
+  // 0. Resident Profile (For Address in SOS)
+  const residentDocRef = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
+  }, [firestore, user]);
+  const { data: residentProfile } = useDoc<Resident>(residentDocRef);
+
+  // 1. My Requests (Client-Side Filtering)
   const requestsQuery = useMemo(() => {
     const q = getMyRequestsQuery();
     if (q) {
@@ -98,7 +110,8 @@ export default function ResidentDashboardPage() {
     }
     return q;
   }, [getMyRequestsQuery]);
-  const { data: myRequests } = useCollection<CertificateRequest>(requestsQuery);
+  const { data: allRequests } = useCollection<CertificateRequest>(requestsQuery);
+  const myRequests = allRequests?.filter(req => req.residentId === user?.uid);
 
   // 2. Ordinances (Legislative)
   const ordinancesQuery = useMemo(() => {
@@ -122,6 +135,17 @@ export default function ResidentDashboardPage() {
   }, [getHealthSchedulesQuery]);
   const { data: healthSchedules } = useCollection(healthQuery);
 
+  // 4. Announcements
+  const announcementsQuery = useMemo(() => {
+    const q = getAnnouncementsQuery();
+    if (q) {
+        // @ts-ignore
+        q.__memo = true;
+    }
+    return q;
+  }, [getAnnouncementsQuery]);
+  const { data: announcements } = useCollection(announcementsQuery);
+
 
   // HANDLERS
 
@@ -130,13 +154,47 @@ export default function ResidentDashboardPage() {
         toast({ variant: 'destructive', title: "Geolocation Error", description: "Location not supported." });
         return;
     }
+
+    setSosLoading(true);
+    
+    // High Precision Geolocation Logic
+    const geoOptions = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0 
+    };
+
     navigator.geolocation.getCurrentPosition(async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const result = await createAlert(latitude, longitude, sosCategory, sosMessage);
-        if (result) setActiveModal(null);
+        const { latitude, longitude, accuracy } = pos.coords;
+        
+        // Prepare address payload
+        let addressPayload = null;
+        if (residentProfile?.address) {
+            addressPayload = residentProfile.address;
+        }
+
+        const result = await createAlert(latitude, longitude, sosCategory, sosMessage, addressPayload, accuracy);
+        
+        setSosLoading(false);
+        if (result) {
+            setActiveModal(null);
+            setSosMessage(''); // Reset
+        }
     }, (err) => {
-        toast({ variant: 'destructive', title: "Location Error", description: err.message });
-    });
+        console.error("GPS Error", err);
+        setSosLoading(false);
+        
+        // Fallback Logic: Try to send without precise location or use last known?
+        // For now, we inform the user.
+        toast({ 
+            variant: 'destructive', 
+            title: "Location Failed", 
+            description: "Could not get your precise location. Please ensure GPS is enabled." 
+        });
+        
+        // Optional: Allow sending with low accuracy or cached location if available
+        // But per requirements, we want high precision or fail/warn.
+    }, geoOptions);
   };
 
   const handleBlotter = async () => {
@@ -191,13 +249,25 @@ export default function ResidentDashboardPage() {
             bgClass="bg-slate-100 group-hover:bg-slate-200" 
             onClick={() => window.location.href = '/resident/profile'} // Simple redirect
         />
-         <ActionCard 
-            label="Emergency SOS" 
-            icon={Siren} 
-            colorClass="text-red-600 animate-pulse" 
-            bgClass="bg-red-50 group-hover:bg-red-100" 
-            onClick={() => setActiveModal('sos')}
+        <ActionCard 
+            label="Community News" 
+            icon={Megaphone} 
+            colorClass="text-amber-500" 
+            bgClass="bg-amber-50 group-hover:bg-amber-100" 
+            onClick={() => setActiveModal('news')}
         />
+      </div>
+
+      {/* SOS Button (Separate for emphasis) */}
+      <div className="flex justify-center px-4">
+          <Button 
+            size="lg" 
+            variant="destructive" 
+            className="w-full max-w-md h-16 text-lg font-bold shadow-lg shadow-red-200 hover:shadow-red-300 animate-pulse"
+            onClick={() => setActiveModal('sos')}
+          >
+              <Siren className="mr-2 h-6 w-6" /> EMERGENCY SOS
+          </Button>
       </div>
 
       {/* --- INFO SECTIONS --- */}
@@ -370,8 +440,9 @@ export default function ResidentDashboardPage() {
             </div>
             <DialogFooter>
                 <Button variant="ghost" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button variant="destructive" onClick={handleSOS} disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} SEND ALERT
+                <Button variant="destructive" onClick={handleSOS} disabled={sosLoading || loading}>
+                    {sosLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+                    {sosLoading ? "LOCATING..." : "SEND ALERT"}
                 </Button>
             </DialogFooter>
         </DialogContent>
@@ -455,6 +526,38 @@ export default function ResidentDashboardPage() {
                 <Button onClick={handleRequest} disabled={loading || !docPurpose} className="bg-cyan-600 hover:bg-cyan-700">
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit Request
                 </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* NEWS MODAL */}
+      <Dialog open={activeModal === 'news'} onOpenChange={(open) => !open && setActiveModal(null)}>
+        <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col">
+            <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-amber-500"/> Community News</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+               {announcements && announcements.length > 0 ? (
+                  announcements.map((news: any) => (
+                      <div key={news.id} className="border border-slate-100 rounded-lg p-4 bg-slate-50">
+                          <div className="flex justify-between items-start mb-2">
+                              <h3 className="font-bold text-slate-800">{news.title}</h3>
+                              <span className="text-xs text-slate-500">{news.datePosted ? format(news.datePosted.toDate(), 'MMM dd') : ''}</span>
+                          </div>
+                          <p className="text-sm text-slate-600">{news.content || 'No details.'}</p>
+                          {news.category && (
+                              <span className="inline-block mt-2 text-[10px] uppercase font-bold px-2 py-1 bg-white border border-slate-200 rounded text-slate-500">
+                                  {news.category}
+                              </span>
+                          )}
+                      </div>
+                  ))
+               ) : (
+                   <div className="text-center py-10 text-slate-500">No announcements yet.</div>
+               )}
+            </div>
+            <DialogFooter>
+                <Button onClick={() => setActiveModal(null)}>Close</Button>
             </DialogFooter>
         </DialogContent>
       </Dialog>

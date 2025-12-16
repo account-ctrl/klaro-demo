@@ -97,6 +97,21 @@ export type HouseholdMember = {
     role: 'Head' | 'Spouse' | 'Child' | 'Parent' | 'Sibling' | 'Other';
 };
 
+export type ResidentAddress = {
+    purok: string;
+    mapAddress: {
+        street: string;
+        blockLot: string;
+        unit: string;
+        landmark: string;
+    };
+    coordinates: {
+        lat: number;
+        lng: number;
+        accuracy_meters: number;
+    };
+};
+
 export type Resident = {
     residentId: string;
     householdId?: string; // Reference to the household.
@@ -104,7 +119,8 @@ export type Resident = {
     lastName: string;
     dateOfBirth: string; // ISO Date string (dob)
     gender: 'Male' | 'Female' | 'Other';
-    address?: string;
+    // Updated Address Schema
+    address?: string | ResidentAddress; // Allow both for backward compatibility or migration
     purokId?: string; // Added for explicit Purok linking
     status?: 'Active' | 'Moved Out' | 'Deceased';
     middleName?: string;
@@ -279,6 +295,7 @@ export type EmergencyAlert = {
     category?: 'Medical' | 'Fire' | 'Crime' | 'Accident' | 'Unspecified';
     description?: string; // Admin's notes on the situation.
     message?: string; // Resident's message.
+    address?: ResidentAddress; // Added structured address
     contactNumber?: string;
     householdId?: string;
     householdMembersSnapshot?: { name: string; age?: string; relationship?: string }[];
