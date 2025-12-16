@@ -143,22 +143,10 @@ export default function OrdinanceEditor({ content, onChange, onEditorReady }: { 
       TableHeader,
       TableCell,
     ],
-    content: content || `
-      <h1 style="text-align: center">Republic of the Philippines</h1>
-      <h2 style="text-align: center">Barangay San Isidro</h2>
-      <h3 style="text-align: center">OFFICE OF THE SANGGUNIANG BARANGAY</h3>
-      <hr>
-      <p style="text-align: center"><strong>ORDINANCE NO. ____ SERIES OF 20__</strong></p>
-      <p style="text-align: center"><strong>AN ORDINANCE [TITLE HERE]</strong></p>
-      <p><strong>WHEREAS</strong>, [Reason 1];</p>
-      <p><strong>WHEREAS</strong>, [Reason 2];</p>
-      <p><strong>NOW THEREFORE</strong>, be it ordained by the Sangguniang Barangay of San Isidro that:</p>
-      <p><strong>SECTION 1. TITLE.</strong> This ordinance shall be known as...</p>
-      <p><strong>SECTION 2. SCOPE.</strong> ...</p>
-      <p><strong>SECTION 3. PENALTY CLAUSE.</strong> ...</p>
-      <p><strong>SECTION 4. EFFECTIVITY.</strong> This ordinance shall take effect immediately upon approval.</p>
-    `,
+    content: content, // Initial content only
     onUpdate: ({ editor }) => {
+        // Only trigger onChange if content actually changed to avoid loops if needed, 
+        // though Tiptap usually handles this well.
         onChange?.(editor.getHTML())
     },
     immediatelyRender: false,
@@ -168,6 +156,18 @@ export default function OrdinanceEditor({ content, onChange, onEditorReady }: { 
         },
     },
   })
+
+  // Sync content prop to editor state (Fix for external updates)
+  useEffect(() => {
+    if (editor && content !== undefined) {
+      const currentContent = editor.getHTML();
+      // Only update if significantly different to avoid cursor jumping and loops
+      if (currentContent !== content) {
+         // Optionally check for semantic difference, but direct comparison works for simple cases
+         editor.commands.setContent(content);
+      }
+    }
+  }, [content, editor])
 
   // Expose editor instance to parent
   useEffect(() => {
