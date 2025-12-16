@@ -5,8 +5,6 @@ import { useState, useMemo } from 'react';
 import { useResidents } from '@/hooks/use-barangay-data';
 import { useInventoryItems, useInventoryBatches, getFefoAllocation, useEHealthRef } from '@/hooks/use-ehealth';
 import { BARANGAY_ID } from '@/hooks/use-barangay-data';
-import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { doc, serverTimestamp, increment } from 'firebase/firestore';
 import { useUser, useFirestore } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +16,7 @@ import { Search, Pill, User as UserIcon, CheckCircle, AlertCircle, ShoppingCart,
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { executeDispenseTransaction, BatchAllocation } from '@/lib/ehealth-logic';
 
 interface CartItem {
     itemId: string;
@@ -31,8 +30,6 @@ export default function DispensingPage() {
     const { data: residents } = useResidents();
     const { data: items } = useInventoryItems();
     const { data: allBatches } = useInventoryBatches();
-    const logsRef = useEHealthRef('ehealth_dispensing_logs');
-    const batchesRef = useEHealthRef('ehealth_inventory_batches');
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
@@ -44,6 +41,7 @@ export default function DispensingPage() {
     const [quantity, setQuantity] = useState('1');
     const [cart, setCart] = useState<CartItem[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [isDispensing, setIsDispensing] = useState(false);
 
     // Filter Residents
     const filteredResidents = useMemo(() => {
@@ -55,21 +53,17 @@ export default function DispensingPage() {
     }, [residents, searchTerm]);
 
     const activeResident = useMemo(() => residents?.find(r => r.residentId === selectedResident), [residents, selectedResident]);
-    // Use .id here because useCollection injects it
     const activeItem = useMemo(() => items?.find(i => i.id === selectedItem), [items, selectedItem]);
 
     const addToCart = () => {
         setError(null);
         if (!activeItem || !allBatches) return;
 
-        // Check if already in cart
-        // activeItem.id is the document ID, which matches batch.itemId
         if (cart.some(i => i.itemId === activeItem.id)) {
             setError("Item is already in the cart.");
             return;
         }
 
-        // Match batches where batch.itemId equals the item's doc ID
         const itemBatches = allBatches.filter(b => b.itemId === activeItem.id);
         const qty = parseInt(quantity);
 
@@ -81,14 +75,13 @@ export default function DispensingPage() {
         try {
             const allocation = getFefoAllocation(itemBatches, qty);
             setCart([...cart, {
-                itemId: activeItem.id, // Store doc ID as itemId
+                itemId: activeItem.id,
                 name: activeItem.name,
                 dosage: activeItem.dosage,
                 quantity: qty,
                 allocation
             }]);
             
-            // Reset input
             setSelectedItem(null);
             setQuantity('1');
         } catch (e: any) {
@@ -101,52 +94,40 @@ export default function DispensingPage() {
     };
 
     const handleDispense = async () => {
-        if (!activeResident || cart.length === 0 || !user || !logsRef || !firestore) return;
+        if (!activeResident || cart.length === 0 || !user || !firestore) return;
+        setIsDispensing(true);
 
         try {
-            // Process each item in the cart
+            // Process each item in the cart using robust Firestore Transactions
             for (const item of cart) {
-                // Process allocation for this item
-                for (const alloc of item.allocation) {
-                    // 1. Create Log
-                    await addDocumentNonBlocking(logsRef, {
-                        residentId: activeResident.residentId,
-                        residentName: `${activeResident.firstName} ${activeResident.lastName}`,
-                        itemId: item.itemId,
-                        itemName: item.name,
-                        batchId: alloc.batch.id || alloc.batch.batchId, // Ensure we have the batch doc ID
-                        batchNumber: alloc.batch.batchNumber,
-                        quantity: alloc.deduct,
-                        dispensedByUserId: user.uid,
-                        dispensedByUserName: user.displayName || 'Staff',
-                        dateDispensed: serverTimestamp()
-                    });
+                // Prepare Allocation Data
+                const allocations: BatchAllocation[] = item.allocation.map(a => ({
+                    batchId: a.batch.id || a.batch.batchId,
+                    quantityToDeduct: a.deduct,
+                    currentExpiry: a.batch.expiryDate
+                }));
 
-                    // 2. Update Batch Quantity
-                    // Use alloc.batch.id if available from useCollection
-                    const batchId = alloc.batch.id || alloc.batch.batchId;
-                    const batchDocRef = doc(firestore, batchesRef.path, batchId);
-                    await updateDocumentNonBlocking(batchDocRef, {
-                        quantity: increment(-alloc.deduct),
-                    });
-                }
-                
-                // 3. Update Parent Item Total Stock
-                const itemDocRef = doc(firestore, `/barangays/${BARANGAY_ID}/ehealth_inventory_items/${item.itemId}`);
-                await updateDocumentNonBlocking(itemDocRef, {
-                    totalStock: increment(-item.quantity)
+                // Execute Transaction
+                // We generate a "Direct Dispense" ID since we don't have a Consultation/Prescription flow here yet.
+                await executeDispenseTransaction(firestore, BARANGAY_ID, item.itemId, allocations, {
+                    residentId: activeResident.residentId,
+                    consultationId: 'DIRECT_DISPENSE', 
+                    prescriptionId: 'DIRECT_DISPENSE',
+                    userId: user.uid,
+                    itemName: item.name
                 });
             }
 
             toast({ title: "Dispensed Successfully", description: `Prescription issued to ${activeResident.firstName}.` });
             
-            // Reset All
             setCart([]);
             setSelectedResident(null);
             setSearchTerm('');
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            toast({ variant: "destructive", title: "Error", description: "Transaction failed." });
+            toast({ variant: "destructive", title: "Dispense Failed", description: e.message || "Transaction could not be completed." });
+        } finally {
+            setIsDispensing(false);
         }
     };
 
@@ -230,7 +211,6 @@ export default function DispensingPage() {
                                         <SelectTrigger><SelectValue placeholder="Choose medicine..." /></SelectTrigger>
                                         <SelectContent>
                                             {items?.map(i => (
-                                                // Use i.id here as the key and value
                                                 <SelectItem key={i.id} value={i.id} disabled={!i.totalStock || i.totalStock <= 0}>
                                                     {i.name} ({i.dosage}) - Stock: {i.totalStock || 0}
                                                 </SelectItem>
@@ -308,10 +288,10 @@ export default function DispensingPage() {
                             <Button 
                                 className="w-full" 
                                 size="lg" 
-                                disabled={cart.length === 0 || !activeResident} 
+                                disabled={cart.length === 0 || !activeResident || isDispensing} 
                                 onClick={handleDispense}
                             >
-                                Confirm Dispense
+                                {isDispensing ? 'Processing...' : 'Confirm Dispense'}
                             </Button>
                         </CardFooter>
                     </Card>

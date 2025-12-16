@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Package, AlertTriangle, History, Search, Filter, AlertCircle, Trash2, CalendarIcon, ListPlus } from 'lucide-react';
+import { Plus, Package, AlertTriangle, History, Search, Filter, AlertCircle, Trash2, CalendarIcon, ListPlus, LayoutGrid, List } from 'lucide-react';
 import { format } from 'date-fns';
 import { serverTimestamp, doc, increment, Timestamp } from 'firebase/firestore';
 import { BARANGAY_ID } from '@/hooks/use-barangay-data'; 
@@ -37,6 +37,7 @@ export default function InventoryPage() {
     // State for Search & Filter
     const [searchTerm, setSearchTerm] = useState('');
     const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     // State for Add Master Item Dialog
     const [isAddItemOpen, setIsAddItemOpen] = useState(false);
@@ -312,7 +313,7 @@ export default function InventoryPage() {
                 </div>
             </div>
 
-            {/* Filters */}
+            {/* Filters & View Toggle */}
             <div className="flex flex-col sm:flex-row gap-4 items-center bg-muted/40 p-4 rounded-lg border">
                 <div className="relative w-full sm:w-[300px]">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -333,17 +334,37 @@ export default function InventoryPage() {
                         <AlertCircle className="mr-2 h-4 w-4" />
                         Low Stock Alerts
                     </Button>
+                    <div className="h-6 w-px bg-border mx-2 hidden sm:block"></div>
+                    <div className="flex items-center bg-background rounded-md border p-0.5">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-7 w-7 rounded-sm ${viewMode === 'grid' ? 'bg-muted shadow-sm' : 'text-muted-foreground'}`}
+                            onClick={() => setViewMode('grid')}
+                        >
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-7 w-7 rounded-sm ${viewMode === 'list' ? 'bg-muted shadow-sm' : 'text-muted-foreground'}`}
+                            onClick={() => setViewMode('list')}
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* Items Grid */}
+            {/* Content Area */}
             {isLoading ? (
                 <div className="text-center py-10">Loading inventory...</div>
             ) : filteredItems.length === 0 ? (
                 <div className="text-center py-16 border-2 border-dashed rounded-lg bg-muted/10">
                     <p className="text-muted-foreground">No medicines found matching your filters.</p>
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
+                // GRID VIEW
                 <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                     {filteredItems.map(item => {
                         const isLowStock = (item.totalStock || 0) <= item.reorderPoint;
@@ -411,6 +432,86 @@ export default function InventoryPage() {
                             </Card>
                         );
                     })}
+                </div>
+            ) : (
+                // LIST VIEW
+                <div className="rounded-md border bg-white overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Item Name</TableHead>
+                                <TableHead>Category / Form</TableHead>
+                                <TableHead className="text-right">Total Stock</TableHead>
+                                <TableHead className="text-right">Reorder Point</TableHead>
+                                <TableHead className="text-center">Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredItems.map((item) => {
+                                const isLowStock = (item.totalStock || 0) <= item.reorderPoint;
+                                const itemId = item.id;
+                                return (
+                                    <TableRow key={itemId}>
+                                        <TableCell className="font-medium">
+                                            <div className="flex flex-col">
+                                                <span>{item.name}</span>
+                                                <span className="text-xs text-muted-foreground">{item.dosage}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className="font-normal">{item.unit}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right font-bold">
+                                            {item.totalStock || 0}
+                                        </TableCell>
+                                        <TableCell className="text-right text-muted-foreground">
+                                            {item.reorderPoint}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {isLowStock ? (
+                                                <Badge variant="destructive" className="text-[10px]">Low Stock</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200">Good</Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                                                    title="Add Batch"
+                                                    onClick={() => { setSelectedItem(item); setIsAddBatchOpen(true); }}
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" title="Delete Item">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Delete Inventory Item?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will delete <strong>{item.name}</strong> from the master list. 
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteItem(itemId)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
                 </div>
             )}
 
