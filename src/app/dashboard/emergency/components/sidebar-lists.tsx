@@ -182,7 +182,7 @@ export const ActiveAlertFeed = ({ alerts, onSelectAlert, selectedAlertId }: { al
                              <div className="text-xs text-zinc-500 text-center py-4">No active alerts.</div>
                         ) : (
                             alerts.map(alert => {
-                                 const timeAgo = formatDistanceToNow(alert.timestamp?.toDate() || new Date(), { addSuffix: true });
+                                 const timeAgo = alert.timestamp ? formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true }) : 'Just now';
                                  const isSelected = selectedAlertId === alert.alertId;
                                  // Simplify Category Display
                                  const category = alert.category && alert.category !== 'Unspecified' ? alert.category : null;

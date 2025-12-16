@@ -1,0 +1,62 @@
+
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { ResponderLocation, User } from "@/lib/types";
+import { formatDistanceToNow } from "date-fns";
+import { ShieldCheck, User as UserIcon } from "lucide-react";
+
+interface AvailableRespondersPanelProps {
+    responders: ResponderLocation[];
+    users: User[];
+}
+
+export function AvailableRespondersPanel({ responders, users }: AvailableRespondersPanelProps) {
+    // Map responder location data to user profile data
+    const activeResponders = responders.map(r => {
+        const userProfile = users.find(u => u.userId === r.userId);
+        return {
+            ...r,
+            name: userProfile?.fullName || 'Unknown Officer',
+            role: userProfile?.position || userProfile?.systemRole || 'Responder'
+        };
+    });
+
+    return (
+        <div className="bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-lg overflow-hidden flex flex-col max-h-[30vh]">
+            <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-blue-900/20">
+                <h3 className="font-semibold text-blue-200 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    Responders On Duty
+                </h3>
+                <Badge className="bg-blue-600 hover:bg-blue-700">{activeResponders.length}</Badge>
+            </div>
+            <ScrollArea className="flex-1">
+                {activeResponders.length === 0 ? (
+                    <div className="p-4 text-center text-zinc-500 text-sm">
+                        No responders currently online.
+                    </div>
+                ) : (
+                    <div className="divide-y divide-zinc-800">
+                        {activeResponders.map(responder => (
+                            <div key={responder.userId} className="p-3 flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                                    <UserIcon className="h-4 w-4 text-zinc-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-sm font-medium text-white truncate">{responder.name}</p>
+                                        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                                    </div>
+                                    <p className="text-xs text-zinc-400 truncate">{responder.role}</p>
+                                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                                        Active {responder.last_active ? formatDistanceToNow(responder.last_active.toDate()) : 'recently'} ago
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </ScrollArea>
+        </div>
+    );
+}

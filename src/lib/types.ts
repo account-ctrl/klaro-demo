@@ -273,6 +273,8 @@ export type EmergencyAlert = {
     timestamp: Timestamp;
     latitude: number;
     longitude: number;
+    accuracy_m?: number; // Added: GPS accuracy
+    location_source?: 'GPS' | 'Manual' | 'Simulation'; // Added: Source
     status: 'New' | 'Acknowledged' | 'Dispatched' | 'On Scene' | 'Resolved' | 'False Alarm';
     category?: 'Medical' | 'Fire' | 'Crime' | 'Accident' | 'Unspecified';
     description?: string; // Admin's notes on the situation.
@@ -305,6 +307,7 @@ export type ResponderLocation = {
     userId: string; // The Tanod's user ID.
     latitude: number;
     longitude: number;
+    accuracy?: number; // Added
     last_active: Timestamp;
     status: 'On Duty' | 'Busy' | 'Offline';
 };
