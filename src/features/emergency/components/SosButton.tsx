@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Siren, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentCoordinates } from '../hooks/useGeolocation';
-import { useFirestore } from '@/firebase/provider'; // Updated import
+import { useFirestore } from '@/firebase/provider';
 import { useTenant } from '@/providers/tenant-provider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useUser } from '@/firebase';
@@ -19,8 +19,12 @@ export function SOSButton() {
     const handleSOS = async () => {
         setIsLoading(true);
         try {
+            // Updated call to accept higher timeout options if needed, 
+            // though the function defaults are now more robust.
             const coords = await getCurrentCoordinates();
             
+            console.log("SOS GPS Coordinates captured:", coords);
+
             if (!firestore || !tenantPath) throw new Error("Connection error");
 
             const incidentsRef = collection(firestore, `${tenantPath}/emergency_alerts`);
@@ -31,17 +35,17 @@ export function SOSButton() {
                 timestamp: serverTimestamp(),
                 latitude: coords.lat,
                 longitude: coords.lng,
-                accuracy_m: coords.accuracy, // Added accuracy
+                accuracy_m: coords.accuracy,
                 status: 'New',
                 category: 'Unspecified',
                 description: 'SOS Button Triggered',
                 contactNumber: user?.phoneNumber || '', 
-                location_source: 'GPS' // Added source
+                location_source: 'GPS'
             });
 
             toast({
                 title: "SOS SENT!",
-                description: "Help is on the way. Your location has been shared.",
+                description: `Help is on the way. Location sent (Accuracy: ±${Math.round(coords.accuracy)}m).`,
                 className: "bg-red-600 text-white border-red-800"
             });
 
@@ -53,10 +57,16 @@ export function SOSButton() {
                     description: "Please enable location services to use SOS.",
                     variant: "destructive"
                 });
+            } else if (error.message === "Geolocation not supported") {
+                 toast({
+                    title: "Not Supported",
+                    description: "Your device does not support GPS tracking.",
+                    variant: "destructive"
+                });
             } else {
                 toast({
                     title: "SOS Failed",
-                    description: "Could not send alert. Please call emergency hotline directly.",
+                    description: "Could not acquire GPS lock. Please call emergency hotline directly.",
                     variant: "destructive"
                 });
             }

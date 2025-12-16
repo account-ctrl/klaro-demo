@@ -91,7 +91,7 @@ export const useGeolocationTracker = (isActive: boolean) => {
 
 /**
  * Enhanced geolocation fetcher that attempts to get a high-accuracy reading.
- * It waits up to 5 seconds to refine the location if the initial lock is poor (>20m accuracy).
+ * It waits up to 10 seconds to refine the location if the initial lock is poor (>20m accuracy).
  */
 export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accuracy: number}> => {
     return new Promise((resolve, reject) => {
@@ -100,44 +100,56 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
             return;
         }
         
-        const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+        const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
         
         // 1. Request initial position
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                // If we have a good fix immediately (< 25m), return it
-                if (pos.coords.accuracy < 25) {
+                let bestPos = pos;
+                console.log(`Initial GPS: ${pos.coords.latitude},${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`);
+
+                // If we have a good fix immediately (< 20m), return it
+                if (bestPos.coords.accuracy <= 20) {
                      resolve({
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        accuracy: pos.coords.accuracy
+                        lat: bestPos.coords.latitude,
+                        lng: bestPos.coords.longitude,
+                        accuracy: bestPos.coords.accuracy
                     });
                     return;
                 }
 
-                // 2. If initial accuracy is poor, try watching for a better fix for a few seconds
-                let bestPos = pos;
+                // 2. If initial accuracy is poor, try watching for a better fix
+                // We will wait up to 10 seconds to get a better fix.
                 let watchId: number;
+                
+                const stopWatching = () => {
+                    if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
+                };
 
                 const refinementTimeout = setTimeout(() => {
-                    navigator.geolocation.clearWatch(watchId);
+                    stopWatching();
+                    console.log(`Refinement timeout. Returning best: ${bestPos.coords.accuracy}m`);
+                    // Resolve with the best we found in 10s
                     resolve({
                         lat: bestPos.coords.latitude,
                         lng: bestPos.coords.longitude,
                         accuracy: bestPos.coords.accuracy
                     });
-                }, 5000); // Wait 5 seconds for refinement
+                }, 10000); 
 
                 watchId = navigator.geolocation.watchPosition(
                     (newPos) => {
-                        // If new position is more accurate, update bestPos
+                        console.log(`Refining GPS: ${newPos.coords.latitude},${newPos.coords.longitude} (Acc: ${newPos.coords.accuracy}m)`);
+                        // If new position is more accurate (smaller accuracy number), update bestPos
                         if (newPos.coords.accuracy < bestPos.coords.accuracy) {
                             bestPos = newPos;
                         }
-                        // If we hit our target accuracy, stop waiting
-                        if (bestPos.coords.accuracy < 25) {
+                        
+                        // If we hit our target accuracy, stop waiting immediately
+                        if (bestPos.coords.accuracy <= 20) {
                             clearTimeout(refinementTimeout);
-                            navigator.geolocation.clearWatch(watchId);
+                            stopWatching();
+                            console.log("Target accuracy hit!");
                             resolve({
                                 lat: bestPos.coords.latitude,
                                 lng: bestPos.coords.longitude,
@@ -147,7 +159,7 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
                     }, 
                     (err) => {
                         console.warn("Refinement watch error", err);
-                        // Do not reject here, wait for timeout or success
+                        // If watch fails, we still have the initial 'pos' to fall back on in the timeout
                     },
                     options
                 );
