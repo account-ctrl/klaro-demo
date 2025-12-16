@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { EmergencyAlert, ResponderLocation, Household, TenantSettings } from '@/lib/types'; // Added TenantSettings
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Scan, Eye, Loader2, Save, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -211,22 +211,25 @@ const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contras
 
 export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation, showStructures = true, settings }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
-    const selectedAlert = alerts.find(a => a.alertId === selectedAlertId);
+    const selectedAlert = useMemo(() => alerts.find(a => a.alertId === selectedAlertId), [alerts, selectedAlertId]);
     
     // Determine the initial center
     // Priority: Searched Location > Selected Alert > First Alert > Default
     // Note: MapAutoFocus will override this once it resolves the location.
-    let centerToUse: [number, number] = defaultCenter;
-    if (searchedLocation) {
-        centerToUse = [searchedLocation.lat, searchedLocation.lng];
-    } else if (selectedAlert) {
-        centerToUse = [selectedAlert.latitude, selectedAlert.longitude];
-    } else if (alerts.length > 0) {
-        centerToUse = [alerts[0].latitude, alerts[0].longitude];
-    } else if (households.length > 0 && households[0].latitude) {
-        // Fallback to first household if no alerts
-        centerToUse = [households[0].latitude!, households[0].longitude!];
-    }
+    
+    const centerToUse = useMemo<[number, number]>(() => {
+        if (searchedLocation) {
+            return [searchedLocation.lat, searchedLocation.lng];
+        } else if (selectedAlert) {
+            return [selectedAlert.latitude, selectedAlert.longitude];
+        } else if (alerts.length > 0) {
+            return [alerts[0].latitude, alerts[0].longitude];
+        } else if (households.length > 0 && households[0].latitude) {
+            // Fallback to first household if no alerts
+            return [households[0].latitude!, households[0].longitude!];
+        }
+        return defaultCenter;
+    }, [searchedLocation, selectedAlert, alerts, households, defaultCenter]);
 
     const mapRef = useRef<L.Map | null>(null);
     const firestore = useFirestore();
