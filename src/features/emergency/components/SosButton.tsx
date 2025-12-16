@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Loader2, MapPinOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { useGeolocation } from '../hooks/useGeolocation';
+import { useHighPrecisionLocation } from '../hooks/useHighPrecisionLocation';
 import { useFirestore } from '@/firebase/client-provider';
 import { useTenant } from '@/providers/tenant-provider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -21,10 +21,10 @@ export const SOSButton = () => {
     const { toast } = useToast();
     const firestore = useFirestore();
     const { tenantPath } = useTenant();
-    const { user, userError } = useUser();
+    const { user } = useUser();
     
-    // Instantiate hook to get the function
-    const { getCurrentCoordinates } = useGeolocation();
+    // New High Precision Hook
+    const { getCurrentCoordinates, loading: locationLoading } = useHighPrecisionLocation();
 
     useEffect(() => {
         if (navigator.permissions && navigator.permissions.query) {
@@ -44,10 +44,10 @@ export const SOSButton = () => {
         setLoading(true);
 
         try {
-            // 1. Get Coordinates using the simplified hook logic
-            const { lat, lng, accuracy } = await getCurrentCoordinates();
+            // 1. Get High Precision Location
+            const { lat, lng, accuracy, provider } = await getCurrentCoordinates();
 
-            // 2. Create Incident
+            // 2. Create Incident Payload
             const incidentsRef = collection(
                 firestore,
                 `${tenantPath}/emergency_alerts`
@@ -57,14 +57,22 @@ export const SOSButton = () => {
                 residentId: user?.uid || 'anonymous',
                 residentName: user?.displayName || 'Unknown User',
                 timestamp: serverTimestamp(),
+                // Use the new structured location payload
+                location: {
+                    lat: lat,
+                    lng: lng,
+                    accuracy: accuracy,
+                    provider: provider
+                },
+                // Keep flat fields for backward compatibility if needed, but prefer 'location' object
                 latitude: lat,
                 longitude: lng,
                 accuracy_m: accuracy, 
+                
                 status: 'New',
                 category: 'Unspecified',
                 description: 'SOS Button Triggered',
                 contactNumber: user?.phoneNumber || '', 
-                location_source: 'GPS' 
             });
 
             toast({
@@ -76,8 +84,8 @@ export const SOSButton = () => {
         } catch (error: any) {
             console.error("SOS Error:", error);
             let msg = "Could not get location.";
-            if (error.message.includes("denied")) msg = "Location permission denied. Please enable it in browser settings.";
-            else if (error.message.includes("timed out")) msg = "GPS timed out. Ensure you have a clear signal.";
+            if (error.message && error.message.includes("denied")) msg = "Location permission denied. Please enable it in browser settings.";
+            else if (error.message && error.message.includes("timed out")) msg = "GPS timed out. Ensure you have a clear signal.";
 
             toast({
                 title: "SOS Failed",
@@ -111,15 +119,27 @@ export const SOSButton = () => {
         );
     }
 
+    const isProcessing = loading || locationLoading;
+
     return (
         <Button 
             variant="destructive" 
             size="lg" 
-            className={`h-16 w-16 rounded-full shadow-xl ${loading ? '' : 'animate-pulse hover:animate-none'}`}
+            className={`h-16 w-16 rounded-full shadow-xl ${isProcessing ? '' : 'animate-pulse hover:animate-none'}`}
             onClick={handleSosClick}
-            disabled={loading}
+            disabled={isProcessing}
         >
-            {loading ? <Loader2 className="h-8 w-8 animate-spin" /> : <div className="flex flex-col items-center"><AlertCircle className="h-6 w-6" /><span className="text-[10px] font-bold">SOS</span></div>}
+            {isProcessing ? (
+                <div className="flex flex-col items-center">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span className="text-[8px] font-medium mt-1">LOCATING...</span>
+                </div>
+            ) : (
+                <div className="flex flex-col items-center">
+                    <AlertCircle className="h-6 w-6" />
+                    <span className="text-[10px] font-bold">SOS</span>
+                </div>
+            )}
         </Button>
     );
 };

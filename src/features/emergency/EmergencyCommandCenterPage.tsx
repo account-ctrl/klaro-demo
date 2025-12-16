@@ -8,11 +8,13 @@ import { ActiveAlertsPanel } from "./components/ActiveAlertsPanel";
 import { AvailableRespondersPanel } from "./components/AvailableRespondersPanel";
 import { OnDutyToggle } from "./components/OnDutyToggle";
 import { SOSButton } from "./components/SosButton";
-import { WeatherHeader } from "../../app/dashboard/emergency/components/weather-header"; // Reuse existing
+import { WeatherHeader } from "../../app/dashboard/emergency/components/weather-header"; 
 import { useUser, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
 import { collection } from "firebase/firestore";
 import { User } from "@/lib/types";
 import { Loader2 } from "lucide-react";
+import { GeolocationDebugger } from "./components/GeolocationDebugger";
+import { useGeolocation } from "./hooks/useGeolocation";
 
 // Dynamically import map to avoid SSR issues
 const FeatureMap = dynamic(
@@ -23,23 +25,22 @@ const FeatureMap = dynamic(
   }
 );
 
-// We define a wrapper that reuses the Leaflet map container but injects our new components
-// Note: In a real refactor, we would merge this with src/app/dashboard/emergency/page.tsx
-// For this task, we will create a standalone page to demonstrate the "Feature" requirement 
-// while keeping the existing dashboard intact. Ideally, the existing dashboard imports these components.
-
 export default function EmergencyCommandCenterPage() {
     const { incidents, loading: loadingIncidents } = useIncidents();
     const { responders, loading: loadingResponders } = useLiveLocations();
     const [center, setCenter] = useState<{lat: number, lng: number} | undefined>(undefined);
     
-    // Fetch users to hydrate responder names
+    // Auth & Data
+    const { user: currentUser } = useUser();
     const firestore = useFirestore();
     const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
     const { data: users } = useCollection<User>(usersCollection);
 
-    // Default center (placeholder, e.g., Manila) if no data
-    // In production, this should come from TenantSettings
+    // Geolocation for Debugger
+    // We use the hook here to pass the location to the map
+    const { location: debugLocation, getCurrentCoordinates } = useGeolocation();
+
+    // Default center (placeholder)
     const defaultCenter = { lat: 14.5995, lng: 120.9842 };
 
     const handleIncidentClick = (id: string) => {
@@ -57,6 +58,18 @@ export default function EmergencyCommandCenterPage() {
         }
     }, [incidents]);
 
+    // Auto-center on user location when it's first found (and no incident selected)
+    useEffect(() => {
+        if (debugLocation.lat && debugLocation.lng && !center) {
+            setCenter({ lat: debugLocation.lat, lng: debugLocation.lng });
+        }
+    }, [debugLocation.lat, debugLocation.lng]);
+
+    // Initial fetch for debugger
+    useEffect(() => {
+        getCurrentCoordinates().catch(() => {});
+    }, []);
+
     if (loadingIncidents) {
         return <div className="h-screen w-full bg-zinc-950 flex items-center justify-center text-white gap-2">
             <Loader2 className="animate-spin" /> Loading Command Center...
@@ -68,14 +81,6 @@ export default function EmergencyCommandCenterPage() {
             {/* Map Layer */}
             <div className="absolute inset-0 z-0">
                 <div className="h-full w-full" id="map-container">
-                     {/* 
-                        We need a MapContainer here. 
-                        Since MapView.tsx uses useMap(), it must be child of MapContainer.
-                        We'll inline the MapContainer here or wrap it.
-                     */}
-                     {/* Reuse the dynamic import approach for the container if possible or just use the FeatureMap assuming it has container inside? 
-                         Wait, FeatureMap defined previously only has Marker logic. We need the container.
-                     */}
                      <MapContainerWrapper 
                         center={center || defaultCenter}
                         zoom={15}
@@ -85,6 +90,8 @@ export default function EmergencyCommandCenterPage() {
                             responders={responders}
                             center={center}
                             onIncidentClick={handleIncidentClick}
+                            currentUserLocation={debugLocation.lat && debugLocation.lng ? { lat: debugLocation.lat, lng: debugLocation.lng } : null}
+                            currentUser={currentUser}
                          />
                      </MapContainerWrapper>
                 </div>
@@ -96,6 +103,11 @@ export default function EmergencyCommandCenterPage() {
             {/* Header */}
             <div className="absolute top-6 left-6 z-10 pointer-events-none">
                 <WeatherHeader />
+            </div>
+
+            {/* Left Panel: Geolocation Debugger (New) */}
+            <div className="absolute top-24 left-6 z-10 pointer-events-auto">
+                <GeolocationDebugger currentUser={currentUser} />
             </div>
 
             {/* Right Panel */}
@@ -111,7 +123,6 @@ export default function EmergencyCommandCenterPage() {
 
             {/* SOS Button (Bottom Right) */}
             <div className="absolute bottom-10 right-96 z-50 pointer-events-auto">
-                 {/* Positioned slightly left of the right panel */}
                  <SOSButton />
             </div>
         </div>
