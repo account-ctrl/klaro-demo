@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Siren, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentCoordinates } from '../hooks/useGeolocation';
-import { useFirestore } from '@/firebase/client-provider';
+import { useFirestore } from '@/firebase/provider'; // Updated import
 import { useTenant } from '@/providers/tenant-provider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useUser } from '@/firebase';
