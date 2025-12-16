@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -85,9 +85,14 @@ function TemplateForm({ record, onSave, onClose }: TemplateFormProps) {
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
-  const handleCodeChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, content: value }));
-  };
+  // Wrap in useCallback to prevent infinite loop in TemplateEditor effect
+  const handleCodeChange = useCallback((value: string) => {
+    setFormData((prev) => {
+        // Prevent unnecessary updates if content hasn't changed effectively
+        if (prev.content === value) return prev;
+        return { ...prev, content: value };
+    });
+  }, []);
 
   const handlePreview = () => {
     const previewContent = formData.content
