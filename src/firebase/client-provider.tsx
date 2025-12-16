@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, type ReactNode } from 'react';
-import { FirebaseProvider } from '@/firebase/provider';
+import { FirebaseProvider, useFirebase } from '@/firebase/provider';
 import { initializeFirebase } from '@/firebase';
 
 interface FirebaseClientProviderProps {
@@ -24,3 +24,12 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
     </FirebaseProvider>
   );
 }
+
+// Added export to fix import errors in other modules
+export const useFirestore = () => {
+    const { firestore } = useFirebase();
+    return firestore;
+};
+
+// Re-export useFirebase for convenience if needed by consumers importing from here
+export { useFirebase };

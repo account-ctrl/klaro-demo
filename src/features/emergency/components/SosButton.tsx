@@ -1,10 +1,10 @@
 
 import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Siren, Loader2, MapPinOff } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Loader2, MapPinOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { getCurrentCoordinates, checkGeolocationPermission } from '../hooks/useGeolocation';
-import { useFirestore } from '@/firebase/provider';
+import { useGeolocation } from '../hooks/useGeolocation';
+import { useFirestore } from '@/firebase/client-provider';
 import { useTenant } from '@/providers/tenant-provider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useUser } from '@/firebase';
@@ -15,114 +15,111 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export function SOSButton() {
-    const [isLoading, setIsLoading] = useState(false);
-    const [permStatus, setPermStatus] = useState<string>('unknown');
+export const SOSButton = () => {
+    const [loading, setLoading] = useState(false);
+    const [permissionState, setPermissionState] = useState<PermissionState | 'unknown'>('unknown');
     const { toast } = useToast();
     const firestore = useFirestore();
     const { tenantPath } = useTenant();
-    const { user } = useUser();
+    const { user, userError } = useUser();
+    
+    // Instantiate hook to get the function
+    const { getCurrentCoordinates } = useGeolocation();
 
-    // Check permission status on mount
     useEffect(() => {
-        checkGeolocationPermission().then(status => setPermStatus(status));
+        if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+                setPermissionState(result.state);
+                result.onchange = () => setPermissionState(result.state);
+            });
+        }
     }, []);
 
-    const handleSOS = async () => {
-        setIsLoading(true);
+    const handleSosClick = async () => {
+        if (!firestore || !tenantPath || !user) {
+            toast({ title: "System Error", description: "Service not available.", variant: "destructive" });
+            return;
+        }
+
+        setLoading(true);
+
         try {
-            console.log("SOS Button Clicked. Requesting location...");
-            
-            // Explicitly call getCurrentCoordinates which triggers the browser prompt if not granted
-            const coords = await getCurrentCoordinates();
-            
-            console.log("SOS GPS Coordinates captured:", coords);
+            // 1. Get Coordinates using the simplified hook logic
+            const { lat, lng, accuracy } = await getCurrentCoordinates();
 
-            if (!firestore || !tenantPath) throw new Error("Connection error");
+            // 2. Create Incident
+            const incidentsRef = collection(
+                firestore,
+                `${tenantPath}/emergency_alerts`
+            );
 
-            const incidentsRef = collection(firestore, `${tenantPath}/emergency_alerts`);
-            
             await addDoc(incidentsRef, {
                 residentId: user?.uid || 'anonymous',
                 residentName: user?.displayName || 'Unknown User',
                 timestamp: serverTimestamp(),
-                latitude: coords.lat,
-                longitude: coords.lng,
-                accuracy_m: coords.accuracy,
+                latitude: lat,
+                longitude: lng,
+                accuracy_m: accuracy, 
                 status: 'New',
                 category: 'Unspecified',
                 description: 'SOS Button Triggered',
                 contactNumber: user?.phoneNumber || '', 
-                location_source: 'GPS'
+                location_source: 'GPS' 
             });
 
             toast({
                 title: "SOS SENT!",
-                description: `Help is on the way. Location sent (Accuracy: ±${Math.round(coords.accuracy)}m).`,
-                className: "bg-red-600 text-white border-red-800"
+                description: `Help is on the way. Location pinned (Accuracy: ${Math.round(accuracy)}m).`,
+                className: "bg-red-600 text-white border-none"
             });
 
         } catch (error: any) {
             console.error("SOS Error:", error);
-            
-            if (error.message.includes("Secure Context")) {
-                 toast({
-                    title: "Security Error",
-                    description: "Location requires HTTPS or Localhost.",
-                    variant: "destructive"
-                });
-            } else if (error.code === 1) { // PERMISSION_DENIED
-                setPermStatus('denied');
-                toast({
-                    title: "Permission Denied",
-                    description: "You blocked location access. Please enable it in your browser address bar.",
-                    variant: "destructive"
-                });
-            } else if (error.message === "Geolocation not supported") {
-                 toast({
-                    title: "Not Supported",
-                    description: "Your device does not support GPS tracking.",
-                    variant: "destructive"
-                });
-            } else {
-                toast({
-                    title: "SOS Failed",
-                    description: "Could not acquire GPS lock. Try moving to an open area.",
-                    variant: "destructive"
-                });
-            }
+            let msg = "Could not get location.";
+            if (error.message.includes("denied")) msg = "Location permission denied. Please enable it in browser settings.";
+            else if (error.message.includes("timed out")) msg = "GPS timed out. Ensure you have a clear signal.";
+
+            toast({
+                title: "SOS Failed",
+                description: msg,
+                variant: "destructive"
+            });
         } finally {
-            setIsLoading(false);
+            setLoading(false);
         }
     };
 
+    if (permissionState === 'denied') {
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button 
+                            variant="destructive" 
+                            size="lg" 
+                            className="h-16 w-16 rounded-full shadow-xl animate-none bg-gray-400 hover:bg-gray-500"
+                            onClick={() => alert("Location is blocked. Click the lock icon in your address bar to reset permissions.")}
+                        >
+                            <MapPinOff className="h-8 w-8" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Location permission blocked. Click to see how to enable.</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    }
+
     return (
-        <TooltipProvider>
-            <Tooltip open={permStatus === 'denied'}>
-                <TooltipTrigger asChild>
-                    <Button 
-                        className={`rounded-full w-24 h-24 shadow-[0_0_50px_-10px_rgba(220,38,38,0.8)] border-4 animate-pulse hover:animate-none transition-all scale-100 hover:scale-110 flex flex-col gap-1 items-center justify-center z-[100] ${
-                            permStatus === 'denied' 
-                            ? 'bg-zinc-700 border-zinc-500 cursor-not-allowed hover:bg-zinc-700' 
-                            : 'bg-red-600 border-red-800 hover:bg-red-700'
-                        }`}
-                        onClick={handleSOS}
-                        disabled={isLoading}
-                    >
-                        {isLoading ? (
-                            <Loader2 className="h-8 w-8 animate-spin" />
-                        ) : permStatus === 'denied' ? (
-                            <MapPinOff className="h-10 w-10 text-zinc-400" />
-                        ) : (
-                            <Siren className="h-10 w-10" />
-                        )}
-                        <span className="font-bold text-lg">SOS</span>
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent className="bg-red-900 border-red-800 text-white max-w-[200px] text-center">
-                    <p>Location access is blocked. Click the lock icon in your URL bar to enable.</p>
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
+        <Button 
+            variant="destructive" 
+            size="lg" 
+            className={`h-16 w-16 rounded-full shadow-xl ${loading ? '' : 'animate-pulse hover:animate-none'}`}
+            onClick={handleSosClick}
+            disabled={loading}
+        >
+            {loading ? <Loader2 className="h-8 w-8 animate-spin" /> : <div className="flex flex-col items-center"><AlertCircle className="h-6 w-6" /><span className="text-[10px] font-bold">SOS</span></div>}
+        </Button>
     );
-}
+};

@@ -1,174 +1,116 @@
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useFirestore } from '@/firebase/provider'; 
-import { useTenant } from '@/providers/tenant-provider';
-import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { useUser } from '@/firebase';
+import { useState, useRef, useEffect } from 'react';
+import { useFirestore } from '@/firebase/client-provider';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
-const UPDATE_INTERVAL_MS = 5000;
+interface LocationState {
+    lat: number | null;
+    lng: number | null;
+    accuracy: number | null;
+}
 
-export const useGeolocationTracker = (isActive: boolean) => {
-  const [location, setLocation] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const watchIdRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
-  const { tenantPath } = useTenant();
-  const firestore = useFirestore();
-  const { user } = useUser();
+interface GeolocationResult {
+    lat: number;
+    lng: number;
+    accuracy: number;
+}
 
-  const updateFirestore = useCallback(async (lat: number, lng: number, accuracy: number) => {
-    if (!firestore || !tenantPath || !user) return;
+export const useGeolocation = (userId?: string, role?: string) => {
+    const [location, setLocation] = useState<LocationState>({ lat: null, lng: null, accuracy: null });
+    const [error, setError] = useState<string | null>(null);
+    const watchIdRef = useRef<number | null>(null);
     
-    const now = Date.now();
-    if (now - lastUpdateRef.current < UPDATE_INTERVAL_MS) return;
+    // --- 1. One-time Location Request (Used for SOS) ---
+    const getCurrentCoordinates = (): Promise<GeolocationResult> => {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                reject(new Error("Geolocation not supported by this browser."));
+                return;
+            }
 
-    try {
-      const locationRef = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
-      await setDoc(locationRef, {
-        userId: user.uid,
-        latitude: lat,
-        longitude: lng,
-        accuracy: accuracy,
-        last_active: serverTimestamp(),
-        status: 'On Duty',
-      }, { merge: true });
-      lastUpdateRef.current = now;
-    } catch (err) {
-      console.error("Failed to update location to Firestore", err);
-    }
-  }, [firestore, tenantPath, user]);
+            const successHandler = (pos: GeolocationPosition) => {
+                // Log for debugging
+                console.log(`GPS Success: ${pos.coords.latitude}, ${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`);
+                resolve({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                });
+            };
 
-  useEffect(() => {
-    if (!isActive) {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      
-      if (firestore && tenantPath && user && lastUpdateRef.current > 0) {
-          const locationRef = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
-          updateDoc(locationRef, { status: 'Offline' }).catch(console.error);
-      }
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser.");
-      return;
-    }
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setLocation({ lat: latitude, lng: longitude, accuracy });
-        updateFirestore(latitude, longitude, accuracy);
-        setError(null);
-      },
-      (err) => {
-        console.error("Geolocation error:", err);
-        if (err.code === 1) setError("Location permission denied.");
-        else if (err.code === 2) setError("Position unavailable.");
-        else if (err.code === 3) setError("Location request timed out.");
-        else setError(err.message);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      }
-    );
-
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
-  }, [isActive, updateFirestore, firestore, tenantPath, user]);
-
-  return { location, error };
-};
-
-export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accuracy: number}> => {
-    return new Promise((resolve, reject) => {
-        // 1. Check for Secure Context
-        if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost') {
-            reject(new Error("Secure Context Required. Geolocation only works on HTTPS or localhost."));
-            return;
-        }
-
-        if (!navigator.geolocation) {
-            reject(new Error("Geolocation not supported"));
-            return;
-        }
-        
-        const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
-        
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                let bestPos = pos;
-                console.log(`Initial GPS: ${pos.coords.latitude},${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`);
-
-                if (bestPos.coords.accuracy <= 20) {
-                     resolve({
-                        lat: bestPos.coords.latitude,
-                        lng: bestPos.coords.longitude,
-                        accuracy: bestPos.coords.accuracy
-                    });
-                    return;
-                }
-
-                let watchId: number;
-                
-                const stopWatching = () => {
-                    if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
-                };
-
-                const refinementTimeout = setTimeout(() => {
-                    stopWatching();
-                    console.log(`Refinement timeout. Returning best: ${bestPos.coords.accuracy}m`);
-                    resolve({
-                        lat: bestPos.coords.latitude,
-                        lng: bestPos.coords.longitude,
-                        accuracy: bestPos.coords.accuracy
-                    });
-                }, 10000); 
-
-                watchId = navigator.geolocation.watchPosition(
-                    (newPos) => {
-                        console.log(`Refining GPS: ${newPos.coords.latitude},${newPos.coords.longitude} (Acc: ${newPos.coords.accuracy}m)`);
-                        if (newPos.coords.accuracy < bestPos.coords.accuracy) {
-                            bestPos = newPos;
-                        }
-                        
-                        if (bestPos.coords.accuracy <= 20) {
-                            clearTimeout(refinementTimeout);
-                            stopWatching();
-                            console.log("Target accuracy hit!");
-                            resolve({
-                                lat: bestPos.coords.latitude,
-                                lng: bestPos.coords.longitude,
-                                accuracy: bestPos.coords.accuracy
-                            });
-                        }
-                    }, 
-                    (err) => {
-                        console.warn("Refinement watch error", err);
-                    },
-                    options
+            const errorHandler = (err: GeolocationPositionError) => {
+                console.warn("High accuracy GPS failed, trying fallback...", err.message);
+                // If high accuracy fails (timeout/unavail), try one more time with lower settings
+                navigator.geolocation.getCurrentPosition(
+                    successHandler,
+                    (finalErr) => reject(new Error(`Location error: ${finalErr.message}`)),
+                    { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
                 );
-            },
-            (err) => reject(err),
-            options
-        );
-    });
-};
+            };
 
-export const checkGeolocationPermission = async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
-    if (!navigator.permissions || !navigator.permissions.query) return 'unknown';
-    try {
-        const result = await navigator.permissions.query({ name: 'geolocation' });
-        return result.state;
-    } catch (e) {
-        return 'unknown';
-    }
+            // Request 1: High Accuracy (Primary)
+            navigator.geolocation.getCurrentPosition(
+                successHandler,
+                errorHandler,
+                {
+                    enableHighAccuracy: true,
+                    timeout: 12000, // Wait max 12s for high accuracy lock
+                    maximumAge: 0   // Force fresh reading
+                }
+            );
+        });
+    };
+
+    // --- 2. Live Tracking (Used for Responders) ---
+    const startWatching = () => {
+        if (!navigator.geolocation) {
+            setError("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        // Clear existing watch if any
+        if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+        }
+
+        watchIdRef.current = navigator.geolocation.watchPosition(
+            (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                setLocation({ lat: latitude, lng: longitude, accuracy });
+                setError(null);
+            },
+            (err) => {
+                console.error("Geolocation watch error:", err);
+                if (err.code === 1) setError("Location permission denied.");
+                else if (err.code === 2) setError("Position unavailable.");
+                else if (err.code === 3) setError("Location request timed out.");
+                else setError(err.message);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 0,
+                distanceFilter: 5 // Only update if moved > 5 meters
+            }
+        );
+    };
+
+    const stopWatching = () => {
+        if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+        }
+    };
+
+    useEffect(() => {
+        return () => stopWatching();
+    }, []);
+
+    return {
+        location,
+        error,
+        startWatching,
+        stopWatching,
+        getCurrentCoordinates
+    };
 };
