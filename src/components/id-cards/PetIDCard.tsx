@@ -9,6 +9,8 @@ interface PetIDCardProps {
     photoUrl?: string;
     tagNumber?: string;
     colorMarkings?: string;
+    gender?: string;
+    birthDate?: string;
   };
   owner?: {
     firstName: string;
@@ -16,371 +18,438 @@ interface PetIDCardProps {
     address?: string;
     contactNumber?: string;
   };
+  barangay?: {
+      name?: string;
+      logoUrl?: string;
+      cityLogoUrl?: string;
+      city?: string;
+      province?: string;
+  };
 }
 
-export const PetIDCard: React.FC<PetIDCardProps> = ({ pet, owner }) => {
+export const PetIDCard: React.FC<PetIDCardProps> = ({ pet, owner, barangay }) => {
+  const bgImage = barangay?.logoUrl ? `url(${barangay.logoUrl})` : 'none';
+
   return (
     <div className="id-card-container">
       {/* Front of Card */}
-      <div className="id-card">
+      <div className="id-card front-face">
+        {/* Background Watermark */}
+        <div className="watermark" style={{ backgroundImage: bgImage }}></div>
+
         {/* Header Region */}
         <div className="id-header">
-          <h1>BARANGAY PET REGISTRY</h1>
-          <p>Republic of the Philippines, Barangay San Isidro</p>
+            <div className="logo-box">
+                {barangay?.cityLogoUrl ? <img src={barangay.cityLogoUrl} alt="City Logo" /> : <div className="placeholder-logo"></div>}
+            </div>
+            <div className="header-text">
+                <p className="republic">Republic of the Philippines</p>
+                <p className="province">{barangay?.city || 'City / Municipality'} • {barangay?.province || 'Province'}</p>
+                <h1 className="barangay-name">{barangay?.name || 'BARANGAY NAME'}</h1>
+                <p className="doc-title">ANIMAL IDENTIFICATION CARD</p>
+            </div>
+             <div className="logo-box">
+                 {barangay?.logoUrl ? <img src={barangay.logoUrl} alt="Brgy Logo" /> : <div className="placeholder-logo"></div>}
+            </div>
         </div>
 
         {/* Main Content Grid */}
         <div className="id-body">
-          {/* Photo Region */}
-          <div className="id-photo-container">
-            <img 
-              src={pet.photoUrl || 'https://placehold.co/300x400/png?text=Pet+Photo'} 
-              alt={pet.name} 
-              className="id-photo"
-            />
+          {/* Left Column: Photo & Tag */}
+          <div className="left-col">
+            <div className="id-photo-container">
+               {pet.photoUrl ? (
+                   <img src={pet.photoUrl} alt={pet.name} className="id-photo" />
+               ) : (
+                   <div className="no-photo">NO PHOTO</div>
+               )}
+            </div>
+            <div className="tag-box">
+                <span className="tag-label">ID NO.</span>
+                <span className="tag-number">{pet.tagNumber || 'PENDING'}</span>
+            </div>
           </div>
 
-          {/* Info Region */}
-          <div className="id-info">
-            <h2 className="pet-name">{pet.name || 'Unknown Pet'}</h2>
-            
-            <div className="info-row">
-              <span className="label">Owner:</span>
-              <span className="value truncate">{owner ? `${owner.firstName} ${owner.lastName}` : 'N/A'}</span>
-            </div>
-            
-            <div className="info-row">
-              <span className="label">Address:</span>
-              <span className="value truncate-2">{owner?.address || 'N/A'}</span>
-            </div>
+          {/* Right Column: Details */}
+          <div className="right-col">
+             <div className="details-group">
+                <label>PET NAME</label>
+                <div className="value name-value">{pet.name || 'Unknown'}</div>
+             </div>
 
-            <div className="info-grid">
-              <div className="info-item">
-                <span className="label">Species</span>
-                <span className="value">{pet.species || 'N/A'}</span>
-              </div>
-              <div className="info-item">
-                <span className="label">Breed</span>
-                <span className="value truncate">{pet.breed || 'N/A'}</span>
-              </div>
-            </div>
+             <div className="grid-2">
+                 <div className="details-group">
+                    <label>SPECIES</label>
+                    <div className="value">{pet.species || '-'}</div>
+                 </div>
+                 <div className="details-group">
+                    <label>BREED</label>
+                    <div className="value truncate">{pet.breed || '-'}</div>
+                 </div>
+             </div>
 
-             <div className="info-row mt-1">
-              <span className="label">Tag No:</span>
-              <span className="value tag-text">{pet.tagNumber || 'PENDING'}</span>
-            </div>
+             <div className="grid-2">
+                 <div className="details-group">
+                    <label>SEX</label>
+                    <div className="value">{pet.gender || '-'}</div>
+                 </div>
+                 <div className="details-group">
+                    <label>COLOR/MARKINGS</label>
+                    <div className="value truncate">{pet.colorMarkings || '-'}</div>
+                 </div>
+             </div>
+
+             <div className="details-group mt-1">
+                <label>OWNER</label>
+                <div className="value truncate uppercase">{owner ? `${owner.firstName} ${owner.lastName}` : 'N/A'}</div>
+             </div>
+
+             <div className="details-group">
+                <label>ADDRESS</label>
+                <div className="value truncate-2 uppercase" style={{ fontSize: '6pt', lineHeight: '1.2' }}>{owner?.address || 'N/A'}</div>
+             </div>
           </div>
         </div>
 
          {/* Footer/Strip */}
          <div className="id-footer-strip">
-            OFFICIAL REGISTRATION DOCUMENT
+            <div className="footer-line"></div>
+            <span>OFFICIAL DOCUMENT • NON-TRANSFERABLE</span>
          </div>
       </div>
 
       {/* Back of Card */}
       <div className="id-card back-face">
-        <div className="back-grid">
-             {/* Emergency Info */}
-            <div className="section emergency-section">
-                <h3>EMERGENCY INFORMATION</h3>
-                <div className="content">
-                    <p>If found, please return to owner:</p>
-                    <p className="highlight">{owner?.contactNumber || 'No Contact Info'}</p>
-                    <p className="sub">Or call Barangay Hall: (02) 8123-4567</p>
-                </div>
+         <div className="watermark" style={{ backgroundImage: bgImage, opacity: 0.03 }}></div>
+         
+         <div className="back-content">
+             {/* Emergency Header */}
+            <div className="back-header">
+                <h2>IN CASE OF EMERGENCY / FOUND</h2>
             </div>
 
-            {/* Vaccination Record */}
-            <div className="section vacc-section">
-                <h3>VACCINATION RECORD</h3>
-                 <div className="vacc-row">
-                    <span>Anti-Rabies:</span>
+            <div className="emergency-info">
+                <p>Please contact the owner immediately:</p>
+                <p className="contact-number">{owner?.contactNumber || 'NO CONTACT INFO'}</p>
+                <p className="or-text">OR REPORT TO THE BARANGAY HALL</p>
+                <p className="brgy-contact">Hotline: (02) 8123-4567</p>
+            </div>
+
+            <div className="divider"></div>
+
+            {/* Medical / Status */}
+            <div className="medical-section">
+                <h3>VACCINATION STATUS</h3>
+                <div className="checkbox-row">
+                     <div className="cb-item">
+                         <div className="box"></div> <span>Anti-Rabies</span>
+                     </div>
+                     <div className="cb-item">
+                         <div className="box"></div> <span>Deworming</span>
+                     </div>
+                </div>
+                <div className="notes-area">
+                    <span>Notes:</span>
                     <div className="line"></div>
                 </div>
-                <div className="vacc-row">
-                    <span>Deworming:</span>
-                    <div className="line"></div>
-                </div>
             </div>
 
-             {/* Legal/Disclaimer */}
-            <div className="section legal-section">
-                <p>Registered under Brgy. Ordinance No. 123. Abandonment is punishable by law.</p>
-            </div>
+            <div className="spacer"></div>
 
-            {/* QR Region - FIXED ANCHOR */}
-            <div className="qr-region">
-                 <div className="qr-wrapper">
-                    <QRCodeSVG 
-                        value={`https://barangay.app/pets/${pet.tagNumber || 'check'}`}
-                        size={120} // Minimum guaranteed size
-                        level="H" // High error correction
-                        includeMargin={false}
-                        className="qr-code-svg"
-                    />
+            {/* Bottom Section: QR & Legal */}
+            <div className="bottom-row">
+                 <div className="legal-col">
+                     <p className="legal-text">
+                        This card certifies that the animal described herein is registered under Barangay Ordinance No. 123.
+                     </p>
+                     <p className="legal-text">
+                        Valid until revoked. Ensure annual vaccination updates.
+                     </p>
+                     
+                     <div className="signature-area">
+                        <div className="sig-line"></div>
+                        <span className="sig-label">Barangay Captain</span>
+                     </div>
                  </div>
-                 <span className="qr-label">SCAN FOR RECORDS</span>
+
+                 {/* ANCHORED QR REGION */}
+                 <div className="qr-col">
+                     <div className="qr-border">
+                        <QRCodeSVG 
+                            value={`https://barangay.app/pets/${pet.tagNumber || 'check'}`}
+                            size={80} 
+                            level="M"
+                            className="qr-code-svg"
+                        />
+                     </div>
+                     <span className="qr-caption">SCAN RECORD</span>
+                 </div>
             </div>
-        </div>
+         </div>
       </div>
 
       <style jsx>{`
         /* 
            CR80 Card Dimensions: 85.60mm x 53.98mm 
-           We use mm for print accuracy.
         */
         .id-card-container {
             display: flex;
             flex-direction: column;
             gap: 20px;
             align-items: center;
-            background: #f0f0f0;
+            background: #e2e8f0;
             padding: 20px;
+            font-family: 'Arial', sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
 
         .id-card {
-            /* Standard CR80 Size */
             width: 85.6mm;
             height: 54mm; 
-            background: white;
-            border-radius: 3mm; /* Rounded corners for preview, sharp for print usually */
+            background: #fff;
+            border-radius: 3mm;
             overflow: hidden;
             position: relative;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             display: flex;
             flex-direction: column;
-            font-family: 'Arial', sans-serif;
             page-break-inside: avoid;
+            color: #1e293b;
         }
 
-        /* --- FRONT DESIGN --- */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%;
+            height: 60%;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 0;
+            filter: grayscale(100%);
+        }
+
+        /* FRONT FACE STYLES */
         .id-header {
-            background: #e11d48; /* Rose-600 */
+            background: linear-gradient(90deg, #1e40af 0%, #3b82f6 100%); /* Blue Theme */
             color: white;
-            padding: 2mm 3mm;
-            text-align: center;
-            flex-shrink: 0;
-        }
-        .id-header h1 {
-            margin: 0;
-            font-size: 8pt;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-        .id-header p {
-            margin: 0;
-            font-size: 5pt;
-            opacity: 0.9;
-        }
-
-        .id-body {
-            display: grid;
-            grid-template-columns: 28mm 1fr; /* Fixed photo width */
-            gap: 3mm;
-            padding: 3mm;
-            flex-grow: 1;
-        }
-
-        .id-photo-container {
-            width: 100%;
-            height: 32mm;
-            border: 1px solid #ddd;
-            background: #f9f9f9;
-            border-radius: 1mm;
-            overflow: hidden;
-        }
-        .id-photo {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .id-info {
+            padding: 1.5mm 2mm;
             display: flex;
-            flex-direction: column;
-            gap: 1.5mm;
-            overflow: hidden; /* Prevent spillover */
-        }
-
-        .pet-name {
-            margin: 0;
-            font-size: 14pt;
-            font-weight: 800;
-            color: #0f172a; /* Slate-900 */
-            line-height: 1;
-        }
-
-        .info-row {
-            display: flex;
-            align-items: baseline;
-            gap: 1mm;
-            font-size: 7pt;
-            line-height: 1.1;
-        }
-        
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2mm;
-            margin-top: 1mm;
-        }
-        
-        .info-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .label {
-            font-weight: 700;
-            color: #64748b; /* Slate-500 */
-            font-size: 5.5pt;
-            text-transform: uppercase;
-        }
-        .value {
-            color: #334155; /* Slate-700 */
-            font-weight: 600;
-            font-size: 7pt;
-        }
-        .tag-text {
-            color: #e11d48;
-            font-family: 'Courier New', monospace;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-        }
-
-        .truncate {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .truncate-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        .id-footer-strip {
-            background: #f1f5f9;
-            color: #94a3b8;
-            text-align: center;
-            font-size: 4pt;
-            padding: 1mm;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            margin-top: auto;
-        }
-
-        /* --- BACK DESIGN (GRID LAYOUT) --- */
-        .back-face {
-            padding: 0; /* Layout handled by grid */
-        }
-
-        .back-grid {
-            display: grid;
-            grid-template-rows: auto auto 1fr auto; /* Header, Vacc, Legal, QR */
-            height: 100%;
-            padding: 3mm;
-            box-sizing: border-box;
-            gap: 2mm;
-        }
-
-        .section h3 {
-            margin: 0 0 1mm 0;
-            font-size: 6pt;
-            font-weight: 800;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 0.5mm;
-            color: #475569;
-            text-transform: uppercase;
-        }
-
-        .emergency-section .content {
-            font-size: 6pt;
-            text-align: center;
-        }
-        .highlight {
-            font-weight: 800;
-            font-size: 8pt;
-            color: #000;
-            margin: 0.5mm 0;
-        }
-        .sub {
-            color: #64748b;
-        }
-
-        .vacc-row {
-            display: flex;
-            align-items: flex-end;
-            font-size: 6pt;
-            margin-bottom: 1mm;
-        }
-        .vacc-row span {
-            width: 20mm;
-            flex-shrink: 0;
-            font-weight: 600;
-        }
-        .vacc-row .line {
-            flex-grow: 1;
-            border-bottom: 0.5pt solid #cbd5e1;
-        }
-
-        .legal-section p {
-            font-size: 4.5pt;
-            color: #94a3b8;
-            text-align: justify;
-            margin: 0;
-            line-height: 1.1;
-        }
-
-        /* QR REGION - The Critical Requirement */
-        .qr-region {
-            /* 
-               Grid placement: Ensure it's at the bottom.
-               Usually row 4 in our definition, or use margin-top auto if flex.
-               But we used grid-template-rows: ... 1fr auto
-               Wait, legal is 1fr? No, let legal fill space, QR fixed.
-            */
-            display: flex;
-            flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
-            margin-top: auto; /* Push to bottom if grid allows */
-            padding-top: 1mm;
+            justify-content: space-between;
+            height: 12mm;
+            position: relative;
+            z-index: 1;
         }
-        
-        .qr-wrapper {
-            background: white;
-            padding: 1mm;
-            border: 1px solid #e2e8f0;
-            border-radius: 1mm;
-            /* Fixed dimensions for wrapper to prevent shift */
-            width: 28mm; 
-            height: 28mm;
+
+        .logo-box {
+            width: 9mm;
+            height: 9mm;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        
-        .qr-code-svg {
-            width: 100% !important;
-            height: 100% !important;
+        .logo-box img { width: 100%; height: 100%; object-fit: contain; }
+        .placeholder-logo { width: 80%; height: 80%; border-radius: 50%; border: 1px dashed rgba(255,255,255,0.5); }
+
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            line-height: 1.1;
+        }
+        .republic { font-size: 3.5pt; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; margin: 0; }
+        .province { font-size: 3.5pt; text-transform: uppercase; margin: 0 0 1px 0; opacity: 0.9; }
+        .barangay-name { font-size: 7.5pt; font-weight: 900; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .doc-title { font-size: 4pt; font-weight: 700; background: rgba(0,0,0,0.2); padding: 0.5mm 2mm; border-radius: 2mm; display: inline-block; margin-top: 0.5mm; letter-spacing: 1px; }
+
+        .id-body {
+            display: flex;
+            padding: 3mm;
+            gap: 3mm;
+            flex-grow: 1;
+            position: relative;
+            z-index: 1;
         }
 
-        .qr-label {
-            font-size: 4pt;
+        .left-col {
+            width: 24mm;
+            display: flex;
+            flex-direction: column;
+            gap: 2mm;
+        }
+        
+        .id-photo-container {
+            width: 24mm;
+            height: 28mm;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 1mm;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-photo { width: 100%; height: 100%; object-fit: cover; }
+        .no-photo { font-size: 4pt; color: #94a3b8; text-align: center; font-weight: bold; }
+
+        .tag-box {
+            text-align: center;
+        }
+        .tag-label { display: block; font-size: 3.5pt; font-weight: 700; color: #64748b; margin-bottom: 0.5mm; }
+        .tag-number { 
+            display: block; 
+            font-size: 7pt; 
+            font-weight: 800; 
+            color: #dc2626; 
+            font-family: 'Courier New', monospace; 
+            background: #fef2f2;
+            border: 1px solid #fee2e2;
+            border-radius: 1mm;
+            padding: 0.5mm;
+        }
+
+        .right-col {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5mm;
+        }
+
+        .details-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .details-group label {
+            font-size: 3.5pt;
             font-weight: 700;
             color: #64748b;
-            margin-top: 0.5mm;
-            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 0.2mm;
+        }
+        .value {
+            font-size: 7pt;
+            font-weight: 700;
+            color: #0f172a;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.5mm;
+        }
+        .name-value {
+            font-size: 10pt;
+            font-weight: 900;
+            color: #1e40af;
+            text-transform: uppercase;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2mm;
         }
 
-        /* --- PRINT STYLES --- */
+        .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+        .id-footer-strip {
+            background: #1e40af;
+            height: 4mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .footer-line { position: absolute; top: 0; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.2); }
+        .id-footer-strip span { color: white; font-size: 3.5pt; letter-spacing: 2px; font-weight: 700; }
+
+        /* BACK FACE STYLES */
+        .back-content {
+            padding: 3mm;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+        }
+
+        .back-header {
+            text-align: center;
+            border-bottom: 2px solid #dc2626;
+            margin-bottom: 2mm;
+        }
+        .back-header h2 {
+            margin: 0;
+            color: #dc2626;
+            font-size: 6pt;
+            font-weight: 900;
+            padding-bottom: 0.5mm;
+        }
+
+        .emergency-info {
+            text-align: center;
+        }
+        .emergency-info p { margin: 0; font-size: 4.5pt; color: #475569; }
+        .contact-number { font-size: 8pt !important; font-weight: 900; color: #000 !important; margin: 0.5mm 0 !important; }
+        .or-text { font-size: 3.5pt !important; font-weight: 700; color: #94a3b8 !important; margin: 1mm 0 !important; letter-spacing: 0.5px; }
+        .brgy-contact { font-weight: 700; }
+
+        .divider { height: 1px; background: #e2e8f0; margin: 2mm 0; }
+
+        .medical-section h3 { font-size: 5pt; font-weight: 800; color: #1e40af; margin: 0 0 1mm 0; text-transform: uppercase; }
+        .checkbox-row { display: flex; gap: 4mm; margin-bottom: 1.5mm; }
+        .cb-item { display: flex; align-items: center; gap: 1mm; font-size: 4.5pt; font-weight: 600; }
+        .box { width: 3mm; height: 3mm; border: 0.5pt solid #64748b; background: #f8fafc; }
+        .notes-area { display: flex; align-items: flex-end; gap: 1mm; }
+        .notes-area span { font-size: 4pt; color: #64748b; font-weight: 700; }
+        .notes-area .line { flex-grow: 1; border-bottom: 0.5pt solid #cbd5e1; }
+
+        .spacer { flex-grow: 1; }
+
+        .bottom-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 2mm;
+            margin-top: auto;
+        }
+
+        .legal-col {
+            flex-grow: 1;
+        }
+        .legal-text { font-size: 3.5pt; color: #64748b; margin: 0 0 1mm 0; text-align: justify; line-height: 1.2; }
+        
+        .signature-area { margin-top: 3mm; text-align: center; width: 25mm; }
+        .sig-line { border-bottom: 0.5pt solid #1e293b; margin-bottom: 0.5mm; }
+        .sig-label { font-size: 3.5pt; font-weight: 700; text-transform: uppercase; color: #1e293b; }
+
+        .qr-col {
+            width: 22mm;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .qr-border {
+            padding: 1mm;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 1mm;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .qr-code-svg { width: 20mm !important; height: 20mm !important; }
+        .qr-caption { font-size: 3.5pt; font-weight: 800; color: #1e40af; margin-top: 0.5mm; letter-spacing: 0.5px; }
+
+
+        /* PRINT OVERRIDES */
         @media print {
             @page {
-                size: 85.6mm 54mm; /* Standard ID */
+                size: 85.6mm 54mm;
                 margin: 0;
             }
             body {
@@ -391,18 +460,21 @@ export const PetIDCard: React.FC<PetIDCardProps> = ({ pet, owner }) => {
             .id-card-container {
                 background: white;
                 padding: 0;
-                gap: 0;
-                display: block; /* Stack for print flow */
+                display: block;
             }
             .id-card {
                 margin: 0;
                 border: none;
                 box-shadow: none;
-                border-radius: 0; /* Sharp corners for cutting */
-                break-after: page; /* Ensure back is on new page or separate card */
+                border-radius: 0;
+                break-after: page;
                 page-break-after: always;
                 width: 85.6mm;
                 height: 54mm;
+            }
+            .id-card.back-face {
+                break-after: auto;
+                page-break-after: auto;
             }
         }
       `}</style>

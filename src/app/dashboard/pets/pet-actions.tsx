@@ -53,6 +53,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { createRoot } from 'react-dom/client';
 import { PetIDCard } from '@/components/id-cards/PetIDCard';
+import { useTenantProfile } from '@/hooks/use-tenant-profile';
 
 export type PetFormValues = Omit<Pet, 'petId' | 'createdAt'>;
 
@@ -65,6 +66,8 @@ type PetFormProps = {
 };
 
 function PetForm({ record, onSave, onClose, residents, households }: PetFormProps) {
+  const { profile } = useTenantProfile();
+  
   const [formData, setFormData] = useState<PetFormValues>({
     ownerResidentId: record?.ownerResidentId ?? '',
     householdId: record?.householdId ?? '',
@@ -147,13 +150,22 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
                     breed: record.breed,
                     photoUrl: record.photoUrl,
                     tagNumber: record.tagNumber,
-                    colorMarkings: record.colorMarkings
+                    colorMarkings: record.colorMarkings,
+                    gender: record.gender,
+                    birthDate: record.dateOfBirth
                 }}
                 owner={owner ? {
                     firstName: owner.firstName,
                     lastName: owner.lastName,
                     address: owner.address,
                     contactNumber: owner.contactNumber
+                } : undefined}
+                barangay={profile ? {
+                    name: profile.barangayName,
+                    logoUrl: profile.logoUrl,
+                    cityLogoUrl: profile.cityLogoUrl,
+                    city: profile.city,
+                    province: profile.province
                 } : undefined}
             />
         );
@@ -162,7 +174,7 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
         setTimeout(() => {
             printWindow.print();
             // Optional: printWindow.close();
-        }, 500);
+        }, 800);
     }
   }
 
