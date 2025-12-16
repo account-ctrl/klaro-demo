@@ -32,6 +32,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import CodeMirror from '@uiw/react-codemirror';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TemplateEditor } from './template-editor';
 
 const defaultTemplateContent = `<!DOCTYPE html>
 <html>
@@ -113,7 +115,7 @@ function TemplateForm({ record, onSave, onClose }: TemplateFormProps) {
 
   return (
     <>
-      <ScrollArea className="h-[65vh] p-1">
+      <ScrollArea className="h-[75vh] p-1">
         <form id="template-form" onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="space-y-2">
                 <Label htmlFor="name">Template Name</Label>
@@ -123,28 +125,51 @@ function TemplateForm({ record, onSave, onClose }: TemplateFormProps) {
                 <Label htmlFor="description">Description</Label>
                 <Textarea id="description" value={formData.description} onChange={handleChange} placeholder="A short description of what this template is for." />
             </div>
-              <div className="space-y-2">
-                <Label htmlFor="content">HTML Content</Label>
-                <CodeMirror
-                    value={formData.content}
-                    height="400px"
-                    onChange={handleCodeChange}
-                    theme="light"
-                    basicSetup={{
-                        foldGutter: true,
-                        dropCursor: true,
-                        allowMultipleSelections: true,
-                        indentOnInput: true,
-                    }}
-                />
+            
+            <div className="space-y-2">
+                <Label>Template Content</Label>
+                <Tabs defaultValue="visual" className="w-full">
+                    <div className="flex justify-between items-center mb-2">
+                        <TabsList>
+                            <TabsTrigger value="visual">Visual Editor (Drag & Drop)</TabsTrigger>
+                            <TabsTrigger value="code">HTML Code</TabsTrigger>
+                        </TabsList>
+                        <Button type="button" variant="outline" size="sm" onClick={handlePreview}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Preview
+                        </Button>
+                    </div>
+                    
+                    <TabsContent value="visual" className="mt-0">
+                        <TemplateEditor 
+                            initialContent={formData.content} 
+                            onChange={handleCodeChange} 
+                        />
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Note: Switching to code view and making complex manual edits might break the visual editor's layout.
+                        </p>
+                    </TabsContent>
+                    
+                    <TabsContent value="code" className="mt-0">
+                        <CodeMirror
+                            value={formData.content}
+                            height="500px"
+                            onChange={handleCodeChange}
+                            theme="light"
+                            basicSetup={{
+                                foldGutter: true,
+                                dropCursor: true,
+                                allowMultipleSelections: true,
+                                indentOnInput: true,
+                            }}
+                            className="border rounded-md overflow-hidden"
+                        />
+                    </TabsContent>
+                </Tabs>
             </div>
         </form>
       </ScrollArea>
-      <DialogFooter className="pt-4 border-t">
-        <Button type="button" variant="outline" onClick={handlePreview}>
-            <Eye className="mr-2 h-4 w-4" />
-            Preview
-        </Button>
+      <DialogFooter className="pt-4 border-t px-6 pb-6">
         <div className="flex-grow" />
         <DialogClose asChild>
             <Button type="button" variant="outline">Cancel</Button>
@@ -172,11 +197,11 @@ export function AddTemplate({ onAdd }: { onAdd: (data: TemplateFormValues) => vo
           New Template
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl p-0">
+      <DialogContent className="max-w-[90vw] w-full p-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>Add New Document Template</DialogTitle>
           <DialogDescription>
-            Create a new HTML template for generating documents.
+            Design your document layout using the visual editor or raw HTML.
           </DialogDescription>
         </DialogHeader>
         <TemplateForm onSave={handleSave} onClose={() => setOpen(false)} />
@@ -201,11 +226,11 @@ export function EditTemplate({ record, onEdit }: { record: DocumentTemplateWithI
             Edit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl p-0">
+      <DialogContent className="max-w-[90vw] w-full p-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>Edit Template</DialogTitle>
           <DialogDescription>
-            Update the HTML content for "{record.name}".
+            Update the layout for "{record.name}".
           </DialogDescription>
         </DialogHeader>
         <TemplateForm record={record} onSave={handleSave} onClose={() => setOpen(false)} />
