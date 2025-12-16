@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -51,6 +51,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Combobox } from '@/components/ui/combobox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
+import { createRoot } from 'react-dom/client';
+import { PetIDCard } from '@/components/id-cards/PetIDCard';
 
 export type PetFormValues = Omit<Pet, 'petId' | 'createdAt'>;
 
@@ -61,114 +63,6 @@ type PetFormProps = {
   residents: Resident[];
   households: Household[];
 };
-
-const generatePetIdHtml = (pet: Pet, owner?: Resident) => {
-    // Basic styling for the ID card
-    const css = `
-        @media print {
-            @page {
-                size: 3.370in 2.125in; /* Standard CR80 ID card size */
-                margin: 0;
-            }
-            body {
-                -webkit-print-color-adjust: exact;
-            }
-        }
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        .card-container {
-            width: 3.370in;
-            height: 2.125in;
-            display: flex;
-            flex-direction: column;
-        }
-        .card-face {
-            width: 100%;
-            height: 100%;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            display: flex;
-            flex-direction: column;
-            background-color: white;
-        }
-        .header {
-            background-color: #ff7a59;
-            color: white;
-            padding: 8px;
-            text-align: center;
-        }
-        .header h3 { margin: 0; font-size: 14px; }
-        .header p { margin: 0; font-size: 8px; }
-        .content { display: flex; padding: 8px; gap: 8px; flex-grow: 1; }
-        .photo { width: 1in; height: 1.2in; object-fit: cover; border: 1px solid #eee; }
-        .info { font-size: 9px; flex-grow: 1; }
-        .info p { margin: 2px 0; }
-        .info .label { font-weight: bold; color: #555; }
-        .back .title { font-size: 11px; font-weight: bold; margin: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px;}
-        .back .section { font-size: 8px; padding: 0 8px; margin-bottom: 8px; }
-        .back .section p { margin: 2px 0; }
-        .qr-code { width: 0.8in; height: 0.8in; background-color: #eee; margin: 0 auto; display: block; }
-    `;
-
-    // A simple placeholder for QR code
-    const qrCodeSvg = `<svg viewBox="0 0 100 100" class="qr-code"><path fill="#333" d="M10,10 h20 v20 h-20z M40,10 h10 v10 h-10z M60,10 h30 v30 h-30z M10,40 h10 v10 h-10z M40,40 h30 v10 h-30z M10,60 h30 v30 h-30z M60,60 h10 v10 h-10z M80,80 h10 v10 h-10z"/></svg>`;
-    
-    // HTML for the card
-    return `
-        <html>
-        <head><title>Pet ID - ${pet.name}</title><style>${css}</style></head>
-        <body>
-            <div class="card-container">
-                <!-- Front Side -->
-                <div class="card-face">
-                    <div class="header">
-                        <h3>BARANGAY PET REGISTRY</h3>
-                        <p>Republic of the Philippines, Barangay San Isidro</p>
-                    </div>
-                    <div class="content">
-                        <img src="${pet.photoUrl || 'https://picsum.photos/seed/pet/100/120'}" alt="Pet Photo" class="photo" />
-                        <div class="info">
-                            <p style="text-align: center; font-size: 16px; font-weight: bold; color: #0056b3; margin-bottom: 8px;">${pet.name}</p>
-                            <p><span class="label">Owner:</span> ${owner?.firstName} ${owner?.lastName}</p>
-                            <p><span class="label">Address:</span> ${owner?.address}</p>
-                            <p><span class="label">Species:</span> ${pet.species}</p>
-                            <p><span class="label">Breed:</span> ${pet.breed}</p>
-                            <p><span class="label">Tag No:</span> ${pet.tagNumber || 'N/A'}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Back Side -->
-                <div class="card-face" style="page-break-before: always;">
-                    <div class="back">
-                        <div class="title">EMERGENCY INFORMATION</div>
-                        <div class="section">
-                            <p>If found, please contact the owner:</p>
-                            <p style="font-weight: bold; font-size: 10px;">${owner?.contactNumber || 'N/A'}</p>
-                            <p>Or call the Barangay Hall:</p>
-                            <p style="font-weight: bold; font-size: 10px;">(02) 8123-4567</p>
-                        </div>
-                        <div class="title">VACCINATION RECORD</div>
-                        <div class="section">
-                            <p><span class="label">Anti-Rabies:</span> Next due on __________</p>
-                            <p><span class="label">Deworming:</span> Next due on __________</p>
-                        </div>
-                         <div class="title">IMPORTANT</div>
-                         <div class="section">
-                            <p>This animal is registered under Barangay Ordinance No. 123, Series of 2024 (The Responsible Pet Ownership Ordinance). Abandonment or neglect is punishable by law.</p>
-                        </div>
-                        ${qrCodeSvg}
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
-};
-
 
 function PetForm({ record, onSave, onClose, residents, households }: PetFormProps) {
   const [formData, setFormData] = useState<PetFormValues>({
@@ -202,22 +96,6 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
                 if (householdAsHead) {
                      setFormData(prev => ({...prev, householdId: householdAsHead.householdId}));
                 } else {
-                    // Reset if no household found for this new owner, unless it's the initial load of an existing record which might have loose linking
-                    // But for "Auto-fill", we should probably reset if nothing found.
-                    // Checking against 'record' to avoid clearing existing valid data if there's a disconnect? 
-                    // No, if user selects a new owner, we should re-evaluate.
-                    // If user just opened the form and didn't change owner, this effect might run. 
-                    // But ownerResidentId is initial state.
-                    
-                    // Let's only set if we found something, or if we definitely want to clear it.
-                    // If we don't set it to empty, it might keep the previous value from previous selection.
-                    
-                    // We need to differentiate between "Initial Load" and "User Change".
-                    // But React effects run on mount too.
-                    
-                    // If record exists and owner is same as record, don't clear householdId (it might be manually set?).
-                    // But here we want AUTO fill.
-                    
                     setFormData(prev => ({...prev, householdId: ''}));
                 }
             }
@@ -245,11 +123,47 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
   const handlePrint = () => {
     if (!record) return;
     const owner = residents.find(r => r.residentId === record.ownerResidentId);
-    const htmlContent = generatePetIdHtml(record, owner);
+    
+    // Create a new window for printing
     const printWindow = window.open('', '_blank');
-    printWindow?.document.write(htmlContent);
-    printWindow?.document.close();
-    printWindow?.print();
+    if (!printWindow) {
+        alert("Please allow popups to print.");
+        return;
+    }
+
+    // Write the basic HTML structure
+    printWindow.document.write('<html><head><title>Pet ID Card</title></head><body><div id="print-root"></div></body></html>');
+    printWindow.document.close();
+
+    // Render the React component into the new window
+    const printRoot = printWindow.document.getElementById('print-root');
+    if (printRoot) {
+        const root = createRoot(printRoot);
+        root.render(
+            <PetIDCard 
+                pet={{
+                    name: record.name,
+                    species: record.species,
+                    breed: record.breed,
+                    photoUrl: record.photoUrl,
+                    tagNumber: record.tagNumber,
+                    colorMarkings: record.colorMarkings
+                }}
+                owner={owner ? {
+                    firstName: owner.firstName,
+                    lastName: owner.lastName,
+                    address: owner.address,
+                    contactNumber: owner.contactNumber
+                } : undefined}
+            />
+        );
+        
+        // Wait for images to load (heuristic) or just wait a bit before print
+        setTimeout(() => {
+            printWindow.print();
+            // Optional: printWindow.close();
+        }, 500);
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
