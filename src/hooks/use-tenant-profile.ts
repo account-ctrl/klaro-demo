@@ -4,6 +4,7 @@
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { useTenant } from '@/providers/tenant-provider';
 import { doc } from 'firebase/firestore';
+import { useMemo } from 'react';
 
 // Aligning with TenantSettings from lib/types as much as possible
 export type TenantProfile = {
@@ -53,10 +54,13 @@ export function useTenantProfile() {
     const { data, isLoading: isDocLoading, error } = useDoc<TenantProfile>(docRef);
 
     // Normalize data: ensure barangayName exists
-    const profile = data ? {
-        ...data,
-        barangayName: data.barangayName || data.name || '',
-    } : null;
+    // Memoize the profile object to prevent infinite loops in useEffect dependencies
+    const profile = useMemo(() => {
+        return data ? {
+            ...data,
+            barangayName: data.barangayName || data.name || '',
+        } : null;
+    }, [data]);
 
     return {
         profile,
