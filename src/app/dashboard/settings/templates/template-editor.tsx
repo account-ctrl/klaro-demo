@@ -10,9 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
     Type, Image as ImageIcon, PenTool, LayoutTemplate, 
-    Move, X, AlignLeft, AlignCenter, AlignRight, Bold, Italic, Trash2 
+    Move, X, AlignLeft, AlignCenter, AlignRight, Bold, Italic, Trash2, AlertTriangle 
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // --- Types ---
 
@@ -56,47 +57,73 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [dragState, setDragState] = useState<{ id: string, startX: number, startY: number, initialX: number, initialY: number } | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
-    const [isLoaded, setIsLoaded] = useState(false);
+    
+    // Stability Refs
+    const isLoaded = useRef(false);
+    const isDirty = useRef(false); // Track if user has modified the canvas
     const lastGeneratedHtml = useRef('');
+    
+    const [hasParseError, setHasParseError] = useState(false);
 
-    // Basic parser to try and load existing HTML
+    // 1. Initial Load / Parse
     useEffect(() => {
-        if (initialContent && !isLoaded) {
+        // Only run once on mount or if initialContent changes drastically (e.g. reset) and we haven't loaded yet
+        if (initialContent && !isLoaded.current) {
+            
+            // Heuristic: Does it look like our generated HTML?
             if (initialContent.includes('data-editor-element')) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(initialContent, 'text/html');
-                const loadedElements: EditorElement[] = [];
-                
-                doc.querySelectorAll('[data-editor-element]').forEach((el) => {
-                    if (el instanceof HTMLElement) {
-                        loadedElements.push({
-                            id: el.getAttribute('id') || Math.random().toString(),
-                            type: el.getAttribute('data-type') as ElementType || 'text',
-                            x: parseInt(el.style.left || '0'),
-                            y: parseInt(el.style.top || '0'),
-                            width: parseInt(el.style.width || '200'),
-                            height: parseInt(el.style.height || '50'),
-                            content: el.tagName === 'IMG' ? (el as HTMLImageElement).src : el.innerText,
-                            style: {
-                                textAlign: el.style.textAlign as any,
-                                fontWeight: el.style.fontWeight,
-                                fontStyle: el.style.fontStyle,
-                                fontSize: el.style.fontSize,
-                                color: el.style.color
-                            }
-                        });
-                    }
-                });
-                if (loadedElements.length > 0) setElements(loadedElements);
-            }
-            setIsLoaded(true);
-        }
-    }, [initialContent, isLoaded]);
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(initialContent, 'text/html');
+                    const loadedElements: EditorElement[] = [];
+                    
+                    doc.querySelectorAll('[data-editor-element]').forEach((el) => {
+                        if (el instanceof HTMLElement) {
+                            // Extract styles safely
+                            const x = parseInt(el.style.left || '0', 10);
+                            const y = parseInt(el.style.top || '0', 10);
+                            const width = parseInt(el.style.width || '200', 10);
+                            const height = parseInt(el.style.height || '50', 10);
 
-    // Live Generate HTML on change
+                            loadedElements.push({
+                                id: el.getAttribute('id') || Math.random().toString(36).substr(2, 9),
+                                type: (el.getAttribute('data-type') as ElementType) || 'text',
+                                x: isNaN(x) ? 50 : x,
+                                y: isNaN(y) ? 50 : y,
+                                width: isNaN(width) ? 200 : width,
+                                height: isNaN(height) ? 50 : height,
+                                content: el.tagName === 'IMG' ? (el as HTMLImageElement).src : el.innerText,
+                                style: {
+                                    textAlign: el.style.textAlign as any,
+                                    fontWeight: el.style.fontWeight,
+                                    fontStyle: el.style.fontStyle,
+                                    fontSize: el.style.fontSize,
+                                    color: el.style.color
+                                }
+                            });
+                        }
+                    });
+                    
+                    if (loadedElements.length > 0) {
+                        setElements(loadedElements);
+                        // Do NOT set isDirty here, as we just loaded what's there
+                    }
+                } catch (e) {
+                    console.error("Failed to parse visual template", e);
+                    setHasParseError(true);
+                }
+            } else if (initialContent.trim().length > 0) {
+                // Content exists but isn't in visual format.
+                setHasParseError(true); // Treat as "Cannot edit visually without overwriting"
+            }
+            
+            isLoaded.current = true;
+        }
+    }, [initialContent]);
+
+    // 2. Generate HTML on Change (Only if dirty)
     useEffect(() => {
-        // Only generate if we have elements (or if we explicitly cleared them, but keeping it simple)
-        if (elements.length > 0 && onChange) {
+        if (isDirty.current && elements.length > 0 && onChange) {
             const htmlBody = elements.map(el => {
                 const commonStyle = `position: absolute; left: ${el.x}px; top: ${el.y}px; width: ${el.width}px; height: ${el.height}px;`;
                 
@@ -107,6 +134,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                 // Text based
                 const textStyle = `font-family: sans-serif; font-size: ${el.style?.fontSize || '14px'}; text-align: ${el.style?.textAlign || 'left'}; font-weight: ${el.style?.fontWeight || 'normal'}; font-style: ${el.style?.fontStyle || 'normal'}; color: ${el.style?.color || 'black'};`;
                 
+                // Use innerText-like content, preserving newlines if possible
                 return `<div id="${el.id}" data-editor-element="true" data-type="${el.type}" style="${commonStyle} ${textStyle}">
                     ${el.content}
                 </div>`;
@@ -127,7 +155,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
 </body>
 </html>`;
             
-            // Prevent loop: Only call onChange if HTML actually changed
+            // Prevent redundant updates
             if (fullHtml !== lastGeneratedHtml.current) {
                 lastGeneratedHtml.current = fullHtml;
                 onChange(fullHtml);
@@ -135,14 +163,20 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
         }
     }, [elements, onChange]);
 
-    // --- Actions ---
+    // --- Actions (Mark Dirty) ---
+
+    const markDirty = () => {
+        isDirty.current = true;
+        if (hasParseError) setHasParseError(false); // Clear error once user takes action (overwriting)
+    };
 
     const addElement = (type: ElementType, content: string = 'New Text', x: number = 50, y: number = 50) => {
+        markDirty();
         const newElement: EditorElement = {
             id: Math.random().toString(36).substr(2, 9),
             type,
-            x: x === 50 ? 50 : x, // If default, use default logic later if needed
-            y: y === 50 ? 50 + (elements.length * 20) : y, // Offset if default
+            x,
+            y,
             width: type === 'image' ? 100 : 300,
             height: type === 'image' ? 100 : 40,
             content,
@@ -152,24 +186,27 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                 color: '#000000'
             }
         };
-        setElements([...elements, newElement]);
+        setElements(prev => [...prev, newElement]);
         setSelectedId(newElement.id);
     };
 
     const updateElement = (id: string, updates: Partial<EditorElement>) => {
-        setElements(elements.map(el => el.id === id ? { ...el, ...updates } : el));
+        markDirty();
+        setElements(prev => prev.map(el => el.id === id ? { ...el, ...updates } : el));
     };
 
     const updateStyle = (id: string, styleUpdates: React.CSSProperties) => {
-        setElements(elements.map(el => el.id === id ? { ...el, style: { ...el.style, ...styleUpdates } } : el));
+        markDirty();
+        setElements(prev => prev.map(el => el.id === id ? { ...el, style: { ...el.style, ...styleUpdates } } : el));
     };
 
     const deleteElement = (id: string) => {
-        setElements(elements.filter(el => el.id !== id));
+        markDirty();
+        setElements(prev => prev.filter(el => el.id !== id));
         setSelectedId(null);
     };
 
-    // --- Dragging Logic (Canvas Items) ---
+    // --- Dragging Logic ---
 
     const handleMouseDown = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
@@ -192,17 +229,31 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
         const dx = e.clientX - dragState.startX;
         const dy = e.clientY - dragState.startY;
         
-        updateElement(dragState.id, {
+        // Don't mark dirty on every pixel move, only on drop? 
+        // No, we need live update. But optimize?
+        // Let's mark dirty on Drop/MouseUp to reduce re-renders of parent?
+        // For visual smoothness, we update local state.
+        // We can defer the "markDirty" to mouseUp if needed, but for now let's keep it sync.
+        
+        // Actually, we should NOT trigger onChange during drag if possible to avoid lag.
+        // But updating 'elements' state triggers the effect.
+        // Let's defer isDirty to mouseUp.
+        
+        setElements(prev => prev.map(el => el.id === dragState.id ? {
+            ...el,
             x: dragState.initialX + dx,
             y: dragState.initialY + dy
-        });
+        } : el));
     };
 
     const handleMouseUp = () => {
-        setDragState(null);
+        if (dragState) {
+            markDirty(); // Trigger save only when drag ends
+            setDragState(null);
+        }
     };
 
-    // --- Sidebar Drag Logic (Add Items) ---
+    // --- Sidebar Drag Logic ---
 
     const handleSidebarDragStart = (e: React.DragEvent, type: ElementType, content: string) => {
         e.dataTransfer.setData('type', type);
@@ -216,17 +267,14 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
         
         if (type && canvasRef.current) {
             const rect = canvasRef.current.getBoundingClientRect();
-            // Calculate position relative to canvas
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            
-            // Add with centered offset roughly
             addElement(type, content, x - 50, y - 10);
         }
     };
 
     const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault(); // Allow drop
+        e.preventDefault();
     };
 
     const selectedElement = elements.find(el => el.id === selectedId);
@@ -244,7 +292,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">Components</Label>
                     <div className="grid grid-cols-2 gap-2">
                         <Button 
-                            type="button" // Fix: Prevent form submit
+                            type="button" 
                             variant="outline" 
                             size="sm" 
                             draggable="true"
@@ -292,7 +340,6 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
 
                 {selectedElement && (
                     <div className="space-y-4 pt-4 border-t">
-                        {/* ... Properties Panel ... */}
                         <Label className="text-xs font-semibold uppercase text-muted-foreground">Properties</Label>
                         
                         <div className="space-y-2">
@@ -365,7 +412,19 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                     onDrop={handleCanvasDrop}
                     onDragOver={handleDragOver}
                 >
-                    {elements.length === 0 && (
+                    {/* Grid/Guides could go here */}
+                    {hasParseError && elements.length === 0 && (
+                        <Alert variant="destructive" className="absolute top-4 left-4 right-4 z-50 shadow-md">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Incompatible Content</AlertTitle>
+                            <AlertDescription>
+                                The existing template contains custom HTML code that cannot be edited in Visual Mode. 
+                                Adding elements here will overwrite the existing code.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    
+                    {!hasParseError && elements.length === 0 && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 font-bold text-4xl uppercase tracking-widest">
                             Blank Template
                         </div>
@@ -391,6 +450,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                                 </div>
                             )}
                             
+                            {/* Resize Handle (Simplified - strictly visual for now, dragging logic usually separate) */}
                             {selectedId === el.id && (
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-blue-600 cursor-nwse-resize"></div>
                             )}
