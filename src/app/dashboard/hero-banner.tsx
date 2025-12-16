@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useTransition } from 'react';
@@ -9,7 +8,7 @@ import { askBarangayData } from '@/ai/flows/ask-barangay-data';
 import { Resident, Project, BlotterCase } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
-import { useTenant } from '@/providers/tenant-provider';
+import { useTenantProfile } from '@/hooks/use-tenant-profile';
 
 interface HeroBannerProps {
   residents: Resident[];
@@ -24,7 +23,7 @@ export function HeroBanner({ residents, projects, blotterCases, currentDate, her
   const [answer, setAnswer] = useState<string | null>(null);
   const [query, setQuery] = useState<string>('');
   const { toast } = useToast();
-  const { tenant } = useTenant();
+  const { profile } = useTenantProfile();
 
   const handleAsk = () => {
     if (!query) {
@@ -76,7 +75,7 @@ export function HeroBanner({ residents, projects, blotterCases, currentDate, her
                 <div className="flex items-center gap-2 text-orange-800/80 text-sm font-medium mb-1">
                     <span>Welcome to {currentDate}</span>
                     <span>|</span>
-                    <span>{tenant?.name || 'Barangay San Isidro'}</span>
+                    <span>{profile?.barangayName || 'Barangay San Isidro'}</span>
                 </div>
                 {/* Reduced Text Size */}
                 <h1 className="text-2xl md:text-3xl font-extrabold text-[#33475b] tracking-tight leading-tight">
