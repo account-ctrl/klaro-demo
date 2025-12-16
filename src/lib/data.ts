@@ -76,3 +76,11 @@ export const fundSources = [
     { label: "Senior Citizen Fund", value: "Senior Citizen Fund" },
     { label: "External / Grant", value: "External / Grant" }
 ];
+
+// Fallback for AI actions if used
+export const barangayDataForAI = {
+    // Add placeholder or minimal data required for AI context
+    residents: [],
+    projects: [],
+    cases: []
+}
