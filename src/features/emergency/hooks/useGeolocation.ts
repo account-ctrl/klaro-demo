@@ -5,7 +5,7 @@ import { useTenant } from '@/providers/tenant-provider';
 import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useUser } from '@/firebase';
 
-const UPDATE_INTERVAL_MS = 5000; // Update Firestore every 5 seconds (Throttled as per requirements)
+const UPDATE_INTERVAL_MS = 5000;
 
 export const useGeolocationTracker = (isActive: boolean) => {
   const [location, setLocation] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
@@ -45,7 +45,6 @@ export const useGeolocationTracker = (isActive: boolean) => {
         watchIdRef.current = null;
       }
       
-      // Mark as Offline when toggling off
       if (firestore && tenantPath && user && lastUpdateRef.current > 0) {
           const locationRef = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
           updateDoc(locationRef, { status: 'Offline' }).catch(console.error);
@@ -89,12 +88,14 @@ export const useGeolocationTracker = (isActive: boolean) => {
   return { location, error };
 };
 
-/**
- * Enhanced geolocation fetcher that attempts to get a high-accuracy reading.
- * It waits up to 10 seconds to refine the location if the initial lock is poor (>20m accuracy).
- */
 export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accuracy: number}> => {
     return new Promise((resolve, reject) => {
+        // 1. Check for Secure Context
+        if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost') {
+            reject(new Error("Secure Context Required. Geolocation only works on HTTPS or localhost."));
+            return;
+        }
+
         if (!navigator.geolocation) {
             reject(new Error("Geolocation not supported"));
             return;
@@ -102,13 +103,11 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
         
         const options = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
         
-        // 1. Request initial position
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 let bestPos = pos;
                 console.log(`Initial GPS: ${pos.coords.latitude},${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`);
 
-                // If we have a good fix immediately (< 20m), return it
                 if (bestPos.coords.accuracy <= 20) {
                      resolve({
                         lat: bestPos.coords.latitude,
@@ -118,8 +117,6 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
                     return;
                 }
 
-                // 2. If initial accuracy is poor, try watching for a better fix
-                // We will wait up to 10 seconds to get a better fix.
                 let watchId: number;
                 
                 const stopWatching = () => {
@@ -129,7 +126,6 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
                 const refinementTimeout = setTimeout(() => {
                     stopWatching();
                     console.log(`Refinement timeout. Returning best: ${bestPos.coords.accuracy}m`);
-                    // Resolve with the best we found in 10s
                     resolve({
                         lat: bestPos.coords.latitude,
                         lng: bestPos.coords.longitude,
@@ -140,12 +136,10 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
                 watchId = navigator.geolocation.watchPosition(
                     (newPos) => {
                         console.log(`Refining GPS: ${newPos.coords.latitude},${newPos.coords.longitude} (Acc: ${newPos.coords.accuracy}m)`);
-                        // If new position is more accurate (smaller accuracy number), update bestPos
                         if (newPos.coords.accuracy < bestPos.coords.accuracy) {
                             bestPos = newPos;
                         }
                         
-                        // If we hit our target accuracy, stop waiting immediately
                         if (bestPos.coords.accuracy <= 20) {
                             clearTimeout(refinementTimeout);
                             stopWatching();
@@ -159,7 +153,6 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
                     }, 
                     (err) => {
                         console.warn("Refinement watch error", err);
-                        // If watch fails, we still have the initial 'pos' to fall back on in the timeout
                     },
                     options
                 );
@@ -168,4 +161,14 @@ export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accu
             options
         );
     });
+};
+
+export const checkGeolocationPermission = async (): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> => {
+    if (!navigator.permissions || !navigator.permissions.query) return 'unknown';
+    try {
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        return result.state;
+    } catch (e) {
+        return 'unknown';
+    }
 };
