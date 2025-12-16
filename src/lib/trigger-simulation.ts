@@ -4,6 +4,7 @@ import { initializeFirebase } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { EmergencyAlert } from '@/lib/types';
 import { getAuth } from 'firebase/auth';
+import { captureAccurateLocation } from '@/lib/services/location';
 
 export async function updateSystemStats(updates: { population?: number, households?: number }) {
     // Ensure Firebase is initialized and get the same instance used elsewhere
@@ -56,17 +57,43 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
   const auth = getAuth();
   const user = auth.currentUser;
 
-  // Default to Polomolok, South Cotabato (Client's test area) if no location provided
-  // Fallback to Manila if strictly needed, but client requested Polomolok.
-  const baseLat = 6.2230; 
-  const baseLng = 125.0650;
-  
-  // Small random offset to prevent exact overlapping of multiple simulations
-  const latOffset = (Math.random() - 0.5) * 0.002; // Approx 200m variance
-  const lngOffset = (Math.random() - 0.5) * 0.002;
+  // 1. Try to get Real Location first
+  let finalLat = 0;
+  let finalLng = 0;
+  let locationSource = 'SIMULATION';
+  let accuracy = 0;
 
-  const finalLat = location ? location.lat : baseLat + latOffset;
-  const finalLng = location ? location.lng : baseLng + lngOffset;
+  // If explicit location passed (e.g. from map click), use it
+  if (location) {
+      finalLat = location.lat;
+      finalLng = location.lng;
+      locationSource = 'ADMIN_SELECTED';
+  } else {
+      // Otherwise, try to capture real device GPS
+      try {
+          const gpsData = await captureAccurateLocation({ timeoutMs: 5000, maxWaitMs: 7000 });
+          if (gpsData.location_source === 'GPS' || gpsData.location_source === 'NETWORK') {
+              finalLat = gpsData.lat;
+              finalLng = gpsData.lng;
+              locationSource = gpsData.location_source;
+              accuracy = gpsData.accuracy_m;
+          }
+      } catch (e) {
+          console.warn("Simulation failed to get GPS, falling back to Polomolok default.");
+      }
+  }
+
+  // 2. Fallback to Polomolok ONLY if no valid location found
+  if (finalLat === 0 && finalLng === 0) {
+      const baseLat = 6.2230; 
+      const baseLng = 125.0650;
+      const latOffset = (Math.random() - 0.5) * 0.002; 
+      const lngOffset = (Math.random() - 0.5) * 0.002;
+      
+      finalLat = baseLat + latOffset;
+      finalLng = baseLng + lngOffset;
+      locationSource = 'MOCK_FALLBACK';
+  }
 
   const alertData: Omit<EmergencyAlert, 'id' | 'alertId'> & { alertId: string } = {
     alertId: `sim-${Date.now()}`,
@@ -80,7 +107,10 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
     category: 'Unspecified',
     message: 'This is a simulated emergency alert.',
     contactNumber: '09123456789',
-  };
+    // Add location metadata if type supports it (though strict types might block it, Firestore accepts it)
+    location_source: locationSource,
+    accuracy_m: accuracy
+  } as any;
 
   try {
     // Construct the path: tenantPath is something like "provinces/cebu/cities/cebu-city/barangays/luz"
@@ -89,7 +119,7 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
     const alertsRef = collection(firestore, `${safePath}/emergency_alerts`);
     
     await addDoc(alertsRef, alertData);
-    console.log(`Simulated emergency alert created at ${safePath}/emergency_alerts with lat: ${finalLat}, lng: ${finalLng}`);
+    console.log(`Simulated emergency alert created at ${safePath}/emergency_alerts with lat: ${finalLat}, lng: ${finalLng} (Source: ${locationSource})`);
     return true;
   } catch (error) {
     console.error("Error simulating emergency:", error);
