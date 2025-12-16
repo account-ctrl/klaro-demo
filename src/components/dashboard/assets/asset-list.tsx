@@ -55,13 +55,14 @@ export function AssetList({
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {filteredAssets.map((asset) => (
-        <AssetCard
-          key={asset.assetId} // Correctly using assetId as key
-          asset={asset}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onGenerateQR={onGenerateQR}
-        />
+        <div key={asset.assetId}> 
+          <AssetCard
+            asset={asset}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onGenerateQR={onGenerateQR}
+          />
+        </div>
       ))}
     </div>
   );

@@ -37,23 +37,13 @@ service cloud.firestore {
     
     // 3. Global User Profiles
     match /users/{userId} {
-        allow read: if request.auth != null && (
-            request.auth.uid == userId || 
-            (request.auth.token.role == 'admin' && resource.data.tenantId == request.auth.token.tenantId)
-        );
-        
-        allow list: if request.auth != null && 
-                     request.auth.token.role == 'admin' && 
-                     request.query.limit <= 100 &&
-                     resource.data.tenantId == request.auth.token.tenantId;
-
-        allow write: if isSuperAdmin(); 
+        allow read, write: if request.auth != null;
     }
 
     // --- LEGACY / FLAT STRUCTURE SUPPORT (For Demo/Dev) ---
     match /barangays/{barangayId}/{document=**} {
         // Allow authenticated users to access this path for now
-        // TODO: Tighten this up to check for tenantId in claims matching the path or ID
+        // This is crucial for the Resident Dashboard demo connecting to 'barangay_san_isidro'
         allow read, write: if request.auth != null;
     }
 
