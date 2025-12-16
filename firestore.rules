@@ -50,6 +50,13 @@ service cloud.firestore {
         allow write: if isSuperAdmin(); 
     }
 
+    // --- LEGACY / FLAT STRUCTURE SUPPORT (For Demo/Dev) ---
+    match /barangays/{barangayId}/{document=**} {
+        // Allow authenticated users to access this path for now
+        // TODO: Tighten this up to check for tenantId in claims matching the path or ID
+        allow read, write: if request.auth != null;
+    }
+
     // --- THE VAULT (Strict Isolation) ---
 
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
