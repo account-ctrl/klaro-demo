@@ -57,6 +57,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
     const [dragState, setDragState] = useState<{ id: string, startX: number, startY: number, initialX: number, initialY: number } | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const lastGeneratedHtml = useRef('');
 
     // Basic parser to try and load existing HTML
     useEffect(() => {
@@ -94,6 +95,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
 
     // Live Generate HTML on change
     useEffect(() => {
+        // Only generate if we have elements (or if we explicitly cleared them, but keeping it simple)
         if (elements.length > 0 && onChange) {
             const htmlBody = elements.map(el => {
                 const commonStyle = `position: absolute; left: ${el.x}px; top: ${el.y}px; width: ${el.width}px; height: ${el.height}px;`;
@@ -124,7 +126,12 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
     ${htmlBody}
 </body>
 </html>`;
-            onChange(fullHtml);
+            
+            // Prevent loop: Only call onChange if HTML actually changed
+            if (fullHtml !== lastGeneratedHtml.current) {
+                lastGeneratedHtml.current = fullHtml;
+                onChange(fullHtml);
+            }
         }
     }, [elements, onChange]);
 
