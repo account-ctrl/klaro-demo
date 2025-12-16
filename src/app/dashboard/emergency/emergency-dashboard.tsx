@@ -44,6 +44,8 @@ import { WeatherHeader } from "./components/weather-header";
 import { MapControls } from "./components/map-controls";
 import { HouseholdSearch } from "./components/household-search";
 import { MapHousehold } from "@/components/emergency-map";
+import { SOSButton } from "@/features/emergency/components/SosButton";
+import { OnDutyToggle } from "@/features/emergency/components/OnDutyToggle";
 
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
@@ -625,6 +627,9 @@ export function EmergencyDashboard() {
 
         <div className="absolute right-6 top-6 bottom-24 z-10 flex flex-col gap-4 overflow-y-auto pointer-events-none w-80 pr-2">
             <div className="pointer-events-auto">
+                <OnDutyToggle />
+            </div>
+            <div className="pointer-events-auto">
                 <ActiveAlertFeed 
                     alerts={sortedAlerts} 
                     onSelectAlert={handleAlertSelect}
@@ -650,14 +655,10 @@ export function EmergencyDashboard() {
             />
         </div>
 
-        <Button 
-            className="absolute bottom-6 right-6 z-[100] h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 shadow-[0_0_40px_-10px_rgba(220,38,38,0.7)] border-4 border-red-800 animate-pulse hover:animate-none transition-all scale-100 hover:scale-110 flex items-center justify-center cursor-pointer pointer-events-auto"
-            onClick={handleSimulateSOS} 
-            disabled={isSimulating}
-            title="Broadcast Emergency Alert"
-        >
-            <Siren className="h-8 w-8 text-white" />
-        </Button>
+        {/* Updated SOS Button Location & Component */}
+        <div className="absolute bottom-6 right-6 z-[100] pointer-events-auto">
+             <SOSButton />
+        </div>
 
         {selectedAlert && (
             <IncidentActionModal 

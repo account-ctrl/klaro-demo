@@ -5,7 +5,7 @@ import { useTenant } from '@/providers/tenant-provider';
 import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useUser } from '@/firebase';
 
-const UPDATE_INTERVAL_MS = 10000; // Update Firestore every 10 seconds max
+const UPDATE_INTERVAL_MS = 5000; // Update Firestore every 5 seconds (Throttled as per requirements)
 
 export const useGeolocationTracker = (isActive: boolean) => {
   const [location, setLocation] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
@@ -30,7 +30,9 @@ export const useGeolocationTracker = (isActive: boolean) => {
         longitude: lng,
         accuracy: accuracy,
         last_active: serverTimestamp(),
-        status: 'On Duty'
+        status: 'On Duty',
+        // We can add role info here if we want it denormalized, 
+        // but typically we join with users collection on read.
       }, { merge: true });
       lastUpdateRef.current = now;
     } catch (err) {
@@ -46,8 +48,10 @@ export const useGeolocationTracker = (isActive: boolean) => {
       }
       
       // Mark as Offline when toggling off
-      if (firestore && tenantPath && user) {
+      if (firestore && tenantPath && user && lastUpdateRef.current > 0) {
           const locationRef = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
+          // We set status to Offline. We don't delete the doc so history is preserved if needed, 
+          // or we can let the reading side filter by status.
           updateDoc(locationRef, { status: 'Offline' }).catch(console.error);
       }
       return;
@@ -63,9 +67,14 @@ export const useGeolocationTracker = (isActive: boolean) => {
         const { latitude, longitude, accuracy } = position.coords;
         setLocation({ lat: latitude, lng: longitude, accuracy });
         updateFirestore(latitude, longitude, accuracy);
+        setError(null);
       },
       (err) => {
-        setError(err.message);
+        console.error("Geolocation error:", err);
+        if (err.code === 1) setError("Location permission denied.");
+        else if (err.code === 2) setError("Position unavailable.");
+        else if (err.code === 3) setError("Location request timed out.");
+        else setError(err.message);
       },
       {
         enableHighAccuracy: true,
