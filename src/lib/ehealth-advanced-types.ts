@@ -84,10 +84,14 @@ export type DispenseTransaction = {
 // 5. Medical Item (The Parent Product)
 export type MedicalItem = {
     itemId: string;
-    name: string; // e.g. "Paracetamol 500mg"
-    genericName?: string;
+    name: string; // Generic Name or Constructed Name (e.g. "Paracetamol 500mg")
+    genericName?: string; // e.g. "Paracetamol"
+    brandName?: string; // e.g. "Biogesic"
+    strength?: string; // e.g. "500mg"
+    form?: string; // e.g. "Tablet"
     category: 'Medicine' | 'Supply' | 'Equipment';
-    unit: string; // e.g. "Tablet", "Box", "Bottle"
+    unit: string; // Main tracking unit (e.g. "Tablet", "Box") - Legacy field kept for compatibility
+    dispensingUnit?: string; // e.g. "Tablet", "Bottle"
     description?: string;
     
     // Aggregates (Optimistic UI support)
