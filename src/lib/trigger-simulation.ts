@@ -50,7 +50,7 @@ export async function updateSystemStats(updates: { population?: number, househol
 export const simulateEmergency = async (tenantPath: string, location?: { lat: number; lng: number }) => {
   if (!tenantPath) {
     console.error("Cannot simulate emergency: No tenant path provided.");
-    return false;
+    return { success: false, error: "No Tenant Path" };
   }
   
   const { firestore } = initializeFirebase();
@@ -126,9 +126,15 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
     
     await addDoc(alertsRef, alertData);
     console.log(`Simulated emergency alert created at ${safePath}/emergency_alerts with lat: ${finalLat}, lng: ${finalLng} (Source: ${locationSource})`);
-    return true;
-  } catch (error) {
+    
+    return { 
+        success: true, 
+        source: locationSource,
+        lat: finalLat,
+        lng: finalLng
+    };
+  } catch (error: any) {
     console.error("Error simulating emergency:", error);
-    return false;
+    return { success: false, error: error.message };
   }
 };
