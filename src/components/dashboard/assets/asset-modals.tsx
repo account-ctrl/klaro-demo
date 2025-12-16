@@ -22,13 +22,14 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FixedAsset } from "@/lib/types";
+import { FixedAsset, Resident } from "@/lib/types";
 import { QRCodeSVG } from "qrcode.react";
 import {
   LOCATION_OPTIONS,
   officialsAndStaff,
 } from "@/lib/data";
 import { AlertTriangle } from "lucide-react";
+import { Combobox } from "@/components/ui/combobox";
 
 export type AssetFormValues = Omit<
   FixedAsset,
@@ -75,6 +76,7 @@ interface AssetModalsProps {
     setMaintenanceForm: (form: any) => void;
     handleSaveMaintenance: () => void;
     isEditBooking?: boolean;
+    residents: Resident[];
 }
 
 export function AssetModals({
@@ -100,8 +102,12 @@ export function AssetModals({
   maintenanceForm,
   setMaintenanceForm,
   handleSaveMaintenance,
-  isEditBooking
+  isEditBooking,
+  residents
 }: AssetModalsProps) {
+
+  const residentOptions = residents ? residents.map(r => ({ label: `${r.firstName} ${r.lastName}`, value: r.residentId })) : [];
+
   return (
     <>
       {/* Asset Form Sheet */}
@@ -303,7 +309,25 @@ export function AssetModals({
                 </div>
                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="borrowerName" className="text-right">Borrower</Label>
-                    <Input id="borrowerName" value={newBooking.borrowerName} onChange={e => setNewBooking({...newBooking, borrowerName: e.target.value})} className="col-span-3" />
+                    <div className="col-span-3">
+                        <Combobox 
+                            options={residentOptions} 
+                            value={newBooking.residentId || ''} // Use residentId for value
+                            onChange={(val) => {
+                                const selected = residents.find(r => r.residentId === val);
+                                setNewBooking({
+                                    ...newBooking, 
+                                    residentId: val, 
+                                    borrowerName: selected ? `${selected.firstName} ${selected.lastName}` : '' 
+                                });
+                            }} 
+                            placeholder="Select borrower..."
+                            searchPlaceholder="Search residents..."
+                        />
+                         {/* Fallback display if Name is set but no ID (e.g. non-resident borrowing) - simplified for now, assuming only residents */}
+                         {/* If we allow non-residents, we might need a way to input manual text. Combobox usually allows filtering, but not custom input if not in list unless configured. */}
+                         {/* For now, let's strictly pull from residents as requested. */}
+                    </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="purpose" className="text-right">Purpose</Label>

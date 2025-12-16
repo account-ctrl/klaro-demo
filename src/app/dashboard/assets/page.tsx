@@ -10,12 +10,14 @@ import { FixedAsset, MaintenanceLog } from '@/lib/types';
 import { AssetTabs } from '@/components/dashboard/assets/asset-tabs';
 import { AssetModals, initialAssetForm } from '@/components/dashboard/assets/asset-modals';
 import { useTenant } from '@/providers/tenant-provider';
+import { useResidents } from '@/hooks/use-barangay-data';
 
 export default function AssetsPage() {
     const firestore = useFirestore();
     const { tenantPath } = useTenant();
     const { data: assets, isLoading: isLoadingAssets } = useFixedAssets();
     const { data: bookings } = useAssetBookings();
+    const { data: residents } = useResidents();
     const assetsRef = useAssetsRef('fixed_assets');
     const bookingsRef = useAssetsRef('asset_bookings');
     const maintenanceRef = useAssetsRef('maintenance_logs');
@@ -32,7 +34,7 @@ export default function AssetsPage() {
 
     // Form States
     const [assetForm, setAssetForm] = useState(initialAssetForm);
-    const [newBooking, setNewBooking] = useState({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
+    const [newBooking, setNewBooking] = useState({ bookingId: '', assetId: '', borrowerName: '', residentId: '', purpose: '', startDateTime: '', endDateTime: '' });
     
     // Fix: Extend the type to include nextMaintenanceDue which is an Asset property, not a Log property
     const [maintenanceForm, setMaintenanceForm] = useState<Partial<MaintenanceLog> & { nextMaintenanceDue?: string }>({ 
@@ -140,13 +142,14 @@ export default function AssetsPage() {
                 bookingId: booking.bookingId,
                 assetId: booking.assetId,
                 borrowerName: booking.borrowerName,
+                residentId: booking.residentId || '',
                 purpose: booking.purpose,
                 startDateTime: booking.startDateTime,
                 endDateTime: booking.endDateTime
             });
             setIsEditBooking(true);
         } else {
-            setNewBooking({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
+            setNewBooking({ bookingId: '', assetId: '', borrowerName: '', residentId: '', purpose: '', startDateTime: '', endDateTime: '' });
             setIsEditBooking(false);
         }
         setIsBookSheetOpen(true);
@@ -206,6 +209,7 @@ export default function AssetsPage() {
                 assetId: newBooking.assetId,
                 assetName: selectedAsset?.name || 'Unknown Asset',
                 borrowerName: newBooking.borrowerName,
+                residentId: newBooking.residentId || null,
                 purpose: newBooking.purpose,
                 startDateTime: newBooking.startDateTime,
                 endDateTime: newBooking.endDateTime,
@@ -223,7 +227,7 @@ export default function AssetsPage() {
             }
 
             setIsBookSheetOpen(false);
-            setNewBooking({ bookingId: '', assetId: '', borrowerName: '', purpose: '', startDateTime: '', endDateTime: '' });
+            setNewBooking({ bookingId: '', assetId: '', borrowerName: '', residentId: '', purpose: '', startDateTime: '', endDateTime: '' });
         } catch (e) {
             console.error("Booking failed", e);
             toast({ variant: "destructive", title: "Booking Failed", description: "Could not save booking to database." });
@@ -361,6 +365,7 @@ export default function AssetsPage() {
                 setMaintenanceForm={setMaintenanceForm} 
                 handleSaveMaintenance={handleSaveMaintenance} 
                 isEditBooking={isEditBooking}
+                residents={residents || []}
             />
         </div>
     );
