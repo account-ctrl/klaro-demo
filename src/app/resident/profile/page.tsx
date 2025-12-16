@@ -140,21 +140,36 @@ export default function ResidentProfilePage() {
             toast({ variant: "destructive", title: "Geolocation Error", description: "Your browser does not support location." });
             return;
         }
-        toast({ title: "Locating...", description: "Please wait while we get your precise location." });
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                setPinnedLocation({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    acc: pos.coords.accuracy
-                });
-                toast({ title: "Location Pinned", description: `Accuracy: ${Math.round(pos.coords.accuracy)} meters` });
-            }, 
-            (err) => {
-                toast({ variant: "destructive", title: "Location Failed", description: err.message });
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-        );
+        
+        // Use a less restrictive approach for iframes if permissions policy is strict
+        try {
+            toast({ title: "Locating...", description: "Please wait while we get your precise location." });
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    setPinnedLocation({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        acc: pos.coords.accuracy
+                    });
+                    toast({ title: "Location Pinned", description: `Accuracy: ${Math.round(pos.coords.accuracy)} meters` });
+                }, 
+                (err) => {
+                    // Fallback or better error message
+                    if (err.code === 1) { // PERMISSION_DENIED
+                         toast({ 
+                             variant: "destructive", 
+                             title: "Location Permission Denied", 
+                             description: "Please enable location access for this site in your browser settings." 
+                        });
+                    } else {
+                        toast({ variant: "destructive", title: "Location Failed", description: err.message });
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        } catch (e) {
+             toast({ variant: "destructive", title: "Error", description: "Geolocation is not available in this environment." });
+        }
     };
 
     const onSubmit = (data: ProfileFormValues) => {

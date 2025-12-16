@@ -56,7 +56,7 @@ export function AssetList({
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {filteredAssets.map((asset) => (
         <AssetCard
-          key={asset.assetId} // React key for list rendering
+          key={asset.assetId} // Correctly using assetId as key
           asset={asset}
           onEdit={onEdit}
           onDelete={onDelete}
