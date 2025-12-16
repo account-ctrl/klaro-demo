@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
     Type, Image as ImageIcon, PenTool, LayoutTemplate, 
-    Move, X, AlignLeft, AlignCenter, AlignRight, Bold, Italic 
+    Move, X, AlignLeft, AlignCenter, AlignRight, Bold, Italic, Trash2 
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
