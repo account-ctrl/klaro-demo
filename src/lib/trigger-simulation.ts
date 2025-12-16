@@ -71,20 +71,26 @@ export const simulateEmergency = async (tenantPath: string, location?: { lat: nu
   } else {
       // Otherwise, try to capture real device GPS
       try {
-          const gpsData = await captureAccurateLocation({ timeoutMs: 5000, maxWaitMs: 7000 });
-          if (gpsData.location_source === 'GPS' || gpsData.location_source === 'NETWORK') {
+          // Increase timeout to ensure we get a fix if possible
+          const gpsData = await captureAccurateLocation({ timeoutMs: 10000, maxWaitMs: 12000 });
+          
+          if (gpsData.lat !== 0 && gpsData.lng !== 0) {
               finalLat = gpsData.lat;
               finalLng = gpsData.lng;
-              locationSource = gpsData.location_source;
+              locationSource = gpsData.location_source === 'UNAVAILABLE' ? 'SIMULATION' : gpsData.location_source;
               accuracy = gpsData.accuracy_m;
+              console.log("Simulation used Real GPS:", gpsData);
+          } else {
+              console.warn("Simulation failed to get GPS (returned 0,0), falling back.");
           }
       } catch (e) {
-          console.warn("Simulation failed to get GPS, falling back to Polomolok default.");
+          console.warn("Simulation failed to get GPS with error:", e);
       }
   }
 
   // 2. Fallback to Polomolok ONLY if no valid location found
   if (finalLat === 0 && finalLng === 0) {
+      console.log("Using Fallback Mock Coordinates (Polomolok)");
       const baseLat = 6.2230; 
       const baseLng = 125.0650;
       const latOffset = (Math.random() - 0.5) * 0.002; 
