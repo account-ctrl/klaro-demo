@@ -3,7 +3,7 @@ export interface AccurateLocation {
     lng: number;
     accuracy_m: number;
     captured_at: number;
-    location_source: 'GPS' | 'NETWORK' | 'CACHED' | 'MANUAL_FALLBACK' | 'UNAVAILABLE' | 'ADMIN_SELECTED';
+    location_source: 'GPS' | 'NETWORK' | 'CACHED' | 'MANUAL_FALLBACK' | 'UNAVAILABLE' | 'ADMIN_SELECTED' | 'SIMULATION';
     is_mock?: boolean;
     location_unavailable_reason?: string;
 }
@@ -23,14 +23,8 @@ export interface LocationOptions {
  * 3. Return the best available location.
  */
 export async function captureAccurateLocation(options: LocationOptions = {}): Promise<AccurateLocation> {
-    const {
-        maxWaitMs = 15000,
-        minAccuracyM = 25,
-        timeoutMs = 10000,
-        maximumAge = 2000
-    } = options;
-
-    if (!navigator.geolocation) {
+    // Only available in browser environments
+    if (typeof window === 'undefined' || !navigator.geolocation) {
         return {
             lat: 0,
             lng: 0,
@@ -40,6 +34,13 @@ export async function captureAccurateLocation(options: LocationOptions = {}): Pr
             location_unavailable_reason: 'Geolocation API not supported'
         };
     }
+
+    const {
+        maxWaitMs = 15000,
+        minAccuracyM = 25,
+        timeoutMs = 10000,
+        maximumAge = 2000
+    } = options;
 
     const getLocationPromise = new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -64,7 +65,7 @@ export async function captureAccurateLocation(options: LocationOptions = {}): Pr
         }
 
         // If initial accuracy is poor, try watchPosition for a short time
-        console.warn(`Initial accuracy poor (${position.coords.accuracy}m). Starting watchPosition...`);
+        // console.warn(`Initial accuracy poor (${position.coords.accuracy}m). Starting watchPosition...`);
 
         return await new Promise<AccurateLocation>((resolve) => {
             let bestPosition = position;
@@ -109,7 +110,7 @@ export async function captureAccurateLocation(options: LocationOptions = {}): Pr
         });
 
     } catch (error: any) {
-        console.error("Geolocation error:", error);
+        // console.error("Geolocation error:", error);
         
         let reason = 'Unknown error';
         if (error.code === 1) reason = 'Permission denied';
