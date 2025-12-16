@@ -1,7 +1,5 @@
 
 import { useState, useRef, useEffect } from 'react';
-import { useFirestore } from '@/firebase/client-provider';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 interface LocationState {
     lat: number | null;
@@ -46,6 +44,10 @@ export const useGeolocation = (userId?: string, role?: string) => {
                     source: source
                 });
 
+                // ONLY RESOLVE if accuracy is acceptable (e.g., < 20m) OR if it's the fallback
+                // If it's high accuracy attempt but poor result, we might want to reject or retry?
+                // For now, we return what we have, but the UI can warn if accuracy is > 50m.
+                
                 resolve({
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
@@ -64,17 +66,19 @@ export const useGeolocation = (userId?: string, role?: string) => {
                         setError(errMsg);
                         reject(new Error(errMsg));
                     },
-                    { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+                    { enableHighAccuracy: false, timeout: 20000, maximumAge: 0 }
                 );
             };
 
             // Request 1: High Accuracy (Primary)
+            // INCREASED TIMEOUT: 5s might be too short for a cold GPS lock on some devices.
+            // Using 15s to give the GPS radio time to warm up.
             navigator.geolocation.getCurrentPosition(
                 (pos) => successHandler(pos, true),
                 errorHandler,
                 {
                     enableHighAccuracy: true,
-                    timeout: 5000, // Reduced timeout for faster fallback
+                    timeout: 15000, 
                     maximumAge: 0   // Force fresh reading
                 }
             );
@@ -93,11 +97,13 @@ export const useGeolocation = (userId?: string, role?: string) => {
             navigator.geolocation.clearWatch(watchIdRef.current);
         }
 
+        // We use watchPosition to progressively get better accuracy.
+        // Often the first result is cached/WiFi (low acc), and subsequent ones are GPS (high acc).
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
-                // Note: watchPosition doesn't explicitly tell us if it used high accuracy, 
-                // but we request it. We can infer based on accuracy if needed, but for now we'll just log it.
+                console.log(`[WatchPosition] Update: ${latitude}, ${longitude} (Acc: ${accuracy}m)`);
+                
                 setLocation({ lat: latitude, lng: longitude, accuracy, source: 'high-accuracy' }); 
                 setError(null);
             },
@@ -110,9 +116,9 @@ export const useGeolocation = (userId?: string, role?: string) => {
             },
             {
                 enableHighAccuracy: true,
-                timeout: 20000,
+                timeout: 30000, // Longer timeout for watching
                 maximumAge: 0,
-                distanceFilter: 5 // Only update if moved > 5 meters
+                // Removed distanceFilter to allow "convergence" updates where only accuracy improves without position changing much
             }
         );
     };

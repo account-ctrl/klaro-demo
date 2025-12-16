@@ -46,6 +46,7 @@ import { HouseholdSearch } from "./components/household-search";
 import { MapHousehold } from "@/components/emergency-map";
 import { SOSButton } from "@/features/emergency/components/SosButton";
 import { OnDutyToggle } from "@/features/emergency/components/OnDutyToggle";
+import { GeolocationDebugger } from "@/features/emergency/components/GeolocationDebugger";
 
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
@@ -621,14 +622,22 @@ export function EmergencyDashboard() {
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/60 via-transparent to-black/60"></div>
         </div>
         
-        <div className="absolute top-6 left-6 z-10 pointer-events-none">
-             <WeatherHeader />
+        <div className="absolute top-6 left-6 z-10 pointer-events-none flex flex-col gap-4">
+             <div className="pointer-events-auto">
+                 <WeatherHeader />
+             </div>
+             
+             {/* Moved GeolocationDebugger here */}
+             <div className="pointer-events-auto">
+                 <GeolocationDebugger currentUser={user} />
+             </div>
         </div>
 
-        <div className="absolute right-6 top-6 bottom-24 z-10 flex flex-col gap-4 overflow-y-auto pointer-events-none w-80 pr-2">
+        <div className="absolute right-6 top-6 bottom-24 z-10 flex flex-col gap-4 overflow-y-auto pointer-events-none w-96 pr-2">
             <div className="pointer-events-auto">
                 <OnDutyToggle />
             </div>
+
             <div className="pointer-events-auto">
                 <ActiveAlertFeed 
                     alerts={sortedAlerts} 

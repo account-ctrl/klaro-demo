@@ -4,10 +4,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Radio, Truck, Boxes, AlertTriangle } from "lucide-react";
+import { Radio, Truck, Boxes, AlertTriangle, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { useFixedAssets } from "@/hooks/use-assets";
 import { formatDistanceToNow } from "date-fns";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 // Roles considered as Responders
 const RESPONDER_ROLES = [
@@ -22,6 +23,8 @@ const RESPONDER_ROLES = [
 ];
 
 export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
     // Correctly filter responders based on user prompt
     // 1. Must have a defined role (position or systemRole)
     // 2. Filter logic:
@@ -57,17 +60,39 @@ export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
         });
     }, [responders]);
 
-    return (
-        <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden mb-4 pointer-events-auto flex-shrink-0">
-            <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-blue-400">
-                        <Radio className="h-4 w-4 animate-pulse" />
-                        <h3 className="font-semibold text-sm text-zinc-100">Available Responders</h3>
-                    </div>
-                    <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-300 bg-blue-500/10">
-                        {responderList.length} Total
+    if (isCollapsed) {
+        return (
+            <div className="flex justify-end w-full mb-4">
+                <Button
+                    variant="outline"
+                    className="h-12 px-4 rounded-full bg-zinc-900 border-zinc-800 text-blue-400 hover:bg-zinc-800 hover:text-blue-300 shadow-xl flex items-center gap-3 transition-all duration-300"
+                    onClick={() => setIsCollapsed(false)}
+                    title="Available Responders"
+                >
+                    <Radio className="h-5 w-5 animate-pulse" />
+                    <span className="font-semibold text-sm">Responders</span>
+                    <Badge variant="secondary" className="ml-1 bg-blue-900/50 text-blue-300 hover:bg-blue-900/50">
+                        {responderList.length}
                     </Badge>
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden mb-4 pointer-events-auto flex-shrink-0 transition-all duration-300">
+            <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800 flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center gap-2 text-blue-400">
+                    <Radio className="h-4 w-4 animate-pulse" />
+                    <h3 className="font-semibold text-sm text-zinc-100">Available Responders</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-300 bg-blue-500/10">
+                        {responderList.length}
+                    </Badge>
+                     <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300" onClick={() => setIsCollapsed(true)}>
+                        <ChevronUp className="h-4 w-4" />
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -109,18 +134,41 @@ export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
 
 export const AssetList = () => {
     const { data: assets, isLoading } = useFixedAssets();
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    if (isCollapsed) {
+        return (
+             <div className="flex justify-end w-full mb-4">
+                <Button
+                    variant="outline"
+                    className="h-12 px-4 rounded-full bg-zinc-900 border-zinc-800 text-emerald-400 hover:bg-zinc-800 hover:text-emerald-300 shadow-xl flex items-center gap-3 transition-all duration-300"
+                    onClick={() => setIsCollapsed(false)}
+                    title="Resources & Assets"
+                >
+                    <Boxes className="h-5 w-5" />
+                    <span className="font-semibold text-sm">Assets</span>
+                    <Badge variant="secondary" className="ml-1 bg-emerald-900/50 text-emerald-300 hover:bg-emerald-900/50">
+                        {assets ? assets.length : 0}
+                    </Badge>
+                </Button>
+            </div>
+        );
+    }
 
     return (
-        <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden pointer-events-auto flex-shrink-0">
-            <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-emerald-400">
-                        <Boxes className="h-4 w-4" />
-                        <h3 className="font-semibold text-sm text-zinc-100">Resources & Assets</h3>
-                    </div>
+        <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden pointer-events-auto flex-shrink-0 transition-all duration-300">
+            <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800 flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center gap-2 text-emerald-400">
+                    <Boxes className="h-4 w-4" />
+                    <h3 className="font-semibold text-sm text-zinc-100">Resources & Assets</h3>
+                </div>
+                 <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-xs border-emerald-500/30 text-emerald-300 bg-emerald-500/10">
-                        {assets ? assets.length : 0} Total
+                        {assets ? assets.length : 0}
                     </Badge>
+                     <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300" onClick={() => setIsCollapsed(true)}>
+                        <ChevronUp className="h-4 w-4" />
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -162,17 +210,44 @@ export const AssetList = () => {
 }
 
 export const ActiveAlertFeed = ({ alerts, onSelectAlert, selectedAlertId }: { alerts: EmergencyAlert[], onSelectAlert: (id: string) => void, selectedAlertId: string | null }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    if (isCollapsed) {
+        return (
+             <div className="flex justify-end w-full mb-4">
+                <Button
+                    variant="outline"
+                    className="h-12 px-4 rounded-full bg-zinc-900 border-zinc-800 text-red-400 hover:bg-zinc-800 hover:text-red-300 shadow-xl flex items-center gap-3 transition-all duration-300 relative overflow-hidden"
+                    onClick={() => setIsCollapsed(false)}
+                    title="Active Alerts"
+                >
+                    {alerts.length > 0 && <div className="absolute inset-0 bg-red-500/10 animate-pulse" />}
+                    <AlertTriangle className="h-5 w-5" />
+                    <span className="font-semibold text-sm">Active Alerts</span>
+                    <Badge variant="secondary" className="ml-1 bg-red-900/50 text-red-300 hover:bg-red-900/50">
+                        {alerts.length}
+                    </Badge>
+                </Button>
+            </div>
+        );
+    }
+
     return (
-        <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden pointer-events-auto flex-shrink-0">
-            <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800">
-                <div className="flex items-center justify-between">
+        <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden pointer-events-auto flex-shrink-0 transition-all duration-300">
+            <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800 flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center justify-between gap-4 w-full">
                      <div className="flex items-center gap-2 text-red-400">
                         <AlertTriangle className="h-4 w-4 animate-pulse" />
                         <h3 className="font-semibold text-sm text-zinc-100">Active Alerts</h3>
                     </div>
-                     <Badge variant="outline" className="text-xs border-red-500/30 text-red-300 bg-red-500/10">
-                        {alerts.length} Active
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs border-red-500/30 text-red-300 bg-red-500/10">
+                            {alerts.length} Active
+                        </Badge>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300" onClick={() => setIsCollapsed(true)}>
+                            <ChevronUp className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </CardHeader>
              <CardContent className="p-0">
