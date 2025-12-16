@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Query,
   onSnapshot,
@@ -9,6 +9,11 @@ import {
   FirestoreError,
   QuerySnapshot,
   CollectionReference,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  setDoc
 } from 'firebase/firestore';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -23,6 +28,10 @@ export interface UseCollectionResult<T> {
   data: WithId<T>[] | null; // Document data with ID, or null.
   isLoading: boolean;       // True if loading.
   error: FirestoreError | Error | null; // Error object, or null.
+  add: (data: Omit<T, 'id'>) => Promise<any>;
+  update: (id: string, data: Partial<T>) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  set: (id: string, data: T) => Promise<void>;
 }
 
 /* Internal implementation of Query:
@@ -65,7 +74,9 @@ export function useCollection<T = any>(
   const prevQueryRef = useRef<typeof targetRefOrQuery>(undefined);
 
   useEffect(() => {
-    // Basic strict equality check, but we trust the caller to memoize.
+    // We can't rely just on object identity if memoization is not perfect.
+    // However, if the user follows rules, this check prevents re-subscription
+    // if the reference hasn't changed.
     if (prevQueryRef.current === targetRefOrQuery) {
       return;
     }
@@ -116,6 +127,44 @@ export function useCollection<T = any>(
 
     return () => unsubscribe();
   }, [targetRefOrQuery]); 
+  
+    // Helper functions for CRUD operations
+    const add = async (newData: Omit<T, 'id'>) => {
+        if (!targetRefOrQuery || targetRefOrQuery.type !== 'collection') {
+            throw new Error("Cannot add to a query, must be a collection reference");
+        }
+        return await addDoc(targetRefOrQuery as CollectionReference<DocumentData>, newData as DocumentData);
+    };
 
-  return { data, isLoading, error };
+    const update = async (id: string, updatedData: Partial<T>) => {
+        if (!targetRefOrQuery || targetRefOrQuery.type !== 'collection') {
+             // If it's a query, we might need to get the doc ref differently or throw error
+             // Ideally we shouldn't be updating from a query result directly without a collection ref context usually available
+             // But assuming we have enough info or caller handles it.
+             // Best practice: caller should pass collection ref if they want to use 'add'.
+             // For update, we can construct the doc ref if we know the path.
+             // But from a query object we can't always easily get the parent collection for a doc.
+              throw new Error("Cannot update directly on query result without collection context");
+        }
+        const docRef = doc(targetRefOrQuery as CollectionReference<DocumentData>, id);
+        await updateDoc(docRef, updatedData as DocumentData);
+    };
+
+    const remove = async (id: string) => {
+        if (!targetRefOrQuery || targetRefOrQuery.type !== 'collection') {
+             throw new Error("Cannot delete directly on query result without collection context");
+        }
+        const docRef = doc(targetRefOrQuery as CollectionReference<DocumentData>, id);
+        await deleteDoc(docRef);
+    };
+
+     const set = async (id: string, newData: T) => {
+        if (!targetRefOrQuery || targetRefOrQuery.type !== 'collection') {
+             throw new Error("Cannot set directly on query result without collection context");
+        }
+        const docRef = doc(targetRefOrQuery as CollectionReference<DocumentData>, id);
+        await setDoc(docRef, newData as DocumentData);
+    };
+
+  return { data, isLoading, error, add, update, remove, set };
 }
