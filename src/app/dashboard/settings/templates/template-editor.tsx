@@ -137,12 +137,12 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
 
     // --- Actions ---
 
-    const addElement = (type: ElementType, content: string = 'New Text') => {
+    const addElement = (type: ElementType, content: string = 'New Text', x: number = 50, y: number = 50) => {
         const newElement: EditorElement = {
             id: Math.random().toString(36).substr(2, 9),
             type,
-            x: 50,
-            y: 50 + (elements.length * 20),
+            x: x === 50 ? 50 : x, // If default, use default logic later if needed
+            y: y === 50 ? 50 + (elements.length * 20) : y, // Offset if default
             width: type === 'image' ? 100 : 300,
             height: type === 'image' ? 100 : 40,
             content,
@@ -169,7 +169,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
         setSelectedId(null);
     };
 
-    // --- Dragging Logic ---
+    // --- Dragging Logic (Canvas Items) ---
 
     const handleMouseDown = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
@@ -202,25 +202,89 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
         setDragState(null);
     };
 
+    // --- Sidebar Drag Logic (Add Items) ---
+
+    const handleSidebarDragStart = (e: React.DragEvent, type: ElementType, content: string) => {
+        e.dataTransfer.setData('type', type);
+        e.dataTransfer.setData('content', content);
+    };
+
+    const handleCanvasDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const type = e.dataTransfer.getData('type') as ElementType;
+        const content = e.dataTransfer.getData('content');
+        
+        if (type && canvasRef.current) {
+            const rect = canvasRef.current.getBoundingClientRect();
+            // Calculate position relative to canvas
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Add with centered offset roughly
+            addElement(type, content, x - 50, y - 10);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault(); // Allow drop
+    };
+
     const selectedElement = elements.find(el => el.id === selectedId);
 
     return (
-        <div className="flex h-[600px] border rounded-md overflow-hidden bg-slate-100" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+        <div 
+            className="flex h-[600px] border rounded-md overflow-hidden bg-slate-100" 
+            onMouseMove={handleMouseMove} 
+            onMouseUp={handleMouseUp} 
+            onMouseLeave={handleMouseUp}
+        >
             {/* Sidebar Tools */}
             <div className="w-64 bg-white border-r p-4 flex flex-col gap-4 overflow-y-auto">
                 <div className="space-y-2">
                     <Label className="text-xs font-semibold uppercase text-muted-foreground">Components</Label>
                     <div className="grid grid-cols-2 gap-2">
-                        <Button variant="outline" size="sm" onClick={() => addElement('text', 'Double click to edit')} className="justify-start">
+                        <Button 
+                            type="button" // Fix: Prevent form submit
+                            variant="outline" 
+                            size="sm" 
+                            draggable="true"
+                            onDragStart={(e) => handleSidebarDragStart(e, 'text', 'Double click to edit')}
+                            onClick={() => addElement('text', 'Double click to edit')} 
+                            className="justify-start cursor-grab active:cursor-grabbing"
+                        >
                             <Type className="mr-2 h-4 w-4" /> Text
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => addElement('image', 'https://placehold.co/100x100')} className="justify-start">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            draggable="true"
+                            onDragStart={(e) => handleSidebarDragStart(e, 'image', 'https://placehold.co/100x100')}
+                            onClick={() => addElement('image', 'https://placehold.co/100x100')} 
+                            className="justify-start cursor-grab active:cursor-grabbing"
+                        >
                             <ImageIcon className="mr-2 h-4 w-4" /> Image
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => addElement('placeholder', '{{ PLACEHOLDER }}')} className="justify-start">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            draggable="true"
+                            onDragStart={(e) => handleSidebarDragStart(e, 'placeholder', '{{ PLACEHOLDER }}')}
+                            onClick={() => addElement('placeholder', '{{ PLACEHOLDER }}')} 
+                            className="justify-start cursor-grab active:cursor-grabbing"
+                        >
                             <LayoutTemplate className="mr-2 h-4 w-4" /> Field
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => addElement('signature', '(Signature)')} className="justify-start">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            draggable="true"
+                            onDragStart={(e) => handleSidebarDragStart(e, 'signature', '(Signature)')}
+                            onClick={() => addElement('signature', '(Signature)')} 
+                            className="justify-start cursor-grab active:cursor-grabbing"
+                        >
                             <PenTool className="mr-2 h-4 w-4" /> Sign
                         </Button>
                     </div>
@@ -228,9 +292,9 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
 
                 {selectedElement && (
                     <div className="space-y-4 pt-4 border-t">
+                        {/* ... Properties Panel ... */}
                         <Label className="text-xs font-semibold uppercase text-muted-foreground">Properties</Label>
                         
-                        {/* Content Edit */}
                         <div className="space-y-2">
                             <Label>Content / Text</Label>
                             {selectedElement.type === 'image' ? (
@@ -244,7 +308,6 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                             )}
                         </div>
 
-                        {/* Placeholders */}
                         {selectedElement.type !== 'image' && (
                             <div className="space-y-2">
                                 <Label>Insert Variable</Label>
@@ -257,68 +320,30 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                             </div>
                         )}
 
-                        {/* Style Tools */}
                         <div className="space-y-2">
                             <Label>Styling</Label>
                             <div className="flex gap-1 bg-slate-100 p-1 rounded-md">
-                                <Button 
-                                    variant={selectedElement.style?.textAlign === 'left' ? 'secondary' : 'ghost'} 
-                                    size="icon" className="h-8 w-8"
-                                    onClick={() => updateStyle(selectedElement.id, { textAlign: 'left' })}
-                                >
-                                    <AlignLeft className="h-4 w-4"/>
-                                </Button>
-                                <Button 
-                                    variant={selectedElement.style?.textAlign === 'center' ? 'secondary' : 'ghost'} 
-                                    size="icon" className="h-8 w-8"
-                                    onClick={() => updateStyle(selectedElement.id, { textAlign: 'center' })}
-                                >
-                                    <AlignCenter className="h-4 w-4"/>
-                                </Button>
-                                <Button 
-                                    variant={selectedElement.style?.textAlign === 'right' ? 'secondary' : 'ghost'} 
-                                    size="icon" className="h-8 w-8"
-                                    onClick={() => updateStyle(selectedElement.id, { textAlign: 'right' })}
-                                >
-                                    <AlignRight className="h-4 w-4"/>
-                                </Button>
+                                <Button type="button" variant={selectedElement.style?.textAlign === 'left' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => updateStyle(selectedElement.id, { textAlign: 'left' })}><AlignLeft className="h-4 w-4"/></Button>
+                                <Button type="button" variant={selectedElement.style?.textAlign === 'center' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => updateStyle(selectedElement.id, { textAlign: 'center' })}><AlignCenter className="h-4 w-4"/></Button>
+                                <Button type="button" variant={selectedElement.style?.textAlign === 'right' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => updateStyle(selectedElement.id, { textAlign: 'right' })}><AlignRight className="h-4 w-4"/></Button>
                                 <div className="w-px bg-slate-300 mx-1"></div>
-                                <Button 
-                                    variant={selectedElement.style?.fontWeight === 'bold' ? 'secondary' : 'ghost'} 
-                                    size="icon" className="h-8 w-8"
-                                    onClick={() => updateStyle(selectedElement.id, { fontWeight: selectedElement.style?.fontWeight === 'bold' ? 'normal' : 'bold' })}
-                                >
-                                    <Bold className="h-4 w-4"/>
-                                </Button>
-                                <Button 
-                                    variant={selectedElement.style?.fontStyle === 'italic' ? 'secondary' : 'ghost'} 
-                                    size="icon" className="h-8 w-8"
-                                    onClick={() => updateStyle(selectedElement.id, { fontStyle: selectedElement.style?.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                                >
-                                    <Italic className="h-4 w-4"/>
-                                </Button>
+                                <Button type="button" variant={selectedElement.style?.fontWeight === 'bold' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => updateStyle(selectedElement.id, { fontWeight: selectedElement.style?.fontWeight === 'bold' ? 'normal' : 'bold' })}><Bold className="h-4 w-4"/></Button>
+                                <Button type="button" variant={selectedElement.style?.fontStyle === 'italic' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => updateStyle(selectedElement.id, { fontStyle: selectedElement.style?.fontStyle === 'italic' ? 'normal' : 'italic' })}><Italic className="h-4 w-4"/></Button>
                             </div>
                             <div className="flex gap-2 mt-2">
                                 <div className="flex-1">
                                     <Label className="text-[10px]">Font Size</Label>
-                                    <Input 
-                                        type="text" 
-                                        value={selectedElement.style?.fontSize} 
-                                        onChange={(e) => updateStyle(selectedElement.id, { fontSize: e.target.value })}
-                                        placeholder="14px"
-                                        className="h-8"
-                                    />
+                                    <Input type="text" value={selectedElement.style?.fontSize} onChange={(e) => updateStyle(selectedElement.id, { fontSize: e.target.value })} placeholder="14px" className="h-8" />
                                 </div>
                             </div>
                         </div>
 
-                        {/* Dimensions */}
                         <div className="grid grid-cols-2 gap-2">
                             <div><Label className="text-[10px]">Width</Label><Input type="number" value={selectedElement.width} onChange={(e) => updateElement(selectedElement.id, { width: parseInt(e.target.value) })} className="h-8"/></div>
                             <div><Label className="text-[10px]">Height</Label><Input type="number" value={selectedElement.height} onChange={(e) => updateElement(selectedElement.id, { height: parseInt(e.target.value) })} className="h-8"/></div>
                         </div>
 
-                        <Button variant="destructive" size="sm" onClick={() => deleteElement(selectedElement.id)} className="w-full mt-4">
+                        <Button type="button" variant="destructive" size="sm" onClick={() => deleteElement(selectedElement.id)} className="w-full mt-4">
                             <Trash2 className="mr-2 h-4 w-4"/> Remove Item
                         </Button>
                     </div>
@@ -337,8 +362,9 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                         minHeight: `${PAGE_HEIGHT}px`,
                     }}
                     onClick={() => setSelectedId(null)}
+                    onDrop={handleCanvasDrop}
+                    onDragOver={handleDragOver}
                 >
-                    {/* Grid/Guides could go here */}
                     {elements.length === 0 && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 font-bold text-4xl uppercase tracking-widest">
                             Blank Template
@@ -365,7 +391,6 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                                 </div>
                             )}
                             
-                            {/* Resize Handle (Simplified - strictly visual for now, dragging logic usually separate) */}
                             {selectedId === el.id && (
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-blue-600 cursor-nwse-resize"></div>
                             )}
