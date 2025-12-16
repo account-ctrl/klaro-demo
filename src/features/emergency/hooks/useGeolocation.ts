@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useFirestore } from '@/firebase/client-provider';
+import { useFirestore } from '@/firebase/provider'; 
 import { useTenant } from '@/providers/tenant-provider';
 import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useUser } from '@/firebase';
@@ -31,8 +31,6 @@ export const useGeolocationTracker = (isActive: boolean) => {
         accuracy: accuracy,
         last_active: serverTimestamp(),
         status: 'On Duty',
-        // We can add role info here if we want it denormalized, 
-        // but typically we join with users collection on read.
       }, { merge: true });
       lastUpdateRef.current = now;
     } catch (err) {
@@ -50,8 +48,6 @@ export const useGeolocationTracker = (isActive: boolean) => {
       // Mark as Offline when toggling off
       if (firestore && tenantPath && user && lastUpdateRef.current > 0) {
           const locationRef = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
-          // We set status to Offline. We don't delete the doc so history is preserved if needed, 
-          // or we can let the reading side filter by status.
           updateDoc(locationRef, { status: 'Offline' }).catch(console.error);
       }
       return;
@@ -93,22 +89,71 @@ export const useGeolocationTracker = (isActive: boolean) => {
   return { location, error };
 };
 
+/**
+ * Enhanced geolocation fetcher that attempts to get a high-accuracy reading.
+ * It waits up to 5 seconds to refine the location if the initial lock is poor (>20m accuracy).
+ */
 export const getCurrentCoordinates = (): Promise<{lat: number, lng: number, accuracy: number}> => {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
             reject(new Error("Geolocation not supported"));
             return;
         }
+        
+        const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+        
+        // 1. Request initial position
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                resolve({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy
-                });
+                // If we have a good fix immediately (< 25m), return it
+                if (pos.coords.accuracy < 25) {
+                     resolve({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy
+                    });
+                    return;
+                }
+
+                // 2. If initial accuracy is poor, try watching for a better fix for a few seconds
+                let bestPos = pos;
+                let watchId: number;
+
+                const refinementTimeout = setTimeout(() => {
+                    navigator.geolocation.clearWatch(watchId);
+                    resolve({
+                        lat: bestPos.coords.latitude,
+                        lng: bestPos.coords.longitude,
+                        accuracy: bestPos.coords.accuracy
+                    });
+                }, 5000); // Wait 5 seconds for refinement
+
+                watchId = navigator.geolocation.watchPosition(
+                    (newPos) => {
+                        // If new position is more accurate, update bestPos
+                        if (newPos.coords.accuracy < bestPos.coords.accuracy) {
+                            bestPos = newPos;
+                        }
+                        // If we hit our target accuracy, stop waiting
+                        if (bestPos.coords.accuracy < 25) {
+                            clearTimeout(refinementTimeout);
+                            navigator.geolocation.clearWatch(watchId);
+                            resolve({
+                                lat: bestPos.coords.latitude,
+                                lng: bestPos.coords.longitude,
+                                accuracy: bestPos.coords.accuracy
+                            });
+                        }
+                    }, 
+                    (err) => {
+                        console.warn("Refinement watch error", err);
+                        // Do not reject here, wait for timeout or success
+                    },
+                    options
+                );
             },
             (err) => reject(err),
-            { enableHighAccuracy: true, timeout: 10000 }
+            options
         );
     });
 };

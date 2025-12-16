@@ -12,7 +12,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { useEffect, useState, useMemo } from 'react';
-import { useFirestore } from '@/firebase/client-provider';
+import { useFirestore } from '@/firebase/provider'; // Updated import
 import { useTenant } from '@/providers/tenant-provider';
 import { EmergencyAlert, ResponderLocation } from '@/lib/types';
 import { useUser } from '@/firebase';
