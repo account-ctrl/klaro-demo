@@ -651,9 +651,9 @@ export function EmergencyDashboard() {
         </div>
 
         <Button 
-            className="absolute bottom-6 right-6 z-50 h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 shadow-[0_0_40px_-10px_rgba(220,38,38,0.7)] border-4 border-red-800 animate-pulse hover:animate-none transition-all scale-100 hover:scale-110 flex items-center justify-center"
+            className="absolute bottom-6 right-6 z-[100] h-16 w-16 rounded-full bg-red-600 hover:bg-red-700 shadow-[0_0_40px_-10px_rgba(220,38,38,0.7)] border-4 border-red-800 animate-pulse hover:animate-none transition-all scale-100 hover:scale-110 flex items-center justify-center cursor-pointer pointer-events-auto"
             onClick={handleSimulateSOS} 
-            disabled={isLoading || isSimulating}
+            disabled={isSimulating}
             title="Broadcast Emergency Alert"
         >
             <Siren className="h-8 w-8 text-white" />
