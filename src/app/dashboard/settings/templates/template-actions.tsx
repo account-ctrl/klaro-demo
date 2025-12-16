@@ -34,6 +34,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TemplateEditor } from './template-editor';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const defaultTemplateContent = `<!DOCTYPE html>
 <html>
@@ -145,12 +146,14 @@ function TemplateForm({ record, onSave, onClose }: TemplateFormProps) {
                         </Button>
                     </div>
                     
-                    <TabsContent value="visual" className="mt-0">
-                        <TemplateEditor 
-                            initialContent={formData.content} 
-                            onChange={handleCodeChange} 
-                        />
-                        <p className="text-xs text-muted-foreground mt-2">
+                    <TabsContent value="visual" className="mt-0 h-[600px] border rounded-md overflow-hidden bg-zinc-100 dark:bg-zinc-950/50">
+                        <ErrorBoundary name="Visual Template Editor">
+                            <TemplateEditor 
+                                initialContent={formData.content} 
+                                onChange={handleCodeChange} 
+                            />
+                        </ErrorBoundary>
+                        <p className="text-xs text-muted-foreground mt-2 px-2">
                             Note: Switching to code view and making complex manual edits might break the visual editor's layout.
                         </p>
                     </TabsContent>

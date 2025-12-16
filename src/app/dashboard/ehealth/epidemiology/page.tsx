@@ -22,6 +22,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { EpidemiologyCase } from '@/lib/ehealth-types';
 import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import dynamic from 'next/dynamic';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const DiseaseMap = dynamic(() => import('@/components/maps/DiseaseMap'), { 
     ssr: false,
@@ -197,7 +198,9 @@ export default function EpidemiologyPage() {
 
             {viewMode === 'map' ? (
                 <div className="flex-grow border rounded-lg overflow-hidden relative">
-                    <DiseaseMap cases={casesWithLocation} settings={profile} />
+                    <ErrorBoundary name="Disease Map">
+                        <DiseaseMap cases={casesWithLocation} settings={profile} />
+                    </ErrorBoundary>
                 </div>
             ) : (
                 <>
