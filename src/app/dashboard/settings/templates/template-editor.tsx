@@ -229,16 +229,6 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
         const dx = e.clientX - dragState.startX;
         const dy = e.clientY - dragState.startY;
         
-        // Don't mark dirty on every pixel move, only on drop? 
-        // No, we need live update. But optimize?
-        // Let's mark dirty on Drop/MouseUp to reduce re-renders of parent?
-        // For visual smoothness, we update local state.
-        // We can defer the "markDirty" to mouseUp if needed, but for now let's keep it sync.
-        
-        // Actually, we should NOT trigger onChange during drag if possible to avoid lag.
-        // But updating 'elements' state triggers the effect.
-        // Let's defer isDirty to mouseUp.
-        
         setElements(prev => prev.map(el => el.id === dragState.id ? {
             ...el,
             x: dragState.initialX + dx,
@@ -441,6 +431,7 @@ export function TemplateEditor({ initialContent, onChange }: TemplateEditorProps
                                 ...el.style
                             }}
                             onMouseDown={(e) => handleMouseDown(e, el.id)}
+                            onClick={(e) => e.stopPropagation()} // Prevent deselection
                         >
                             {el.type === 'image' ? (
                                 <img src={el.content} className="w-full h-full object-contain pointer-events-none" alt="element" />
