@@ -136,7 +136,8 @@ export default function SettingsPage() {
                 });
             }
         }
-    }, [profile, profileForm, systemForm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profile, profileForm.reset, systemForm.reset]);
 
     function onProfileSubmit(data: ProfileFormValues) {
         if (!docRef) return;
