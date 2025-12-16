@@ -4,7 +4,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert, ResponderLocation, Household, TenantSettings } from '@/lib/types'; // Added TenantSettings
+import { EmergencyAlert, ResponderLocation, Household, TenantSettings } from '@/lib/types';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Scan, Eye, Loader2, Save, X, Navigation } from 'lucide-react';
@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { addDocumentNonBlocking } from '@/firebase'; 
 import { useFirestore } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
-import { MapAutoFocus } from './maps/MapAutoFocus'; // Import the AutoFocus component
+import { MapAutoFocus } from './maps/MapAutoFocus'; 
+import { useGeolocation } from '@/features/emergency/hooks/useGeolocation'; // Import hook
 
 const CURRENT_BARANGAY_ID = 'barangay_san_isidro';
 
@@ -32,17 +33,30 @@ type EmergencyMapProps = {
     selectedAlertId: string | null;
     onSelectAlert: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
-    showStructures?: boolean; // New prop
-    settings?: TenantSettings | null; // Added prop
+    showStructures?: boolean; 
+    settings?: TenantSettings | null; 
 };
 
-function MapUpdater({ center, zoom = 16 }: { center: [number, number] | null; zoom?: number }) {
+// Updated MapUpdater to handle initial user location centering
+function MapUpdater({ center, zoom = 16, userLocation }: { center: [number, number] | null; zoom?: number; userLocation?: { lat: number, lng: number } | null }) {
     const map = useMap();
+    const [hasInitialCentered, setHasInitialCentered] = useState(false);
+
     useEffect(() => {
+        // Priority 1: Explicit center prop (from search or alert selection)
         if (center) {
-            map.flyTo(center, zoom, { duration: 2 });
+            map.flyTo(center, zoom, { duration: 1.5 });
+            setHasInitialCentered(true);
+            return;
         }
-    }, [center, map, zoom]);
+
+        // Priority 2: Initial user location (only once on load if no specific center)
+        if (userLocation && !hasInitialCentered && !center) {
+            map.setView([userLocation.lat, userLocation.lng], zoom);
+            setHasInitialCentered(true);
+        }
+    }, [center, map, zoom, userLocation, hasInitialCentered]);
+
     return null;
 }
 
@@ -187,9 +201,6 @@ type ScannedPoint = {
 
 // Helper to simulate a building footprint square around a point
 const generateSquare = (lat: number, lng: number, sizeMeters: number = 5): [number, number][] => {
-    // 1 deg latitude ~= 111,000 meters
-    // 1 deg longitude ~= 111,000 * cos(lat) meters
-    // Let's approximate for Philippines (around 14 deg lat)
     const metersPerDegLat = 111000;
     const metersPerDegLng = 107000; // approx at 14 deg
 
@@ -205,31 +216,35 @@ const generateSquare = (lat: number, lng: number, sizeMeters: number = 5): [numb
     ];
 };
 
-// Use a dark map style from a different provider or style it via CSS filter if possible.
-// For simplicity, we'll stick to OSM but apply a dark mode CSS filter to the tile layer.
 const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)';
 
 export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation, showStructures = true, settings }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = useMemo(() => alerts.find(a => a.alertId === selectedAlertId), [alerts, selectedAlertId]);
     
-    // Determine the initial center
-    // Priority: Searched Location > Selected Alert > First Alert > Default
-    // Note: MapAutoFocus will override this once it resolves the location.
-    
-    const centerToUse = useMemo<[number, number]>(() => {
+    // Fetch current user location for initial centering
+    const { getCurrentCoordinates } = useGeolocation();
+    const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+
+    useEffect(() => {
+        // Attempt to get user location once on mount to center the map
+        getCurrentCoordinates()
+            .then(coords => setUserLocation(coords))
+            .catch(err => console.log("Map auto-center: GPS not available yet.", err));
+    }, []);
+
+    const centerToUse = useMemo<[number, number] | null>(() => {
         if (searchedLocation) {
             return [searchedLocation.lat, searchedLocation.lng];
         } else if (selectedAlert) {
             return [selectedAlert.latitude, selectedAlert.longitude];
         } else if (alerts.length > 0) {
+            // Only center on first alert if it's very recent (e.g. < 5 mins) to avoid jumping to old alerts
+            // For now, let's stick to explicit selection or user location
             return [alerts[0].latitude, alerts[0].longitude];
-        } else if (households.length > 0 && households[0].latitude) {
-            // Fallback to first household if no alerts
-            return [households[0].latitude!, households[0].longitude!];
-        }
-        return defaultCenter;
-    }, [searchedLocation, selectedAlert, alerts, households, defaultCenter]);
+        } 
+        return null; // Let MapUpdater handle fallback to userLocation or default
+    }, [searchedLocation, selectedAlert, alerts]);
 
     const mapRef = useRef<L.Map | null>(null);
     const firestore = useFirestore();
@@ -395,7 +410,7 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
 
             <MapContainer 
                 ref={mapRef}
-                center={centerToUse} 
+                center={centerToUse || defaultCenter} 
                 zoom={16} 
                 zoomControl={false} // Disable default zoom controls
                 style={{ height: '100%', width: '100%', borderRadius: 'inherit', zIndex: 0, background: '#09090b' }}
@@ -423,16 +438,12 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                 {showStructures && households.map((h, i) => {
                     if (!h.latitude || !h.longitude) return null;
                     
-                    // Determine Visuals based on vulnerability
-                    const fillColor = h.vulnerabilityLevel === 'High' ? '#ef4444' : '#06b6d4'; // Red or Cyan/Blue
-                    
-                    // Generate Geometry: Real boundary or Simulated Square
+                    const fillColor = h.vulnerabilityLevel === 'High' ? '#ef4444' : '#06b6d4'; 
                     let positions: [number, number][] = [];
                     if (h.boundary && h.boundary.length > 2) {
                         positions = h.boundary.map(p => [p.lat, p.lng]);
                     } else {
-                        // Simulated 5x5m square
-                        positions = generateSquare(h.latitude, h.longitude, 8); // Slightly bigger for visibility (8m)
+                        positions = generateSquare(h.latitude, h.longitude, 8); 
                     }
                     
                     return (
@@ -441,7 +452,7 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                             positions={positions}
                             pathOptions={{ 
                                 fillColor: fillColor, 
-                                color: '#ffffff', // White stroke
+                                color: '#ffffff', 
                                 weight: 1, 
                                 opacity: 0.9,
                                 fillOpacity: 0.7 
@@ -480,7 +491,8 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
 
                 {/* Updater for map movement */}
                 <MapUpdater 
-                    center={searchedLocation ? [searchedLocation.lat, searchedLocation.lng] : (selectedAlert ? [selectedAlert.latitude, selectedAlert.longitude] : null)} 
+                    center={centerToUse} 
+                    userLocation={userLocation}
                     zoom={searchedLocation ? 18 : 16}
                 />
                 
