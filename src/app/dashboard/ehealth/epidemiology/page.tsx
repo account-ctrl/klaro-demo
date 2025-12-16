@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useResidents, usePuroks, BARANGAY_ID } from '@/hooks/use-barangay-data';
+import { useResidents, usePuroks, useHouseholds, BARANGAY_ID } from '@/hooks/use-barangay-data';
 import { useEpidemiologyCases, useTreatmentLogs, useEHealthAdvancedRef } from '@/hooks/use-ehealth-advanced';
 import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { serverTimestamp, doc, collection } from 'firebase/firestore';
@@ -15,20 +15,30 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Microscope, AlertCircle, MapPin, CheckCircle, Plus, CalendarDays, Users, Activity, AlertTriangle } from 'lucide-react';
+import { Microscope, AlertCircle, MapPin, CheckCircle, Plus, CalendarDays, Users, Activity, AlertTriangle, LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Textarea } from '@/components/ui/textarea';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { EpidemiologyCase } from '@/lib/ehealth-types';
+import { useTenantProfile } from '@/hooks/use-tenant-profile';
+import dynamic from 'next/dynamic';
+
+const DiseaseMap = dynamic(() => import('@/components/maps/DiseaseMap'), { 
+    ssr: false,
+    loading: () => <div className="h-full w-full flex items-center justify-center bg-slate-100 text-muted-foreground">Loading Map...</div>
+});
 
 export default function EpidemiologyPage() {
     const { data: cases } = useEpidemiologyCases();
     const { data: residents } = useResidents();
     const { data: puroks } = usePuroks();
+    const { data: households } = useHouseholds();
+    const { profile } = useTenantProfile();
     const casesRef = useEHealthAdvancedRef('epidemiology_cases');
     
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [newCase, setNewCase] = useState({ residentId: '', diseaseName: '', purok: '', status: 'Active', symptoms: '', dateOfOnset: '' });
+    const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
 
     const activeCases = useMemo(() => cases?.filter(c => c.status === 'Active' || c.status === 'Suspected') || [], [cases]);
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -36,6 +46,25 @@ export default function EpidemiologyPage() {
     // Use .id here
     const selectedCase = useMemo(() => cases?.find(c => c.id === selectedCaseId), [cases, selectedCaseId]);
     const selectedResident = useMemo(() => residents?.find(r => r.residentId === selectedCase?.residentId), [residents, selectedCase]);
+
+    // Derived Data for Map
+    const casesWithLocation = useMemo(() => {
+        if (!activeCases || !residents || !households) return [];
+        return activeCases.map(c => {
+            const r = residents.find(res => res.residentId === c.residentId);
+            const h = households.find(hh => hh.householdId === r?.householdId);
+            
+            if (h?.latitude && h?.longitude) {
+                return {
+                    ...c,
+                    latitude: h.latitude,
+                    longitude: h.longitude,
+                    residentName: r ? `${r.firstName} ${r.lastName}` : 'Unknown'
+                };
+            }
+            return null;
+        }).filter(item => item !== null) as (EpidemiologyCase & { latitude: number; longitude: number; residentName: string })[];
+    }, [activeCases, residents, households]);
 
     // Derived Data for Heatmap & Alerts
     const purokStats = useMemo(() => {
@@ -84,163 +113,188 @@ export default function EpidemiologyPage() {
                     </h1>
                     <p className="text-muted-foreground">Real-time outbreak monitoring and response.</p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="destructive"><AlertCircle className="mr-2 h-4 w-4"/> Report Case</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader><DialogTitle>Report Epidemiology Case</DialogTitle></DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label>Affected Resident</Label>
-                                <Select onValueChange={(val) => {
-                                    const r = residents?.find(res => res.residentId === val);
-                                    // In real app, we fetch purok name from purokId, here assuming purokId is the name or simple mapping
-                                    const pName = puroks?.find(p => p.purokId === r?.purokId)?.name || 'Unknown';
-                                    setNewCase({...newCase, residentId: val, purok: pName})
-                                }}>
-                                    <SelectTrigger><SelectValue placeholder="Select resident..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {residents?.map(r => (
-                                            <SelectItem key={r.residentId} value={r.residentId}>{r.firstName} {r.lastName}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Disease</Label>
-                                    <Select onValueChange={(val) => setNewCase({...newCase, diseaseName: val})}>
-                                        <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Dengue">Dengue</SelectItem>
-                                            <SelectItem value="Tuberculosis">TB (Tuberculosis)</SelectItem>
-                                            <SelectItem value="Measles">Measles</SelectItem>
-                                            <SelectItem value="COVID-19">COVID-19</SelectItem>
-                                            <SelectItem value="Cholera">Cholera</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Status</Label>
-                                    <Select onValueChange={(val) => setNewCase({...newCase, status: val})} defaultValue="Active">
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Suspected">Suspected</SelectItem>
-                                            <SelectItem value="Confirmed">Confirmed</SelectItem>
-                                            <SelectItem value="Active">Active</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Date of Onset</Label>
-                                <Input type="date" value={newCase.dateOfOnset} onChange={e => setNewCase({...newCase, dateOfOnset: e.target.value})} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Symptoms (comma separated)</Label>
-                                <Textarea value={newCase.symptoms} onChange={e => setNewCase({...newCase, symptoms: e.target.value})} placeholder="Fever, Rash, Cough..." />
-                            </div>
-                        </div>
-                        <DialogFooter><Button variant="destructive" onClick={handleReportCase}>Submit Report</Button></DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            {/* ALERT BANNER */}
-            {outbreaks.length > 0 && (
-                <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded-r shadow-sm animate-pulse">
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-red-700" />
-                        <h3 className="font-bold text-red-800">Outbreak Alert Detected</h3>
+                <div className="flex gap-2">
+                    <div className="flex items-center bg-muted p-1 rounded-lg">
+                        <Button 
+                            variant={viewMode === 'dashboard' ? 'secondary' : 'ghost'} 
+                            size="sm" 
+                            onClick={() => setViewMode('dashboard')}
+                            className="h-8"
+                        >
+                            <LayoutGrid className="mr-2 h-4 w-4" /> Dashboard
+                        </Button>
+                        <Button 
+                            variant={viewMode === 'map' ? 'secondary' : 'ghost'} 
+                            size="sm" 
+                            onClick={() => setViewMode('map')}
+                            className="h-8"
+                        >
+                            <MapIcon className="mr-2 h-4 w-4" /> Map View
+                        </Button>
                     </div>
-                    <p className="text-sm text-red-700 mt-1">
-                        High activity detected in: {outbreaks.map(o => `${o.purok} (${o.diseases.join(', ')})`).join('; ')}
-                    </p>
+                    <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="destructive"><AlertCircle className="mr-2 h-4 w-4"/> Report Case</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader><DialogTitle>Report Epidemiology Case</DialogTitle></DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label>Affected Resident</Label>
+                                    <Select onValueChange={(val) => {
+                                        const r = residents?.find(res => res.residentId === val);
+                                        const pName = puroks?.find(p => p.purokId === r?.purokId)?.name || 'Unknown';
+                                        setNewCase({...newCase, residentId: val, purok: pName})
+                                    }}>
+                                        <SelectTrigger><SelectValue placeholder="Select resident..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {residents?.map(r => (
+                                                <SelectItem key={r.residentId} value={r.residentId}>{r.firstName} {r.lastName}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Disease</Label>
+                                        <Select onValueChange={(val) => setNewCase({...newCase, diseaseName: val})}>
+                                            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Dengue">Dengue</SelectItem>
+                                                <SelectItem value="Tuberculosis">TB (Tuberculosis)</SelectItem>
+                                                <SelectItem value="Measles">Measles</SelectItem>
+                                                <SelectItem value="COVID-19">COVID-19</SelectItem>
+                                                <SelectItem value="Cholera">Cholera</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Status</Label>
+                                        <Select onValueChange={(val) => setNewCase({...newCase, status: val})} defaultValue="Active">
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Suspected">Suspected</SelectItem>
+                                                <SelectItem value="Confirmed">Confirmed</SelectItem>
+                                                <SelectItem value="Active">Active</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Date of Onset</Label>
+                                    <Input type="date" value={newCase.dateOfOnset} onChange={e => setNewCase({...newCase, dateOfOnset: e.target.value})} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Symptoms (comma separated)</Label>
+                                    <Textarea value={newCase.symptoms} onChange={e => setNewCase({...newCase, symptoms: e.target.value})} placeholder="Fever, Rash, Cough..." />
+                                </div>
+                            </div>
+                            <DialogFooter><Button variant="destructive" onClick={handleReportCase}>Submit Report</Button></DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
-            )}
-
-            {/* HEATMAP / STATS GRID */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {Object.entries(purokStats).map(([pName, data]) => {
-                    // Heatmap logic: 0 = gray, 1-2 = yellow, 3+ = red
-                    let bgClass = "bg-slate-100 border-slate-200";
-                    let textClass = "text-slate-600";
-                    if (data.count > 0) {
-                        bgClass = "bg-yellow-100 border-yellow-300";
-                        textClass = "text-yellow-800";
-                    }
-                    if (data.count >= 3) {
-                        bgClass = "bg-red-100 border-red-300";
-                        textClass = "text-red-800";
-                    }
-
-                    return (
-                        <div key={pName} className={`border rounded-lg p-3 text-center ${bgClass}`}>
-                            <div className={`text-2xl font-bold ${textClass}`}>{data.count}</div>
-                            <div className="text-xs font-medium text-muted-foreground truncate" title={pName}>{pName}</div>
-                        </div>
-                    )
-                })}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow min-h-0">
-                {/* Active Cases List */}
-                <Card className="h-full flex flex-col shadow-md border-t-4 border-t-red-600">
-                    <CardHeader className="py-4">
-                        <CardTitle className="text-base flex items-center justify-between">
-                            <span>Case List</span>
-                            <Badge variant="outline">{activeCases.length}</Badge>
-                        </CardTitle>
-                        <CardDescription>Click to manage case</CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-0 flex-grow overflow-y-auto">
-                        {activeCases.map(c => {
-                            const r = residents?.find(res => res.residentId === c.residentId);
-                            // Use .id here
-                            const caseId = c.id;
+            {viewMode === 'map' ? (
+                <div className="flex-grow border rounded-lg overflow-hidden relative">
+                    <DiseaseMap cases={casesWithLocation} settings={profile} />
+                </div>
+            ) : (
+                <>
+                    {/* ALERT BANNER */}
+                    {outbreaks.length > 0 && (
+                        <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded-r shadow-sm animate-pulse">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-red-700" />
+                                <h3 className="font-bold text-red-800">Outbreak Alert Detected</h3>
+                            </div>
+                            <p className="text-sm text-red-700 mt-1">
+                                High activity detected in: {outbreaks.map(o => `${o.purok} (${o.diseases.join(', ')})`).join('; ')}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* HEATMAP / STATS GRID */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        {Object.entries(purokStats).map(([pName, data]) => {
+                            let bgClass = "bg-slate-100 border-slate-200";
+                            let textClass = "text-slate-600";
+                            if (data.count > 0) {
+                                bgClass = "bg-yellow-100 border-yellow-300";
+                                textClass = "text-yellow-800";
+                            }
+                            if (data.count >= 3) {
+                                bgClass = "bg-red-100 border-red-300";
+                                textClass = "text-red-800";
+                            }
+
                             return (
-                                <div 
-                                    key={caseId} 
-                                    className={`p-4 border-b cursor-pointer hover:bg-muted transition-colors ${selectedCaseId === caseId ? 'bg-red-50 border-l-4 border-l-red-500' : ''}`}
-                                    onClick={() => setSelectedCaseId(caseId)}
-                                >
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <span className="font-semibold block">{r ? `${r.firstName} ${r.lastName}` : 'Unknown'}</span>
-                                            <Badge variant={c.diseaseName === 'Dengue' ? 'destructive' : 'secondary'} className="mt-1 text-[10px]">
-                                                {c.diseaseName}
-                                            </Badge>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-xs text-muted-foreground block">{c.diagnosisDate ? formatDistanceToNow(c.diagnosisDate.toDate(), {addSuffix: true}) : ''}</span>
-                                            <span className="text-[10px] font-bold text-slate-500">{c.status.toUpperCase()}</span>
-                                        </div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
-                                        <MapPin className="h-3 w-3"/> {c.purok}
-                                    </div>
+                                <div key={pName} className={`border rounded-lg p-3 text-center ${bgClass}`}>
+                                    <div className={`text-2xl font-bold ${textClass}`}>{data.count}</div>
+                                    <div className="text-xs font-medium text-muted-foreground truncate" title={pName}>{pName}</div>
                                 </div>
                             )
                         })}
-                        {activeCases.length === 0 && <div className="p-8 text-center text-muted-foreground">No active cases reported.</div>}
-                    </CardContent>
-                </Card>
+                    </div>
 
-                {/* Case Management / DOTS Panel */}
-                <Card className="lg:col-span-2 h-full flex flex-col shadow-md">
-                    {selectedCase && selectedResident ? (
-                        <CaseDetailView caseData={selectedCase} resident={selectedResident} />
-                    ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
-                            <div className="bg-slate-100 p-4 rounded-full">
-                                <Microscope className="h-10 w-10 text-slate-400" />
-                            </div>
-                            <p>Select a case to launch response protocol.</p>
-                        </div>
-                    )}
-                </Card>
-            </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow min-h-0">
+                        {/* Active Cases List */}
+                        <Card className="h-full flex flex-col shadow-md border-t-4 border-t-red-600">
+                            <CardHeader className="py-4">
+                                <CardTitle className="text-base flex items-center justify-between">
+                                    <span>Case List</span>
+                                    <Badge variant="outline">{activeCases.length}</Badge>
+                                </CardTitle>
+                                <CardDescription>Click to manage case</CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-0 flex-grow overflow-y-auto">
+                                {activeCases.map(c => {
+                                    const r = residents?.find(res => res.residentId === c.residentId);
+                                    const caseId = c.id;
+                                    return (
+                                        <div 
+                                            key={caseId} 
+                                            className={`p-4 border-b cursor-pointer hover:bg-muted transition-colors ${selectedCaseId === caseId ? 'bg-red-50 border-l-4 border-l-red-500' : ''}`}
+                                            onClick={() => setSelectedCaseId(caseId)}
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <span className="font-semibold block">{r ? `${r.firstName} ${r.lastName}` : 'Unknown'}</span>
+                                                    <Badge variant={c.diseaseName === 'Dengue' ? 'destructive' : 'secondary'} className="mt-1 text-[10px]">
+                                                        {c.diseaseName}
+                                                    </Badge>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-xs text-muted-foreground block">{c.diagnosisDate ? formatDistanceToNow(c.diagnosisDate.toDate(), {addSuffix: true}) : ''}</span>
+                                                    <span className="text-[10px] font-bold text-slate-500">{c.status.toUpperCase()}</span>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+                                                <MapPin className="h-3 w-3"/> {c.purok}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                                {activeCases.length === 0 && <div className="p-8 text-center text-muted-foreground">No active cases reported.</div>}
+                            </CardContent>
+                        </Card>
+
+                        {/* Case Management / DOTS Panel */}
+                        <Card className="lg:col-span-2 h-full flex flex-col shadow-md">
+                            {selectedCase && selectedResident ? (
+                                <CaseDetailView caseData={selectedCase} resident={selectedResident} />
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
+                                    <div className="bg-slate-100 p-4 rounded-full">
+                                        <Microscope className="h-10 w-10 text-slate-400" />
+                                    </div>
+                                    <p>Select a case to launch response protocol.</p>
+                                </div>
+                            )}
+                        </Card>
+                    </div>
+                </>
+            )}
         </div>
     );
 }
