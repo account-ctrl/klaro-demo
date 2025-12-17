@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from "react";
@@ -412,6 +411,22 @@ export function EmergencyDashboard() {
   const [searchedLocation, setSearchedLocation] = useState<{lat: number, lng: number} | null>(null);
   const [showStructures, setShowStructures] = useState(true);
 
+  // ✅ FIX: add demographic filters state + handler
+  const [demographicFilters, setDemographicFilters] = useState({
+    showSeniors: false,
+    showPWDs: false,
+    showChildren: false,
+    showPregnancy: false,
+    showSoloParents: false,
+  });
+
+  const handleToggleDemographic = (key: keyof typeof demographicFilters) => {
+    setDemographicFilters((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: residents, isLoading: isLoadingResidents } = useResidents();
   const { data: responders, isLoading: isLoadingResponders } = useResponderLocations();
@@ -656,10 +671,13 @@ export function EmergencyDashboard() {
             <HouseholdSearch onSelectLocation={handleSearchSelect} />
         </div>
 
+        {/* ✅ FIX: pass demographicFilters + handler into MapControls */}
         <div className="absolute bottom-6 left-6 z-10 pointer-events-none">
             <MapControls 
                 showStructures={showStructures}
                 onToggleStructures={() => setShowStructures(!showStructures)}
+                demographicFilters={demographicFilters}
+                onToggleDemographic={handleToggleDemographic}
             />
         </div>
 
