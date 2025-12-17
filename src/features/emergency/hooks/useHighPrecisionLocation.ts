@@ -43,7 +43,17 @@ export const useHighPrecisionLocation = () => {
                     });
                 },
                 (err) => {
-                    console.warn("High precision GPS failed, attempting fallback...", err);
+                     // Check for Permission Denied (Code 1) to avoid infinite fallback loops or redundant errors
+                    if (err.code === 1) {
+                        const errMsg = `Geolocation permission denied. (${err.message})`;
+                        console.warn(errMsg);
+                        setLoading(false);
+                        setError(errMsg);
+                        reject(new Error(errMsg));
+                        return;
+                    }
+
+                    console.warn("High precision GPS failed, attempting fallback...", err.message);
                     
                     // 2. Fallback: Standard Accuracy (if GPS fails/times out)
                     navigator.geolocation.getCurrentPosition(
@@ -58,8 +68,9 @@ export const useHighPrecisionLocation = () => {
                         },
                         (finalErr) => {
                             setLoading(false);
-                            setError(finalErr.message);
-                            reject(finalErr);
+                            const errMsg = `Location error: ${finalErr.message} (Code: ${finalErr.code})`;
+                            setError(errMsg);
+                            reject(new Error(errMsg));
                         },
                         {
                             enableHighAccuracy: false,
