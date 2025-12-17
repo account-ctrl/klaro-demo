@@ -15,8 +15,6 @@ import { collection, serverTimestamp } from 'firebase/firestore';
 import { MapAutoFocus } from './maps/MapAutoFocus'; 
 import { useGeolocation } from '@/features/emergency/hooks/useGeolocation'; // Import hook
 
-const CURRENT_BARANGAY_ID = 'barangay_san_isidro';
-
 export interface MapLayerFilters {
     showBoundaries: boolean;
     showDemographics: boolean;
@@ -35,7 +33,7 @@ type EmergencyMapProps = {
     showStructures?: boolean; // Deprecated, kept for backward compat if needed, but will prioritize filters
     filters?: MapLayerFilters;
     settings?: TenantSettings | null;
-    tenantPath?: string | null;
+    tenantPath?: string | null; // Added for dynamic saving
 };
 
 // Updated MapUpdater to handle initial user location centering
@@ -339,16 +337,19 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
 
     const handleSaveScanned = async () => {
         if (!firestore || scannedPoints.length === 0) return;
+        if (!tenantPath) {
+             toast({ variant: "destructive", title: "Configuration Error", description: "Tenant path not available." });
+             return;
+        }
 
-        // Use tenant path if available, else fallback (though fallback might be wrong in multi-tenant)
-        const path = tenantPath ? `${tenantPath}/households` : `/barangays/${CURRENT_BARANGAY_ID}/households`;
-        
         setIsSaving(true);
 
         try {
             const batchSize = 50; 
             let count = 0;
-            const householdsRef = collection(firestore, path);
+            // Clean path to remove leading slash
+            const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+            const householdsRef = collection(firestore, `${safePath}/households`);
 
             for (const point of scannedPoints.slice(0, batchSize)) {
                  await addDocumentNonBlocking(householdsRef, {
@@ -368,8 +369,8 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
             toast({ title: "Imported", description: `${count} households added to registry.` });
 
         } catch (e) {
-             console.error(e);
              toast({ variant: "destructive", title: "Save Failed", description: "Could not save households." });
+             console.error(e);
         } finally {
             setIsSaving(false);
         }
