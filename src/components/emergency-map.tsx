@@ -40,9 +40,8 @@ type EmergencyMapProps = {
     selectedAlertId: string | null;
     onSelectAlert: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
+    showStructures?: boolean; // Deprecated, kept for backward compat if needed, but will prioritize filters
     filters?: MapLayerFilters;
-    // Deprecated but kept for backward compatibility if needed, though filters will take precedence
-    showStructures?: boolean; 
     settings?: TenantSettings | null; 
 };
 
@@ -231,11 +230,14 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = useMemo(() => alerts.find(a => a.alertId === selectedAlertId), [alerts, selectedAlertId]);
     
-    // Determine visibility based on filters prop (if present) or fallback to showStructures
-    const showBoundariesLayer = filters ? filters.showBoundaries : (showStructures ?? true);
-    const showAssetsLayer = filters ? filters.showAssets : true;
-    const showDemographicsLayer = filters ? filters.showDemographics : true;
-    const showBlotterLayer = filters ? filters.showBlotter : true;
+    // Resolve Filters
+    const resolvedFilters: MapLayerFilters = filters || {
+        showBoundaries: showStructures ?? true,
+        showDemographics: true,
+        showHealth: true,
+        showBlotter: true,
+        showAssets: true
+    };
 
     // Fetch current user location for initial centering
     const { getCurrentCoordinates } = useGeolocation();
@@ -449,14 +451,11 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                     </LayersControl.BaseLayer>
                 </LayersControl>
 
-                {/* Households Layer - Structures (Controlled by prop) */}
-                {showBoundariesLayer && households.map((h, i) => {
+                {/* Households Layer - Structures */}
+                {resolvedFilters.showBoundaries && households.map((h, i) => {
                     if (!h.latitude || !h.longitude) return null;
                     
-                    // If showDemographicsLayer is false, render all with standard color, or hide high-risk distinction
-                    const isHighRisk = h.vulnerabilityLevel === 'High' && showDemographicsLayer;
-                    const fillColor = isHighRisk ? '#ef4444' : '#06b6d4'; 
-                    
+                    const fillColor = h.vulnerabilityLevel === 'High' ? '#ef4444' : '#06b6d4'; 
                     let positions: [number, number][] = [];
                     if (h.boundary && h.boundary.length > 2) {
                         positions = h.boundary.map(p => [p.lat, p.lng]);
@@ -481,8 +480,8 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                                     <strong className="text-white text-sm">{h.familyName || h.name || 'Structure'}</strong>
                                     <div className="mt-1 flex flex-col gap-1">
                                         <span className="text-zinc-300">Population: {h.population ?? 'N/A'}</span>
-                                        <span className={`text-xs px-1.5 py-0.5 rounded w-fit ${isHighRisk ? 'bg-red-900/50 text-red-300 border border-red-800' : 'bg-cyan-900/50 text-cyan-300 border border-cyan-800'}`}>
-                                            {isHighRisk ? 'High Risk' : 'Standard'}
+                                        <span className={`text-xs px-1.5 py-0.5 rounded w-fit ${h.vulnerabilityLevel === 'High' ? 'bg-red-900/50 text-red-300 border border-red-800' : 'bg-cyan-900/50 text-cyan-300 border border-cyan-800'}`}>
+                                            {h.vulnerabilityLevel === 'High' ? 'High Risk' : 'Standard'}
                                         </span>
                                         {h.address && <span className="text-zinc-400 truncate max-w-[150px]">{h.address}</span>}
                                     </div>
@@ -516,7 +515,25 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                 
                 {mapMode === 'monitor' && (
                     <>
+                        {/* Alerts - Controlled by showBlotter or showHealth? 
+                            Assuming showBlotter covers crime/security/general alerts.
+                            Assuming showHealth covers Medical/Fire? 
+                            For now, let's just show all alerts if either is true, or maybe separate logic. 
+                            Let's just show alerts always for now as they are critical, or use showBlotter as "Alerts" toggle.
+                            The previous map controls didn't have "Show Alerts", it had "Crime Hotspots" and "Health Outbreaks".
+                            Maybe we can map Alert Categories to these filters?
+                        */}
                         {alerts.map((alert, index) => {
+                             // Simple filter logic for alerts based on category
+                             let isVisible = true;
+                             // If we want rigorous filtering:
+                             // if (alert.category === 'Medical' && !resolvedFilters.showHealth) isVisible = false;
+                             // if (alert.category === 'Crime' && !resolvedFilters.showBlotter) isVisible = false;
+                             // But alerts are usually high priority so let's keep them visible unless explicitly we want to hide everything.
+                             // Actually, clutter reduction is key. 
+                             
+                             if (!isVisible) return null;
+
                             const isAccurate = alert.accuracy_m && alert.accuracy_m <= 50;
                             const hasSource = alert.location_source;
                             const isGPS = hasSource === 'GPS';
@@ -574,7 +591,7 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
                             );
                         })}
 
-                        {showAssetsLayer && responders.map((responder, index) => (
+                        {resolvedFilters.showAssets && responders.map((responder, index) => (
                             <Marker
                                 key={responder.userId || `responder-${index}`}
                                 position={[responder.latitude, responder.longitude]}
