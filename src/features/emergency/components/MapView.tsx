@@ -1,12 +1,12 @@
 
-import { useEffect } from 'react';
-import { useMap, Marker, Popup, Circle } from 'react-leaflet';
+import { useEffect, useMemo } from 'react';
+import { useMap, Marker, Popup, Circle, LayerGroup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { EmergencyAlert, ResponderLocation, User } from '@/lib/types';
+import { EmergencyAlert, ResponderLocation, User, Resident, BlotterCase, Household } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { User as UserIcon } from 'lucide-react';
+import { User as UserIcon, ShieldAlert, HeartPulse } from 'lucide-react';
 
 // Fix default Leaflet marker icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -16,7 +16,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: '/leaflet/marker-shadow.png',
 });
 
-// Custom Icons
+// --- CUSTOM ICONS ---
+
 const incidentIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -28,6 +29,26 @@ const incidentIcon = new L.Icon({
 
 const responderIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Blotter / Crime Icon (Orange)
+const blotterIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Vulnerable Sector Icon (Violet)
+const vulnerableIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
     iconSize: [25, 41],
     iconAnchor: [12, 41],
@@ -77,13 +98,119 @@ const RecenterMap = ({ lat, lng }: { lat: number, lng: number }) => {
 interface FeatureMapProps {
     incidents: EmergencyAlert[];
     responders: ResponderLocation[];
+    
+    // New Data Props
+    residents?: Resident[];
+    households?: Household[];
+    blotterCases?: BlotterCase[];
+    
+    // Filter State
+    visibleLayers?: {
+        showBoundaries: boolean;
+        showDemographics: boolean;
+        showHealth: boolean;
+        showBlotter: boolean;
+        showAssets: boolean;
+    };
+
     center?: { lat: number, lng: number };
     onIncidentClick: (id: string) => void;
     currentUserLocation?: { lat: number, lng: number } | null;
     currentUser?: User | null;
 }
 
-export function FeatureMap({ incidents, responders, center, onIncidentClick, currentUserLocation, currentUser }: FeatureMapProps) {
+export function FeatureMap({ 
+    incidents, 
+    responders, 
+    residents = [], 
+    households = [], 
+    blotterCases = [],
+    visibleLayers = {
+        showBoundaries: true,
+        showDemographics: false,
+        showHealth: false,
+        showBlotter: false,
+        showAssets: true // Default to true as per request to have it visible initially or controlled
+    },
+    center, 
+    onIncidentClick, 
+    currentUserLocation, 
+    currentUser 
+}: FeatureMapProps) {
+
+    // Helper: Map residents/blotter to households for coordinates
+    const householdMap = useMemo(() => {
+        const map = new Map<string, {lat: number, lng: number}>();
+        households.forEach(h => {
+            if (h.latitude && h.longitude) {
+                map.set(h.householdId, { lat: h.latitude, lng: h.longitude });
+            }
+        });
+        return map;
+    }, [households]);
+
+    // Layer: Vulnerable Demographics
+    const demographicMarkers = useMemo(() => {
+        if (!visibleLayers.showDemographics) return [];
+        return residents.filter(r => 
+            (r.isPwd || r.vulnerability_tags?.length || (new Date().getFullYear() - new Date(r.dateOfBirth).getFullYear() > 60)) 
+            && r.householdId
+        ).map(r => {
+            const loc = householdMap.get(r.householdId!);
+            if (!loc) return null;
+            return (
+                <Marker 
+                    key={`demo-${r.residentId}`} 
+                    position={[loc.lat, loc.lng]} 
+                    icon={vulnerableIcon}
+                >
+                    <Popup>
+                        <div className="text-sm">
+                            <strong>{r.lastName}, {r.firstName}</strong><br/>
+                            <span className="text-xs text-zinc-500">
+                                {r.isPwd ? 'PWD ' : ''}
+                                {r.vulnerability_tags?.join(', ')}
+                            </span>
+                        </div>
+                    </Popup>
+                </Marker>
+            );
+        }).filter(Boolean);
+    }, [residents, householdMap, visibleLayers.showDemographics]);
+
+    // Layer: Blotter Cases (Mapped via Complainant's Household)
+    const blotterMarkers = useMemo(() => {
+        if (!visibleLayers.showBlotter) return [];
+        return blotterCases.filter(c => c.status === 'Open' || c.status === 'Under Mediation').map(c => {
+            // Find location via complainant
+            const complainantId = c.complainantIds?.[0];
+            if (!complainantId) return null;
+            const resident = residents.find(r => r.residentId === complainantId);
+            if (!resident || !resident.householdId) return null;
+            const loc = householdMap.get(resident.householdId);
+            if (!loc) return null;
+
+            return (
+                <Marker 
+                    key={`case-${c.caseId}`} 
+                    position={[loc.lat + 0.0001, loc.lng + 0.0001]} // Slight offset to avoid overlapping with household marker
+                    icon={blotterIcon}
+                >
+                    <Popup>
+                        <div className="text-sm">
+                            <strong className="text-orange-600 flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3" /> {c.caseType}
+                            </strong>
+                            <p className="text-xs mt-1 truncate max-w-[150px]">{c.narrative}</p>
+                            <span className="text-xs text-zinc-400">Status: {c.status}</span>
+                        </div>
+                    </Popup>
+                </Marker>
+            );
+        }).filter(Boolean);
+    }, [blotterCases, residents, householdMap, visibleLayers.showBlotter]);
+
+
     return (
         <>
             {center && <RecenterMap lat={center.lat} lng={center.lng} />}
@@ -107,63 +234,75 @@ export function FeatureMap({ incidents, responders, center, onIncidentClick, cur
                 </Marker>
             )}
 
-            {incidents.map((incident) => {
-                // Support both new object structure and legacy flat fields
-                const lat = incident.location?.lat || incident.latitude;
-                const lng = incident.location?.lng || incident.longitude;
-                const accuracy = incident.location?.accuracy || incident.accuracy_m || 0;
+            {/* Incident Layer (Always Visible or controlled?) - Keeping it always visible as it's the core of Emergency Dashboard */}
+            <LayerGroup>
+                {incidents.map((incident) => {
+                    const lat = incident.location?.lat || incident.latitude;
+                    const lng = incident.location?.lng || incident.longitude;
+                    const accuracy = incident.location?.accuracy || incident.accuracy_m || 0;
 
-                // Only render if valid coordinates
-                if (!lat || !lng) return null;
+                    if (!lat || !lng) return null;
 
-                return (
-                    <div key={incident.alertId}>
-                        <Marker 
-                            position={[lat, lng]}
-                            icon={incidentIcon}
-                            eventHandlers={{
-                                click: () => onIncidentClick(incident.alertId)
-                            }}
-                        >
-                             {/* Optional: Add Popup if needed */}
-                        </Marker>
-                        
-                        {/* 
-                            Visual Confidence: Draw a semi-transparent red circle if accuracy is poor (> 50m).
-                            This visually warns the admin that the location is an approximation.
-                        */}
-                        {accuracy > 50 && (
-                            <Circle 
-                                center={[lat, lng]}
-                                radius={accuracy}
-                                pathOptions={{ 
-                                    color: 'red', 
-                                    fillColor: '#f87171', 
-                                    fillOpacity: 0.2, 
-                                    weight: 1,
-                                    dashArray: '5, 5' 
+                    return (
+                        <div key={incident.alertId}>
+                            <Marker 
+                                position={[lat, lng]}
+                                icon={incidentIcon}
+                                eventHandlers={{
+                                    click: () => onIncidentClick(incident.alertId)
                                 }}
-                            />
-                        )}
-                    </div>
-                );
-            })}
-
-            {responders.map((responder) => (
-                <Marker 
-                    key={responder.userId} 
-                    position={[responder.latitude, responder.longitude]}
-                    icon={responderIcon}
-                >
-                    <Popup>
-                        <div className="text-sm">
-                            <strong>Responder</strong><br/>
-                            Status: {responder.status}<br/>
-                            Last Active: {responder.last_active ? formatDistanceToNow(responder.last_active.toDate(), {addSuffix: true}) : 'Unknown'}
+                            >
+                            </Marker>
+                            
+                            {accuracy > 50 && (
+                                <Circle 
+                                    center={[lat, lng]}
+                                    radius={accuracy}
+                                    pathOptions={{ 
+                                        color: 'red', 
+                                        fillColor: '#f87171', 
+                                        fillOpacity: 0.2, 
+                                        weight: 1,
+                                        dashArray: '5, 5' 
+                                    }}
+                                />
+                            )}
                         </div>
-                    </Popup>
-                </Marker>
-            ))}
+                    );
+                })}
+            </LayerGroup>
+
+            {/* Assets / Responders Layer */}
+            {visibleLayers.showAssets && (
+                <LayerGroup>
+                    {responders.map((responder) => (
+                        <Marker 
+                            key={responder.userId} 
+                            position={[responder.latitude, responder.longitude]}
+                            icon={responderIcon}
+                        >
+                            <Popup>
+                                <div className="text-sm">
+                                    <strong>Responder</strong><br/>
+                                    Status: {responder.status}<br/>
+                                    Last Active: {responder.last_active ? formatDistanceToNow(responder.last_active.toDate(), {addSuffix: true}) : 'Unknown'}
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+                </LayerGroup>
+            )}
+
+            {/* Demographics Layer */}
+            <LayerGroup>
+                {demographicMarkers}
+            </LayerGroup>
+
+            {/* Blotter Layer */}
+            <LayerGroup>
+                {blotterMarkers}
+            </LayerGroup>
+
         </>
     );
 }

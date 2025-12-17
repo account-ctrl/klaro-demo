@@ -14,7 +14,8 @@ import {
     EmergencyAlert,
     ResponderLocation,
     User,
-    Purok
+    Purok,
+    BlotterCase
 } from '@/lib/types';
 
 // Deprecated: Prefer useTenant() to get the ID dynamically.
@@ -94,6 +95,10 @@ export function useEmergencyAlerts() {
 
 export function useResponderLocations() {
     return useBarangayCollection<ResponderLocation>('responder_locations');
+}
+
+export function useBlotterCases() {
+    return useBarangayCollection<BlotterCase>('blotter_cases', 'dateReported', 'desc');
 }
 
 export function useOfficials() {
