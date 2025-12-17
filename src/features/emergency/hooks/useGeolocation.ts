@@ -36,7 +36,6 @@ export const useGeolocation = (userId?: string, role?: string) => {
                 const message = `GPS Success (${source}): ${pos.coords.latitude}, ${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`;
                 console.log(message);
                 
-                // Update internal state as well so debugging UI sees it immediately
                 setLocation({
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
@@ -44,10 +43,6 @@ export const useGeolocation = (userId?: string, role?: string) => {
                     source: source
                 });
 
-                // ONLY RESOLVE if accuracy is acceptable (e.g., < 20m) OR if it's the fallback
-                // If it's high accuracy attempt but poor result, we might want to reject or retry?
-                // For now, we return what we have, but the UI can warn if accuracy is > 50m.
-                
                 resolve({
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
@@ -56,7 +51,17 @@ export const useGeolocation = (userId?: string, role?: string) => {
             };
 
             const errorHandler = (err: GeolocationPositionError) => {
+                // If PERMISSION_DENIED (Code 1), do NOT retry. The user or browser policy said no.
+                if (err.code === 1) {
+                    const errMsg = `Permission Denied: ${err.message}. Please allow location access.`;
+                    console.warn(errMsg);
+                    setError(errMsg);
+                    reject(new Error(errMsg));
+                    return;
+                }
+
                 console.warn("High accuracy GPS failed, trying fallback...", err.message, err.code);
+                
                 // If high accuracy fails (timeout/unavail), try one more time with lower settings
                 navigator.geolocation.getCurrentPosition(
                     (pos) => successHandler(pos, false),
@@ -71,8 +76,6 @@ export const useGeolocation = (userId?: string, role?: string) => {
             };
 
             // Request 1: High Accuracy (Primary)
-            // INCREASED TIMEOUT: 5s might be too short for a cold GPS lock on some devices.
-            // Using 15s to give the GPS radio time to warm up.
             navigator.geolocation.getCurrentPosition(
                 (pos) => successHandler(pos, true),
                 errorHandler,
@@ -92,13 +95,10 @@ export const useGeolocation = (userId?: string, role?: string) => {
             return;
         }
 
-        // Clear existing watch if any
         if (watchIdRef.current !== null) {
             navigator.geolocation.clearWatch(watchIdRef.current);
         }
 
-        // We use watchPosition to progressively get better accuracy.
-        // Often the first result is cached/WiFi (low acc), and subsequent ones are GPS (high acc).
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
@@ -109,16 +109,15 @@ export const useGeolocation = (userId?: string, role?: string) => {
             },
             (err) => {
                 console.error("Geolocation watch error:", err);
-                if (err.code === 1) setError("Location permission denied.");
+                if (err.code === 1) setError("Location permission denied. Please enable GPS.");
                 else if (err.code === 2) setError("Position unavailable.");
                 else if (err.code === 3) setError("Location request timed out.");
                 else setError(err.message);
             },
             {
                 enableHighAccuracy: true,
-                timeout: 30000, // Longer timeout for watching
+                timeout: 30000, 
                 maximumAge: 0,
-                // Removed distanceFilter to allow "convergence" updates where only accuracy improves without position changing much
             }
         );
     };
