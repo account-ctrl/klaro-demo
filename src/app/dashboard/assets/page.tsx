@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useFixedAssets, useAssetBookings, useAssetsRef } from '@/hooks/use-assets';
+import { useFixedAssets, useAssetBookings } from '@/hooks/use-assets';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking, useFirestore } from '@/firebase';
 import { serverTimestamp, doc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +9,7 @@ import { FixedAsset, MaintenanceLog } from '@/lib/types';
 import { AssetTabs } from '@/components/dashboard/assets/asset-tabs';
 import { AssetModals, initialAssetForm } from '@/components/dashboard/assets/asset-modals';
 import { useTenant } from '@/providers/tenant-provider';
-import { useResidents } from '@/hooks/use-barangay-data';
+import { useResidents, useBarangayRef } from '@/hooks/use-barangay-data';
 
 export default function AssetsPage() {
     const firestore = useFirestore();
@@ -18,9 +17,9 @@ export default function AssetsPage() {
     const { data: assets, isLoading: isLoadingAssets } = useFixedAssets();
     const { data: bookings } = useAssetBookings();
     const { data: residents } = useResidents();
-    const assetsRef = useAssetsRef('fixed_assets');
-    const bookingsRef = useAssetsRef('asset_bookings');
-    const maintenanceRef = useAssetsRef('maintenance_logs');
+    const assetsRef = useBarangayRef('fixed_assets');
+    const bookingsRef = useBarangayRef('asset_bookings');
+    const maintenanceRef = useBarangayRef('maintenance_logs');
     const { toast } = useToast();
 
     // Sheet States
