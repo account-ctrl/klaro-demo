@@ -1,4 +1,6 @@
 {
-  "firebase_hosting": {},
+  "firebase_hosting": {
+    "deploymentHostingUrl": "https://studio-3081028838-70d86.web.app"
+  },
   "google_maps_platform": {}
 }
