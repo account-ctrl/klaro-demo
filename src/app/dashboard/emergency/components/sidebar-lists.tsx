@@ -4,11 +4,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Radio, Truck, Boxes, AlertTriangle, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { Radio, Truck, Boxes, AlertTriangle, ChevronDown, ChevronRight, ChevronUp, Filter, X } from "lucide-react";
 import { useFixedAssets } from "@/hooks/use-assets";
 import { formatDistanceToNow } from "date-fns";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Roles considered as Responders
 const RESPONDER_ROLES = [
@@ -211,6 +214,21 @@ export const AssetList = () => {
 
 export const ActiveAlertFeed = ({ alerts, onSelectAlert, selectedAlertId }: { alerts: EmergencyAlert[], onSelectAlert: (id: string) => void, selectedAlertId: string | null }) => {
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [filters, setFilters] = useState<{status: string | null, category: string | null}>({ status: null, category: null });
+
+    const filteredAlerts = useMemo(() => {
+        return alerts.filter(alert => {
+            if (filters.status && filters.status !== 'All' && alert.status !== filters.status) return false;
+            if (filters.category && filters.category !== 'All' && alert.category !== filters.category) return false;
+            return true;
+        });
+    }, [alerts, filters]);
+
+    const activeFiltersCount = (filters.status && filters.status !== 'All' ? 1 : 0) + (filters.category && filters.category !== 'All' ? 1 : 0);
+
+    const clearFilters = () => {
+        setFilters({ status: null, category: null });
+    }
 
     if (isCollapsed) {
         return (
@@ -221,11 +239,11 @@ export const ActiveAlertFeed = ({ alerts, onSelectAlert, selectedAlertId }: { al
                     onClick={() => setIsCollapsed(false)}
                     title="Active Alerts"
                 >
-                    {alerts.length > 0 && <div className="absolute inset-0 bg-red-500/10 animate-pulse" />}
+                    {filteredAlerts.length > 0 && <div className="absolute inset-0 bg-red-500/10 animate-pulse" />}
                     <AlertTriangle className="h-5 w-5" />
                     <span className="font-semibold text-sm">Active Alerts</span>
                     <Badge variant="secondary" className="ml-1 bg-red-900/50 text-red-300 hover:bg-red-900/50">
-                        {alerts.length}
+                        {filteredAlerts.length}
                     </Badge>
                 </Button>
             </div>
@@ -235,14 +253,72 @@ export const ActiveAlertFeed = ({ alerts, onSelectAlert, selectedAlertId }: { al
     return (
         <Card className="w-80 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-2xl rounded-xl overflow-hidden pointer-events-auto flex-shrink-0 transition-all duration-300">
             <CardHeader className="py-3 px-4 bg-zinc-950/50 border-b border-zinc-800 flex flex-row items-center justify-between space-y-0">
-                <div className="flex items-center justify-between gap-4 w-full">
-                     <div className="flex items-center gap-2 text-red-400">
-                        <AlertTriangle className="h-4 w-4 animate-pulse" />
-                        <h3 className="font-semibold text-sm text-zinc-100">Active Alerts</h3>
+                <div className="flex items-center justify-between gap-2 w-full">
+                     <div className="flex items-center gap-2 text-red-400 overflow-hidden">
+                        <AlertTriangle className="h-4 w-4 animate-pulse flex-shrink-0" />
+                        <h3 className="font-semibold text-sm text-zinc-100 truncate">Active Alerts</h3>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                         <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className={`h-6 w-6 ${activeFiltersCount > 0 ? 'text-blue-400' : 'text-zinc-500'} hover:text-zinc-300`}>
+                                    <Filter className="h-3.5 w-3.5" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 bg-zinc-900 border-zinc-800 text-zinc-100 p-3" align="end">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="font-semibold text-sm">Filter Alerts</h4>
+                                        {activeFiltersCount > 0 && (
+                                            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 text-xs text-zinc-400 hover:text-white px-2">
+                                                Clear
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-zinc-400">Status</Label>
+                                        <Select 
+                                            value={filters.status || 'All'} 
+                                            onValueChange={(val) => setFilters(prev => ({ ...prev, status: val }))}
+                                        >
+                                            <SelectTrigger className="h-8 bg-zinc-800 border-zinc-700 text-xs">
+                                                <SelectValue placeholder="All Statuses" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-100">
+                                                <SelectItem value="All">All Statuses</SelectItem>
+                                                <SelectItem value="New">New</SelectItem>
+                                                <SelectItem value="Acknowledged">Acknowledged</SelectItem>
+                                                <SelectItem value="Dispatched">Dispatched</SelectItem>
+                                                <SelectItem value="On Scene">On Scene</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-zinc-400">Category</Label>
+                                        <Select 
+                                            value={filters.category || 'All'} 
+                                            onValueChange={(val) => setFilters(prev => ({ ...prev, category: val }))}
+                                        >
+                                            <SelectTrigger className="h-8 bg-zinc-800 border-zinc-700 text-xs">
+                                                <SelectValue placeholder="All Categories" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-100">
+                                                <SelectItem value="All">All Categories</SelectItem>
+                                                <SelectItem value="Medical">Medical</SelectItem>
+                                                <SelectItem value="Fire">Fire</SelectItem>
+                                                <SelectItem value="Crime">Crime</SelectItem>
+                                                <SelectItem value="Accident">Accident</SelectItem>
+                                                <SelectItem value="Disaster">Disaster</SelectItem>
+                                                <SelectItem value="Other">Other</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                        
                         <Badge variant="outline" className="text-xs border-red-500/30 text-red-300 bg-red-500/10">
-                            {alerts.length} Active
+                            {filteredAlerts.length}
                         </Badge>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300" onClick={() => setIsCollapsed(true)}>
                             <ChevronUp className="h-4 w-4" />
@@ -253,10 +329,12 @@ export const ActiveAlertFeed = ({ alerts, onSelectAlert, selectedAlertId }: { al
              <CardContent className="p-0">
                 <ScrollArea className="h-[200px]">
                     <div className="p-2 space-y-1">
-                        {alerts.length === 0 ? (
-                             <div className="text-xs text-zinc-500 text-center py-4">No active alerts.</div>
+                        {filteredAlerts.length === 0 ? (
+                             <div className="text-xs text-zinc-500 text-center py-4">
+                                {activeFiltersCount > 0 ? 'No alerts match your filters.' : 'No active alerts.'}
+                             </div>
                         ) : (
-                            alerts.map(alert => {
+                            filteredAlerts.map(alert => {
                                  const timeAgo = alert.timestamp ? formatDistanceToNow(alert.timestamp.toDate(), { addSuffix: true }) : 'Just now';
                                  const isSelected = selectedAlertId === alert.alertId;
                                  // Simplify Category Display
