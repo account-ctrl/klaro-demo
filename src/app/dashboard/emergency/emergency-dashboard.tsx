@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { doc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { EmergencyAlert, Resident, User, Household } from "@/lib/types";
+import { EmergencyAlert, Resident, User, Household, MapHousehold } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -43,7 +43,6 @@ import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/si
 import { WeatherHeader } from "./components/weather-header";
 import { MapControls } from "./components/map-controls";
 import { HouseholdSearch } from "./components/household-search";
-import { MapHousehold } from "@/components/emergency-map";
 import { SOSButton } from "@/features/emergency/components/SosButton";
 import { OnDutyToggle } from "@/features/emergency/components/OnDutyToggle";
 import { GeolocationDebugger } from "@/features/emergency/components/GeolocationDebugger";

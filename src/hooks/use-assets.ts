@@ -1,29 +1,16 @@
 
-import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, where } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useCollection, useMemoFirebase } from '@/firebase';
+import { query, where } from 'firebase/firestore';
 import { FixedAsset, AssetBooking, MaintenanceLog } from '@/lib/types';
-
-// TODO: Replace with dynamic config
-export const BARANGAY_ID = "1";
-
-export const useAssetsRef = (collectionName: string) => {
-    const firestore = useFirestore();
-    if (!firestore) return null;
-    return collection(firestore, `barangays/${BARANGAY_ID}/${collectionName}`);
-}
+import { useBarangayRef } from './use-barangay-data';
 
 /**
  * A hook to fetch all fixed assets for the current barangay.
  * @returns An array of fixed assets with their Firestore IDs, loading state, and error state.
  */
 export const useFixedAssets = () => {
-  const assetsRef = useAssetsRef('fixed_assets');
-  const [snapshot, isLoading, error] = useCollection(assetsRef);
-
-  const assets: FixedAsset[] | null = snapshot 
-    ? snapshot.docs.map(doc => ({ assetId: doc.id, ...doc.data() } as FixedAsset)) 
-    : null;
+  const assetsRef = useBarangayRef('fixed_assets');
+  const { data: assets, isLoading, error } = useCollection<FixedAsset>(assetsRef);
 
   return { data: assets, isLoading, error };
 };
@@ -33,12 +20,8 @@ export const useFixedAssets = () => {
  * @returns An array of asset bookings with their Firestore IDs, loading state, and error state.
  */
 export const useAssetBookings = () => {
-  const bookingsRef = useAssetsRef('asset_bookings');
-  const [snapshot, isLoading, error] = useCollection(bookingsRef);
-
-  const bookings: AssetBooking[] | null = snapshot
-    ? snapshot.docs.map(doc => ({ bookingId: doc.id, ...doc.data() } as AssetBooking))
-    : null;
+  const bookingsRef = useBarangayRef('asset_bookings');
+  const { data: bookings, isLoading, error } = useCollection<AssetBooking>(bookingsRef);
 
   return { data: bookings, isLoading, error };
 };
@@ -50,13 +33,12 @@ export const useAssetBookings = () => {
  * @returns An array of maintenance logs, loading state, and error state.
  */
 export const useMaintenanceLogs = (assetId: string) => {
-  const logsRef = useAssetsRef('maintenance_logs');
-  const q = logsRef ? query(logsRef, where("assetId", "==", assetId)) : null;
-  const [snapshot, isLoading, error] = useCollection(q);
-
-  const logs: MaintenanceLog[] | null = snapshot
-    ? snapshot.docs.map(doc => ({ logId: doc.id, ...doc.data() } as MaintenanceLog))
-    : null;
+  const logsRef = useBarangayRef('maintenance_logs');
+  const q = useMemoFirebase(() => {
+    return logsRef ? query(logsRef, where("assetId", "==", assetId)) : null;
+  }, [logsRef, assetId]);
+  
+  const { data: logs, isLoading, error } = useCollection<MaintenanceLog>(q);
 
   return { data: logs, isLoading, error };
 };

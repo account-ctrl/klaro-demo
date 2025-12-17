@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert, ResponderLocation, Household, TenantSettings } from '@/lib/types';
+import { EmergencyAlert, ResponderLocation, Household, TenantSettings, MapHousehold, ResponderWithRole } from '@/lib/types';
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Scan, Eye, Loader2, Save, X, Navigation } from 'lucide-react';
@@ -16,14 +16,6 @@ import { MapAutoFocus } from './maps/MapAutoFocus';
 import { useGeolocation } from '@/features/emergency/hooks/useGeolocation'; // Import hook
 
 const CURRENT_BARANGAY_ID = 'barangay_san_isidro';
-
-export type ResponderWithRole = ResponderLocation & { role?: string; name?: string };
-
-export type MapHousehold = Household & {
-    vulnerabilityLevel?: 'High' | 'Normal';
-    population?: number;
-    familyName?: string;
-};
 
 export interface MapLayerFilters {
     showBoundaries: boolean;
@@ -42,7 +34,8 @@ type EmergencyMapProps = {
     searchedLocation?: { lat: number; lng: number } | null;
     showStructures?: boolean; // Deprecated, kept for backward compat if needed, but will prioritize filters
     filters?: MapLayerFilters;
-    settings?: TenantSettings | null; 
+    settings?: TenantSettings | null;
+    tenantPath?: string | null;
 };
 
 // Updated MapUpdater to handle initial user location centering
@@ -226,7 +219,7 @@ const generateSquare = (lat: number, lng: number, sizeMeters: number = 5): [numb
 
 const DARK_MAP_FILTER = 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)';
 
-export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation, showStructures, filters, settings }: EmergencyMapProps) {
+export default function EmergencyMap({ alerts, responders = [], households = [], selectedAlertId, onSelectAlert, searchedLocation, showStructures, filters, settings, tenantPath }: EmergencyMapProps) {
     const defaultCenter: [number, number] = [14.6760, 121.0437]; 
     const selectedAlert = useMemo(() => alerts.find(a => a.alertId === selectedAlertId), [alerts, selectedAlertId]);
     
@@ -346,12 +339,16 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
 
     const handleSaveScanned = async () => {
         if (!firestore || scannedPoints.length === 0) return;
+
+        // Use tenant path if available, else fallback (though fallback might be wrong in multi-tenant)
+        const path = tenantPath ? `${tenantPath}/households` : `/barangays/${CURRENT_BARANGAY_ID}/households`;
+        
         setIsSaving(true);
 
         try {
             const batchSize = 50; 
             let count = 0;
-            const householdsRef = collection(firestore, `/barangays/${CURRENT_BARANGAY_ID}/households`);
+            const householdsRef = collection(firestore, path);
 
             for (const point of scannedPoints.slice(0, batchSize)) {
                  await addDocumentNonBlocking(householdsRef, {
@@ -371,6 +368,7 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
             toast({ title: "Imported", description: `${count} households added to registry.` });
 
         } catch (e) {
+             console.error(e);
              toast({ variant: "destructive", title: "Save Failed", description: "Could not save households." });
         } finally {
             setIsSaving(false);

@@ -529,6 +529,14 @@ export type MaintenanceLog = {
     createdAt: Timestamp;
 };
 
+export type MapHousehold = Household & {
+    vulnerabilityLevel?: 'High' | 'Normal';
+    population?: number;
+    familyName?: string;
+};
+
+export type ResponderWithRole = ResponderLocation & { role?: string; name?: string };
+
 
 // Deprecated old types. To be removed after full refactoring.
 export type Blotter = BlotterCase;
