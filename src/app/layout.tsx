@@ -34,14 +34,14 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <FirebaseClientProvider>
-          <TenantProvider>
-            <Suspense>
+          <Suspense>
+            <TenantProvider>
               <div className="flex flex-col flex-1">
                 {children}
               </div>
-            </Suspense>
-            <Toaster />
-          </TenantProvider>
+              <Toaster />
+            </TenantProvider>
+          </Suspense>
         </FirebaseClientProvider>
       </body>
     </html>
