@@ -10,7 +10,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
-interface MapFilters {
+export interface MapFilters {
     showBoundaries: boolean;
     showDemographics: boolean;
     showHealth: boolean;
@@ -25,6 +25,8 @@ interface MapControlsProps {
 
 export const MapControls = ({ filters, onToggleFilter }: MapControlsProps) => {
     const router = useRouter();
+
+    if (!filters) return null;
 
     return (
         <div className="flex items-end gap-2 pointer-events-none">
