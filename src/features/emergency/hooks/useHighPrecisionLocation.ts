@@ -1,9 +1,10 @@
 
 import { useState } from 'react';
 
+// Enhanced options for better accuracy
 const GEO_OPTIONS = {
     enableHighAccuracy: true, // Critical: Forces GPS hardware over Wi-Fi
-    timeout: 15000,           // Wait longer (15s) for a satellite lock
+    timeout: 30000,           // Wait longer (30s) for a satellite lock to stabilize
     maximumAge: 0             // Never use a cached/old location
 };
 
@@ -18,7 +19,7 @@ export const useHighPrecisionLocation = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const getCurrentCoordinates = (): Promise<Coordinates> => {
+    const getCurrentCoordinates = (minAccuracy: number = 3): Promise<Coordinates> => {
         setLoading(true);
         setError(null);
 
@@ -31,20 +32,50 @@ export const useHighPrecisionLocation = () => {
                 return;
             }
 
-            // 1. Try High Accuracy First
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
+            // 1. Try High Accuracy First with WatchPosition loop for better accuracy
+            const maxWaitTime = 15000;
+            let bestPosition: GeolocationPosition | null = null;
+            let watchId: number;
+
+            const stopWatch = () => {
+                navigator.geolocation.clearWatch(watchId);
+                if (bestPosition) {
                     setLoading(false);
                     resolve({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                        accuracy: position.coords.accuracy,
+                        lat: bestPosition.coords.latitude,
+                        lng: bestPosition.coords.longitude,
+                        accuracy: bestPosition.coords.accuracy,
                         provider: 'high_accuracy_gps'
                     });
+                } else {
+                     setLoading(false);
+                     // Fallback if no position found in time (should be rare)
+                     setError("Could not determine precise location.");
+                     reject(new Error("Could not determine precise location."));
+                }
+            };
+
+            const timeoutId = setTimeout(stopWatch, maxWaitTime);
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                     // Log for debugging
+                     console.log(`GPS Update: ${position.coords.latitude}, ${position.coords.longitude} (Acc: ${position.coords.accuracy}m)`);
+
+                     if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+                         bestPosition = position;
+                     }
+
+                     if (bestPosition.coords.accuracy <= minAccuracy) {
+                         clearTimeout(timeoutId);
+                         stopWatch();
+                     }
                 },
                 (err) => {
-                     // Check for Permission Denied (Code 1) to avoid infinite fallback loops or redundant errors
+                    // Check for Permission Denied (Code 1) to avoid infinite fallback loops or redundant errors
                     if (err.code === 1) {
+                        clearTimeout(timeoutId);
+                        navigator.geolocation.clearWatch(watchId);
                         const errMsg = `Geolocation permission denied. (${err.message})`;
                         console.warn(errMsg);
                         setLoading(false);
@@ -52,32 +83,7 @@ export const useHighPrecisionLocation = () => {
                         reject(new Error(errMsg));
                         return;
                     }
-
-                    console.warn("High precision GPS failed, attempting fallback...", err.message);
-                    
-                    // 2. Fallback: Standard Accuracy (if GPS fails/times out)
-                    navigator.geolocation.getCurrentPosition(
-                        (fallbackPos) => {
-                            setLoading(false);
-                            resolve({
-                                lat: fallbackPos.coords.latitude,
-                                lng: fallbackPos.coords.longitude,
-                                accuracy: fallbackPos.coords.accuracy,
-                                provider: 'low_accuracy_fallback'
-                            });
-                        },
-                        (finalErr) => {
-                            setLoading(false);
-                            const errMsg = `Location error: ${finalErr.message} (Code: ${finalErr.code})`;
-                            setError(errMsg);
-                            reject(new Error(errMsg));
-                        },
-                        {
-                            enableHighAccuracy: false,
-                            timeout: 10000,
-                            maximumAge: 0
-                        }
-                    );
+                    console.warn("Watch position error:", err);
                 },
                 GEO_OPTIONS
             );

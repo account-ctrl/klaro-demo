@@ -37,9 +37,9 @@ export async function captureAccurateLocation(options: LocationOptions = {}): Pr
 
     const {
         maxWaitMs = 15000,
-        minAccuracyM = 25,
+        minAccuracyM = 3, // Increased accuracy requirement
         timeoutMs = 10000,
-        maximumAge = 2000
+        maximumAge = 0 // Prefer fresh location
     } = options;
 
     const getLocationPromise = new Promise<GeolocationPosition>((resolve, reject) => {

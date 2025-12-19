@@ -20,7 +20,8 @@ export const useGeolocation = (userId?: string, role?: string) => {
     const watchIdRef = useRef<number | null>(null);
     
     // --- 1. One-time Location Request (Used for SOS and Debugging) ---
-    const getCurrentCoordinates = (): Promise<GeolocationResult> => {
+    // Updated to wait for better accuracy (<= 3m) using watchPosition technique
+    const getCurrentCoordinates = (minAccuracy: number = 3): Promise<GeolocationResult> => {
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {
                 const err = "Geolocation not supported by this browser.";
@@ -30,9 +31,16 @@ export const useGeolocation = (userId?: string, role?: string) => {
             }
 
             setError(null);
+            
+            const maxWaitTime = 15000; // Wait up to 15s for better accuracy
+            let bestPosition: GeolocationPosition | null = null;
+            let watchId: number;
+            let timeoutId: NodeJS.Timeout;
 
-            const successHandler = (pos: GeolocationPosition, isHighAccuracy: boolean) => {
-                const source = isHighAccuracy ? 'high-accuracy' : 'low-accuracy';
+            const finish = (pos: GeolocationPosition, source: 'high-accuracy' | 'low-accuracy') => {
+                navigator.geolocation.clearWatch(watchId);
+                clearTimeout(timeoutId);
+                
                 const message = `GPS Success (${source}): ${pos.coords.latitude}, ${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`;
                 console.log(message);
                 
@@ -50,39 +58,53 @@ export const useGeolocation = (userId?: string, role?: string) => {
                 });
             };
 
-            const errorHandler = (err: GeolocationPositionError) => {
-                // If PERMISSION_DENIED (Code 1), do NOT retry. The user or browser policy said no.
-                if (err.code === 1) {
-                    const errMsg = `Permission Denied: ${err.message}. Please allow location access.`;
-                    console.warn(errMsg);
-                    setError(errMsg);
-                    reject(new Error(errMsg));
-                    return;
+            const stopWatch = () => {
+                if (bestPosition) {
+                    finish(bestPosition, 'high-accuracy');
+                } else {
+                    // Fallback to single shot if watch didn't return anything (unlikely if supported)
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => finish(pos, 'low-accuracy'),
+                        (err) => {
+                             const errMsg = `Location error: ${err.message} (Code: ${err.code})`;
+                             console.error(errMsg);
+                             setError(errMsg);
+                             reject(new Error(errMsg));
+                        },
+                        { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+                    );
                 }
-
-                console.warn("High accuracy GPS failed, trying fallback...", err.message, err.code);
-                
-                // If high accuracy fails (timeout/unavail), try one more time with lower settings
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => successHandler(pos, false),
-                    (finalErr) => {
-                        const errMsg = `Location error: ${finalErr.message} (Code: ${finalErr.code})`;
-                        console.error(errMsg);
-                        setError(errMsg);
-                        reject(new Error(errMsg));
-                    },
-                    { enableHighAccuracy: false, timeout: 20000, maximumAge: 0 }
-                );
             };
 
-            // Request 1: High Accuracy (Primary)
-            navigator.geolocation.getCurrentPosition(
-                (pos) => successHandler(pos, true),
-                errorHandler,
+            timeoutId = setTimeout(stopWatch, maxWaitTime);
+
+            watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    // console.log(`[useGeolocation] Update: ${pos.coords.accuracy}m`);
+                    if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
+                        bestPosition = pos;
+                    }
+
+                    // If we hit target accuracy, stop early
+                    if (bestPosition.coords.accuracy <= minAccuracy) {
+                        finish(bestPosition, 'high-accuracy');
+                    }
+                },
+                (err) => {
+                    console.warn("WatchPosition error in useGeolocation:", err);
+                    if (err.code === 1) { // Permission denied
+                        navigator.geolocation.clearWatch(watchId);
+                        clearTimeout(timeoutId);
+                        const errMsg = `Permission Denied: ${err.message}`;
+                        setError(errMsg);
+                        reject(new Error(errMsg));
+                    }
+                    // Ignore other errors during watch, wait for timeout to return best found or fallback
+                },
                 {
                     enableHighAccuracy: true,
-                    timeout: 15000, 
-                    maximumAge: 0   // Force fresh reading
+                    timeout: 20000,
+                    maximumAge: 0
                 }
             );
         });
@@ -99,11 +121,15 @@ export const useGeolocation = (userId?: string, role?: string) => {
             navigator.geolocation.clearWatch(watchIdRef.current);
         }
 
+        // Use watchPosition to get continuous updates and filter for better accuracy
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
                 console.log(`[WatchPosition] Update: ${latitude}, ${longitude} (Acc: ${accuracy}m)`);
                 
+                // Only update if accuracy is decent, but always update the state so the user sees something.
+                // In a real high-precision scenario, we might want to filter out low-accuracy updates (e.g. > 20m)
+                // but for debugging purposes, we show what we get.
                 setLocation({ lat: latitude, lng: longitude, accuracy, source: 'high-accuracy' }); 
                 setError(null);
             },

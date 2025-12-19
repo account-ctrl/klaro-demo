@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useSmartGeolocation } from '@/features/emergency/hooks/useSmartGeolocation';
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -76,6 +77,9 @@ export default function ResidentProfilePage() {
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
     const [pinnedLocation, setPinnedLocation] = useState<{lat: number, lng: number, acc: number} | null>(null);
+
+    // Use Smart Geolocation Hook
+    const { startLocating, location: smartLocation, loading: locating, error: geoError, status: geoStatus, stopWatching } = useSmartGeolocation();
 
     const residentDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
@@ -135,41 +139,34 @@ export default function ResidentProfilePage() {
         }
     }, [resident, form]);
 
+    // Handle Smart Geolocation updates
+    useEffect(() => {
+        if (smartLocation) {
+             setPinnedLocation({
+                lat: smartLocation.lat,
+                lng: smartLocation.lng,
+                acc: smartLocation.accuracy
+            });
+
+            if (smartLocation.isFinal) {
+                toast({ 
+                    title: "Location Pinned", 
+                    description: `Accuracy: ±${Math.round(smartLocation.accuracy)} meters` 
+                });
+            }
+        }
+    }, [smartLocation]);
+
+    useEffect(() => {
+        if (geoError) {
+             toast({ variant: "destructive", title: "Location Failed", description: geoError });
+        }
+    }, [geoError]);
+
+
     const handlePinLocation = () => {
-        if (!navigator.geolocation) {
-            toast({ variant: "destructive", title: "Geolocation Error", description: "Your browser does not support location." });
-            return;
-        }
-        
-        // Use a less restrictive approach for iframes if permissions policy is strict
-        try {
-            toast({ title: "Locating...", description: "Please wait while we get your precise location." });
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    setPinnedLocation({
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        acc: pos.coords.accuracy
-                    });
-                    toast({ title: "Location Pinned", description: `Accuracy: ${Math.round(pos.coords.accuracy)} meters` });
-                }, 
-                (err) => {
-                    // Fallback or better error message
-                    if (err.code === 1) { // PERMISSION_DENIED
-                         toast({ 
-                             variant: "destructive", 
-                             title: "Location Permission Denied", 
-                             description: "Please enable location access for this site in your browser settings." 
-                        });
-                    } else {
-                        toast({ variant: "destructive", title: "Location Failed", description: err.message });
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-            );
-        } catch (e) {
-             toast({ variant: "destructive", title: "Error", description: "Geolocation is not available in this environment." });
-        }
+        toast({ title: "Locating...", description: "Please wait while we get your precise location." });
+        startLocating();
     };
 
     const onSubmit = (data: ProfileFormValues) => {
@@ -274,6 +271,7 @@ export default function ResidentProfilePage() {
                              <Button type="button" variant="ghost" onClick={() => {
                                  setIsEditMode(false);
                                  form.reset(); // Revert changes
+                                 stopWatching(); // Ensure geo watch is stopped if cancelled
                              }}>
                                 <X className="mr-2 h-4 w-4" /> Cancel
                             </Button>
@@ -411,14 +409,28 @@ export default function ResidentProfilePage() {
                             <div className="pt-2">
                                 <FormLabel className="block mb-2">GPS Location</FormLabel>
                                 <div className="flex items-center gap-3">
-                                    <Button type="button" variant="secondary" onClick={handlePinLocation} size="sm" className="bg-white border border-slate-200 hover:bg-slate-100">
-                                        <MapPin className="mr-2 h-4 w-4 text-red-500" /> 
-                                        {pinnedLocation ? "Update GPS Pin" : "Pin My Location"}
+                                    <Button 
+                                        type="button" 
+                                        variant="secondary" 
+                                        onClick={handlePinLocation} 
+                                        size="sm" 
+                                        className="bg-white border border-slate-200 hover:bg-slate-100"
+                                        disabled={locating}
+                                    >
+                                        {locating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4 text-red-500" />}
+                                        {locating ? (geoStatus === 'improving' ? "Refining..." : "Locating...") : (pinnedLocation ? "Update GPS Pin" : "Pin My Location")}
                                     </Button>
                                     {pinnedLocation && (
-                                        <span className="text-xs text-green-600 font-medium">
-                                            ✓ Lat: {pinnedLocation.lat.toFixed(6)}, Lng: {pinnedLocation.lng.toFixed(6)}
-                                        </span>
+                                        <div className="flex flex-col">
+                                             <span className="text-xs text-green-600 font-medium">
+                                                ✓ Lat: {pinnedLocation.lat.toFixed(6)}, Lng: {pinnedLocation.lng.toFixed(6)}
+                                            </span>
+                                            {locating && (
+                                                <span className="text-[10px] text-muted-foreground animate-pulse">
+                                                    Improving accuracy... (±{Math.round(pinnedLocation.acc)}m)
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">This helps responders find you during emergencies.</p>

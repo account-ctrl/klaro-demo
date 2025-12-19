@@ -34,6 +34,7 @@ import { useResidentActions } from '@/hooks/use-resident-actions';
 import { useToast } from "@/hooks/use-toast";
 import { CertificateRequest, Resident } from '@/lib/types';
 import { format } from 'date-fns';
+import { captureAccurateLocation } from '@/lib/services/location';
 
 const BARANGAY_ID = 'barangay_san_isidro';
 
@@ -150,22 +151,24 @@ export default function ResidentDashboardPage() {
   // HANDLERS
 
   const handleSOS = async () => {
-    if (!navigator.geolocation) {
-        toast({ variant: 'destructive', title: "Geolocation Error", description: "Location not supported." });
-        return;
-    }
-
     setSosLoading(true);
     
-    // High Precision Geolocation Logic
-    const geoOptions = {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0 
-    };
+    try {
+        const location = await captureAccurateLocation({
+             minAccuracyM: 3,
+             timeoutMs: 15000,
+             maximumAge: 0
+        });
 
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
+        if (location.location_source === 'UNAVAILABLE') {
+            toast({ 
+                variant: 'destructive', 
+                title: "Location Failed", 
+                description: location.location_unavailable_reason || "Could not get location." 
+            });
+            setSosLoading(false);
+            return;
+        }
         
         // Prepare address payload
         let addressPayload = null;
@@ -173,28 +176,22 @@ export default function ResidentDashboardPage() {
             addressPayload = residentProfile.address;
         }
 
-        const result = await createAlert(latitude, longitude, sosCategory, sosMessage, addressPayload, accuracy);
+        const result = await createAlert(location.lat, location.lng, sosCategory, sosMessage, addressPayload, location.accuracy_m);
         
         setSosLoading(false);
         if (result) {
             setActiveModal(null);
             setSosMessage(''); // Reset
         }
-    }, (err) => {
-        console.error("GPS Error", err);
+    } catch (err) {
+        console.error("SOS Error", err);
         setSosLoading(false);
-        
-        // Fallback Logic: Try to send without precise location or use last known?
-        // For now, we inform the user.
         toast({ 
             variant: 'destructive', 
-            title: "Location Failed", 
-            description: "Could not get your precise location. Please ensure GPS is enabled." 
+            title: "Error", 
+            description: "An unexpected error occurred while sending the alert." 
         });
-        
-        // Optional: Allow sending with low accuracy or cached location if available
-        // But per requirements, we want high precision or fail/warn.
-    }, geoOptions);
+    }
   };
 
   const handleBlotter = async () => {

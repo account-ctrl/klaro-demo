@@ -1,7 +1,7 @@
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMap, Marker, Popup, Circle, LayerGroup } from 'react-leaflet';
-import L from 'leaflet';
+import L, { LatLng } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { EmergencyAlert, ResponderLocation, User, Resident, BlotterCase, Household } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -90,7 +90,8 @@ const createCurrentUserIcon = (user: User | null | undefined) => {
 const RecenterMap = ({ lat, lng }: { lat: number, lng: number }) => {
     const map = useMap();
     useEffect(() => {
-        map.setView([lat, lng], 16, { animate: true }); 
+        // High zoom for SOS tracking
+        map.flyTo([lat, lng], 18, { animate: true, duration: 2 }); 
     }, [lat, lng, map]);
     return null;
 }
@@ -115,6 +116,9 @@ interface FeatureMapProps {
 
     center?: { lat: number, lng: number };
     onIncidentClick: (id: string) => void;
+    // Callback for manual pin drag
+    onIncidentDragEnd?: (id: string, newLat: number, newLng: number) => void;
+
     currentUserLocation?: { lat: number, lng: number } | null;
     currentUser?: User | null;
 }
@@ -134,6 +138,7 @@ export function FeatureMap({
     },
     center, 
     onIncidentClick, 
+    onIncidentDragEnd,
     currentUserLocation, 
     currentUser 
 }: FeatureMapProps) {
@@ -210,7 +215,6 @@ export function FeatureMap({
         }).filter(Boolean);
     }, [blotterCases, residents, householdMap, visibleLayers.showBlotter]);
 
-
     return (
         <>
             {center && <RecenterMap lat={center.lat} lng={center.lng} />}
@@ -248,10 +252,30 @@ export function FeatureMap({
                             <Marker 
                                 position={[lat, lng]}
                                 icon={incidentIcon}
+                                // Allow dragging for manual correction
+                                draggable={true} 
                                 eventHandlers={{
-                                    click: () => onIncidentClick(incident.alertId)
+                                    click: () => onIncidentClick(incident.alertId),
+                                    dragend: (e) => {
+                                        const marker = e.target;
+                                        const newPos = marker.getLatLng();
+                                        console.log("Pin Moved:", newPos);
+                                        if (onIncidentDragEnd) {
+                                            onIncidentDragEnd(incident.alertId, newPos.lat, newPos.lng);
+                                        }
+                                    }
                                 }}
                             >
+                                <Popup>
+                                    <div className="text-sm">
+                                        <strong>SOS ALERT</strong><br/>
+                                        <span className="text-red-500 font-bold">{incident.residentName}</span><br/>
+                                        <span className="text-xs text-zinc-500">
+                                            Accuracy: ±{Math.round(accuracy)}m<br/>
+                                            (Drag to Correct)
+                                        </span>
+                                    </div>
+                                </Popup>
                             </Marker>
                             
                             {accuracy > 50 && (
