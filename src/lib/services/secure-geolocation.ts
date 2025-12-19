@@ -22,10 +22,10 @@
 const CONFIG = {
     SOS: {
         TARGET_ACCURACY: 5,       // Aim for 5 meters
-        HARD_TIMEOUT: 20000,      // 20 seconds max wait
+        HARD_TIMEOUT: 25000,      // Increased to 25s max wait
         HIGH_ACCURACY_OPTS: {
             enableHighAccuracy: true,
-            timeout: 30000,       // Browser timeout (keep higher than hard timeout)
+            timeout: 30000,       // Browser timeout
             maximumAge: 0
         }
     },
@@ -139,13 +139,17 @@ export function requestSecureLocation(
             // Absolute Failure of High Accuracy -> Try Low Accuracy Fallback
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
             
+            console.log("[SecureGeo] Hard Timeout. Attempting Fallback (Low Acc)...");
+            
             navigator.geolocation.getCurrentPosition(
                 (pos) => finalize(pos, "Fallback (Low Acc)"),
                 (err) => {
                     stop();
+                    console.error("[SecureGeo] Fallback Failed:", err);
                     onError(`Location Failed: ${err.message}`);
                 },
-                { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+                // Increased fallback timeout to 15s to give low-accuracy providers (WiFi/Cell) enough time
+                { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 } 
             );
         }
     }, CONFIG.SOS.HARD_TIMEOUT);
