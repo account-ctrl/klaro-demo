@@ -20,7 +20,8 @@ export const useGeolocation = (userId?: string, role?: string) => {
     const watchIdRef = useRef<number | null>(null);
     const mountedRef = useRef(true);
     
-    // --- 1. One-time Location Request (Simpler Logic) ---
+    // --- 1. One-time Location Request (Used for Map Center & Debugging) ---
+    // Updated to use the same "Watch & Improve" logic as SOS for consistency
     const getCurrentCoordinates = (targetAccuracy: number = 10): Promise<GeolocationResult> => {
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {
@@ -31,13 +32,43 @@ export const useGeolocation = (userId?: string, role?: string) => {
             }
 
             setError(null);
+            
+            // Similar strategy: Watch for 10s or until target accuracy
+            let bestPosition: GeolocationPosition | null = null;
+            let watchId: number;
+            let timeoutId: NodeJS.Timeout;
 
-            // Attempt 1: High Accuracy (Wait up to 10s)
-            navigator.geolocation.getCurrentPosition(
+            const finish = (pos: GeolocationPosition) => {
+                navigator.geolocation.clearWatch(watchId);
+                clearTimeout(timeoutId);
+                
+                setLocation({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy,
+                    source: pos.coords.accuracy <= 20 ? 'high-accuracy' : 'low-accuracy'
+                });
+
+                resolve({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                });
+            };
+
+            // 1. Start Watch
+            watchId = navigator.geolocation.watchPosition(
                 (pos) => {
-                    if(!mountedRef.current) return;
-                    console.log(`[useGeolocation] High Accuracy Success: ${pos.coords.latitude}, ${pos.coords.longitude} (${Math.round(pos.coords.accuracy)}m)`);
+                    if (!mountedRef.current) return;
                     
+                    if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
+                        bestPosition = pos;
+                    }
+
+                    // Log improvements for debugging
+                    console.log(`[useGeolocation] Update: Acc ${Math.round(pos.coords.accuracy)}m`);
+
+                    // Update UI immediately (don't wait for final)
                     setLocation({
                         lat: pos.coords.latitude,
                         lng: pos.coords.longitude,
@@ -45,46 +76,45 @@ export const useGeolocation = (userId?: string, role?: string) => {
                         source: 'high-accuracy'
                     });
 
-                    resolve({
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        accuracy: pos.coords.accuracy
-                    });
+                    // Target Met?
+                    if (pos.coords.accuracy <= targetAccuracy) {
+                        finish(pos);
+                    }
                 },
                 (err) => {
-                    if(!mountedRef.current) return;
-                    console.warn(`[useGeolocation] High Accuracy Failed: ${err.message}. Trying Fallback...`);
-                    
-                    // Attempt 2: Low Accuracy Fallback
-                    navigator.geolocation.getCurrentPosition(
-                         (pos) => {
-                            if(!mountedRef.current) return;
-                            console.log(`[useGeolocation] Fallback Success: ${pos.coords.latitude}, ${pos.coords.longitude} (${Math.round(pos.coords.accuracy)}m)`);
-
-                            setLocation({
-                                lat: pos.coords.latitude,
-                                lng: pos.coords.longitude,
-                                accuracy: pos.coords.accuracy,
-                                source: 'low-accuracy'
-                            });
-
-                            resolve({
-                                lat: pos.coords.latitude,
-                                lng: pos.coords.longitude,
-                                accuracy: pos.coords.accuracy
-                            });
-                         },
-                         (err2) => {
-                             if(!mountedRef.current) return;
-                             const msg = `Location failed: ${err2.message}`;
-                             setError(msg);
-                             reject(new Error(msg));
-                         },
-                         { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-                    );
+                    if (!mountedRef.current) return;
+                    console.warn(`[useGeolocation] Watch Error: ${err.message}`);
+                    if (err.code === 1) { // Denied
+                        navigator.geolocation.clearWatch(watchId);
+                        clearTimeout(timeoutId);
+                        setError("Permission Denied");
+                        reject(new Error("Permission Denied"));
+                    }
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
             );
+
+            // 2. Timeout (10s)
+            timeoutId = setTimeout(() => {
+                if (bestPosition) {
+                    console.log("[useGeolocation] Timeout. Using best found.");
+                    finish(bestPosition);
+                } else {
+                    console.log("[useGeolocation] Timeout. No GPS. Trying fallback.");
+                    navigator.geolocation.clearWatch(watchId);
+                    
+                    // Fallback
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => finish(pos),
+                        (err) => {
+                            const msg = "Location failed completely.";
+                            setError(msg);
+                            reject(new Error(msg));
+                        },
+                        { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+                    );
+                }
+            }, 10000);
         });
     };
 
