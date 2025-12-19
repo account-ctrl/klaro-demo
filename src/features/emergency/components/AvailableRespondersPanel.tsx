@@ -30,11 +30,16 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
             return {
                 ...r,
                 userProfile, 
-                displayName, // Use strict display name
-                displayRole: roleLabel
+                displayName, 
+                displayRole: roleLabel,
+                // Pass raw data for filtering
+                systemRole: rawRoleKey,
+                position: userProfile?.position || ''
             };
         })
+        // 1. Strict Tenant Check (Must exist in user list)
         .filter(r => r.userProfile !== undefined)
+        // 2. Stale Check (Must be recently active)
         .filter(r => {
             if (!r.last_active) return false;
             if (typeof r.last_active.toMillis === 'function') {
@@ -42,6 +47,16 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
                 return (now - lastActiveMs) < STALE_THRESHOLD_MS;
             }
             return false;
+        })
+        // 3. Responder Role Filter (Must be authorized personnel)
+        .filter(r => {
+            const isSystemResponder = ['responder', 'admin', 'health_worker'].includes(r.systemRole);
+            const pos = r.position.toLowerCase();
+            const hasKeyword = pos.includes('tanod') || pos.includes('bpso') || pos.includes('security') || 
+                               pos.includes('driver') || pos.includes('ambulance') || pos.includes('health') || 
+                               pos.includes('doctor') || pos.includes('nurse');
+            
+            return isSystemResponder || hasKeyword;
         });
 
     return (
