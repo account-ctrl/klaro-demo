@@ -90,8 +90,10 @@ const createCurrentUserIcon = (user: User | null | undefined) => {
 const RecenterMap = ({ lat, lng }: { lat: number, lng: number }) => {
     const map = useMap();
     useEffect(() => {
-        // High zoom for SOS tracking
-        map.flyTo([lat, lng], 18, { animate: true, duration: 2 }); 
+        if (lat && lng) {
+             // High zoom for SOS tracking
+            map.flyTo([lat, lng], 18, { animate: true, duration: 2 }); 
+        }
     }, [lat, lng, map]);
     return null;
 }
