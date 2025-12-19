@@ -18,9 +18,9 @@ export const useGeolocation = (userId?: string, role?: string) => {
     const [location, setLocation] = useState<LocationState>({ lat: null, lng: null, accuracy: null, source: null });
     const [error, setError] = useState<string | null>(null);
     const watchIdRef = useRef<number | null>(null);
+    const mountedRef = useRef(true);
     
-    // --- 1. One-time Location Request (Used for Map Center & Debugging) ---
-    // Updated to be "Smart" - waits for good accuracy, but settles for "okay" if time passes
+    // --- 1. One-time Location Request (Simpler Logic) ---
     const getCurrentCoordinates = (targetAccuracy: number = 10): Promise<GeolocationResult> => {
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {
@@ -31,92 +31,60 @@ export const useGeolocation = (userId?: string, role?: string) => {
             }
 
             setError(null);
-            
-            const HARD_TIMEOUT = 10000; // 10s max wait
-            const FAST_TIMEOUT = 3000;  // 3s check for "good enough"
-            const ACCEPTABLE_ACCURACY = 50; // If we have < 50m after 3s, take it.
 
-            let bestPosition: GeolocationPosition | null = null;
-            let watchId: number;
-            let hardTimeoutId: NodeJS.Timeout;
-            let fastTimeoutId: NodeJS.Timeout;
-
-            const finish = (pos: GeolocationPosition, source: 'high-accuracy' | 'low-accuracy') => {
-                navigator.geolocation.clearWatch(watchId);
-                clearTimeout(hardTimeoutId);
-                clearTimeout(fastTimeoutId);
-                
-                const message = `GPS Success (${source}): ${pos.coords.latitude}, ${pos.coords.longitude} (Acc: ${pos.coords.accuracy}m)`;
-                console.log(message);
-                
-                setLocation({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy,
-                    source: source
-                });
-
-                resolve({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy
-                });
-            };
-
-            const handleError = (err: GeolocationPositionError) => {
-                console.warn("WatchPosition error in useGeolocation:", err);
-                if (err.code === 1) { // Permission denied - Fail immediately
-                    navigator.geolocation.clearWatch(watchId);
-                    clearTimeout(hardTimeoutId);
-                    clearTimeout(fastTimeoutId);
-                    const errMsg = `Permission Denied: ${err.message}`;
-                    setError(errMsg);
-                    reject(new Error(errMsg));
-                }
-            };
-
-            // Start Watch
-            watchId = navigator.geolocation.watchPosition(
+            // Attempt 1: High Accuracy (Wait up to 10s)
+            navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
-                        bestPosition = pos;
-                    }
+                    if(!mountedRef.current) return;
+                    console.log(`[useGeolocation] High Accuracy Success: ${pos.coords.latitude}, ${pos.coords.longitude} (${Math.round(pos.coords.accuracy)}m)`);
+                    
+                    setLocation({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy,
+                        source: 'high-accuracy'
+                    });
 
-                    // 1. Perfect Hit
-                    if (bestPosition.coords.accuracy <= targetAccuracy) {
-                        finish(bestPosition, 'high-accuracy');
-                    }
+                    resolve({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy
+                    });
                 },
-                handleError,
-                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-            );
+                (err) => {
+                    if(!mountedRef.current) return;
+                    console.warn(`[useGeolocation] High Accuracy Failed: ${err.message}. Trying Fallback...`);
+                    
+                    // Attempt 2: Low Accuracy Fallback
+                    navigator.geolocation.getCurrentPosition(
+                         (pos) => {
+                            if(!mountedRef.current) return;
+                            console.log(`[useGeolocation] Fallback Success: ${pos.coords.latitude}, ${pos.coords.longitude} (${Math.round(pos.coords.accuracy)}m)`);
 
-            // 2. Fast Timeout - Take "Acceptable"
-            fastTimeoutId = setTimeout(() => {
-                if (bestPosition && bestPosition.coords.accuracy <= ACCEPTABLE_ACCURACY) {
-                    console.log(`[useGeolocation] Fast timeout. Accepting accuracy: ${bestPosition.coords.accuracy}m`);
-                    finish(bestPosition, 'high-accuracy');
-                }
-            }, FAST_TIMEOUT);
+                            setLocation({
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude,
+                                accuracy: pos.coords.accuracy,
+                                source: 'low-accuracy'
+                            });
 
-            // 3. Hard Timeout - Take whatever we have
-            hardTimeoutId = setTimeout(() => {
-                if (bestPosition) {
-                    console.log(`[useGeolocation] Hard timeout. Using best: ${bestPosition.coords.accuracy}m`);
-                    finish(bestPosition, 'high-accuracy');
-                } else {
-                    // Fallback to single shot if watch didn't yield anything
-                     navigator.geolocation.getCurrentPosition(
-                        (pos) => finish(pos, 'low-accuracy'),
-                        (err) => {
-                             const errMsg = `Location error: ${err.message}`;
-                             setError(errMsg);
-                             reject(new Error(errMsg));
-                        },
-                        { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+                            resolve({
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude,
+                                accuracy: pos.coords.accuracy
+                            });
+                         },
+                         (err2) => {
+                             if(!mountedRef.current) return;
+                             const msg = `Location failed: ${err2.message}`;
+                             setError(msg);
+                             reject(new Error(msg));
+                         },
+                         { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
                     );
-                }
-            }, HARD_TIMEOUT);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
         });
     };
 
@@ -135,14 +103,18 @@ export const useGeolocation = (userId?: string, role?: string) => {
             (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
                 // Update state continuously for tracking
-                setLocation({ lat: latitude, lng: longitude, accuracy, source: 'high-accuracy' }); 
-                setError(null);
+                if (mountedRef.current) {
+                    setLocation({ lat: latitude, lng: longitude, accuracy, source: 'high-accuracy' }); 
+                    setError(null);
+                }
             },
             (err) => {
                 console.error("Geolocation watch error:", err);
-                if (err.code === 1) setError("Location permission denied.");
-                else if (err.code === 2) setError("Position unavailable.");
-                else if (err.code === 3) setError("Location request timed out.");
+                if (mountedRef.current) {
+                    if (err.code === 1) setError("Location permission denied.");
+                    else if (err.code === 2) setError("Position unavailable.");
+                    else if (err.code === 3) setError("Location request timed out.");
+                }
             },
             {
                 enableHighAccuracy: true,
@@ -160,7 +132,11 @@ export const useGeolocation = (userId?: string, role?: string) => {
     };
 
     useEffect(() => {
-        return () => stopWatching();
+        mountedRef.current = true;
+        return () => {
+             mountedRef.current = false;
+             stopWatching();
+        };
     }, []);
 
     return {
