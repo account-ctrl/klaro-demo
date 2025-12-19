@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -10,8 +11,10 @@ import { AssetTabs } from '@/components/dashboard/assets/asset-tabs';
 import { AssetModals, initialAssetForm } from '@/components/dashboard/assets/asset-modals';
 import { useTenant } from '@/providers/tenant-provider';
 import { useResidents, useBarangayRef } from '@/hooks/use-barangay-data';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
-export default function AssetsPage() {
+function AssetsPage() {
     const firestore = useFirestore();
     const { tenantPath } = useTenant();
     const { data: assets, isLoading: isLoadingAssets } = useFixedAssets();
@@ -369,3 +372,5 @@ export default function AssetsPage() {
         </div>
     );
 }
+
+export default withRoleGuard(AssetsPage, [PERMISSIONS.VIEW_ASSETS]);

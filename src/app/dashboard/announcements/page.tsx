@@ -7,8 +7,10 @@ import {
     CardTitle,
   } from "@/components/ui/card";
 import { AnnouncementsTable } from "./announcements-table";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
   
-export default function AnnouncementsPage() {
+function AnnouncementsPage() {
     return (
       <div className="space-y-6">
         <div>
@@ -29,3 +31,5 @@ export default function AnnouncementsPage() {
       </div>
     );
 }
+
+export default withRoleGuard(AnnouncementsPage, [PERMISSIONS.VIEW_DOCUMENTS]);

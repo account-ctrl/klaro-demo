@@ -20,6 +20,8 @@ import { format } from 'date-fns';
 import { serverTimestamp, doc, increment, Timestamp } from 'firebase/firestore';
 import { BARANGAY_ID } from '@/hooks/use-barangay-data'; 
 import { WithId } from '@/firebase/firestore/use-collection';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 // --- Constants ---
 const FORM_TYPES = ['Tablet', 'Capsule', 'Syrup', 'Suspension', 'Drops', 'Ointment', 'Cream', 'Inhaler', 'Injection', 'Powder', 'Solution'];
@@ -27,7 +29,7 @@ const STRENGTH_UNITS = ['mg', 'g', 'mcg', 'mL', 'IU', '%'];
 const DISPENSING_UNITS = ['tablet', 'capsule', 'bottle', 'vial', 'sachet', 'box', 'pack', 'pc'];
 const SOURCES = ['DOH', 'City Health', 'Donation', 'Purchased', 'Other'];
 
-export default function InventoryPage() {
+function InventoryPage() {
     const firestore = useFirestore();
     const { data: items, isLoading } = useInventoryItems();
     const { toast } = useToast();
@@ -625,3 +627,5 @@ function BatchList({ itemId }: { itemId: string }) {
         </div>
     )
 }
+
+export default withRoleGuard(InventoryPage, [PERMISSIONS.VIEW_HEALTH]);

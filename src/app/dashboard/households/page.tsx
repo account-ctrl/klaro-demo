@@ -1,4 +1,6 @@
 
+'use client';
+
 import {
     Card,
     CardContent,
@@ -7,8 +9,10 @@ import {
     CardTitle,
   } from "@/components/ui/card";
 import { HouseholdsTable } from "./households-table";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
   
-export default function HouseholdsPage() {
+function HouseholdsPage() {
     return (
       <div className="space-y-6">
         <div>
@@ -29,4 +33,5 @@ export default function HouseholdsPage() {
       </div>
     );
 }
-  
+
+export default withRoleGuard(HouseholdsPage, [PERMISSIONS.VIEW_RESIDENTS]);

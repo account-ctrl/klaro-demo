@@ -21,8 +21,10 @@ import { useFirestore } from '@/firebase';
 import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Resident } from '@/lib/types';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
-export default function PatientRecordsPage() {
+function PatientRecordsPage() {
     const { data: residents } = useResidents();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
@@ -382,3 +384,5 @@ function PatientDetailView({ resident, familyMembers }: { resident: WithId<Resid
         </>
     )
 }
+
+export default withRoleGuard(PatientRecordsPage, [PERMISSIONS.VIEW_HEALTH]);

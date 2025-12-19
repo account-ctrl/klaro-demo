@@ -7,8 +7,10 @@ import {
     CardTitle,
   } from "@/components/ui/card";
 import { BlotterTable } from "./blotter-table";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
   
-export default function BlotterPage() {
+function BlotterPage() {
     return (
       <div className="space-y-6">
         <div>
@@ -29,4 +31,5 @@ export default function BlotterPage() {
       </div>
     );
 }
-  
+
+export default withRoleGuard(BlotterPage, [PERMISSIONS.VIEW_BLOTTER]);

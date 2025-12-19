@@ -7,8 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { DocumentsTable } from "./documents-table";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
-export default function DocumentsPage() {
+function DocumentsPage() {
   return (
     <div className="space-y-6">
       <div>
@@ -29,3 +31,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+export default withRoleGuard(DocumentsPage, [PERMISSIONS.VIEW_DOCUMENTS]);

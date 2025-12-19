@@ -7,8 +7,10 @@ import {
     CardTitle,
   } from "@/components/ui/card";
 import { PetsTable } from "./pets-table";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
   
-export default function PetsPage() {
+function PetsPage() {
     return (
       <div className="space-y-6">
         <div>
@@ -29,4 +31,5 @@ export default function PetsPage() {
       </div>
     );
 }
-  
+
+export default withRoleGuard(PetsPage, [PERMISSIONS.VIEW_RESIDENTS]);

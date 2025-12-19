@@ -15,6 +15,8 @@ import { User } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { GeolocationDebugger } from "./components/GeolocationDebugger";
 import { useGeolocation } from "./hooks/useGeolocation";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 // Dynamically import map to avoid SSR issues
 const FeatureMap = dynamic(
@@ -25,7 +27,7 @@ const FeatureMap = dynamic(
   }
 );
 
-export default function EmergencyCommandCenterPage() {
+function EmergencyCommandCenterPage() {
     const { incidents, loading: loadingIncidents } = useIncidents();
     const { responders, loading: loadingResponders } = useLiveLocations();
     const [center, setCenter] = useState<{lat: number, lng: number} | undefined>(undefined);
@@ -147,3 +149,5 @@ const MapContainerWrapper = dynamic(
     }),
     { ssr: false }
 );
+
+export default withRoleGuard(EmergencyCommandCenterPage, [PERMISSIONS.VIEW_EMERGENCY]);

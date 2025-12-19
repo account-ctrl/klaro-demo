@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from "react";
@@ -12,10 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useResidents, useHouseholds, useBarangayRef } from '@/hooks/use-barangay-data';
 import { updateSystemStats } from "@/lib/trigger-simulation";
 import { useTenant } from '@/providers/tenant-provider';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 type ResidentWithId = Resident & { id?: string };
 
-export default function ResidentsPage() {
+function ResidentsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const { tenantPath } = useTenant();
@@ -114,3 +117,5 @@ export default function ResidentsPage() {
     </div>
   );
 }
+
+export default withRoleGuard(ResidentsPage, [PERMISSIONS.VIEW_RESIDENTS]);

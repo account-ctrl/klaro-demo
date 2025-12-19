@@ -35,6 +35,8 @@ import { useTenant } from '@/providers/tenant-provider';
 import dynamic from 'next/dynamic';
 import { useTenantProfile } from '@/hooks/use-tenant-profile'; 
 import { JurisdictionLayer } from '@/components/maps/JurisdictionLayer'; // Import JurisdictionLayer
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 // Dynamically import MapAutoFocus
 const MapAutoFocus = dynamic(() => import('@/components/maps/MapAutoFocus').then(mod => mod.MapAutoFocus), { ssr: false });
@@ -104,7 +106,7 @@ const unverifiedIcon = (isSelected: boolean) => createIcon(`relative inline-flex
 const scannedIcon = () => createIcon('animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75') + createIcon('relative inline-flex rounded-full h-3 w-3 bg-blue-500 border border-white shadow-sm');
 
 // --- Main Page Component ---
-export default function MappedHouseholdsPage() {
+function MappedHouseholdsPage() {
     const { data: households } = useHouseholds();
     const { data: residents } = useResidents();
     const firestore = useFirestore();
@@ -373,3 +375,5 @@ export default function MappedHouseholdsPage() {
         </div>
     );
 }
+
+export default withRoleGuard(MappedHouseholdsPage, [PERMISSIONS.VIEW_RESIDENTS]);

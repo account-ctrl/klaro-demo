@@ -27,6 +27,8 @@ import { AddProject, EditProject, DeleteProject, ProjectFormValues } from './pro
 import { Button } from '@/components/ui/button';
 import { ProjectsTable } from './projects-table';
 import { useTenant } from '@/providers/tenant-provider';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 const ProjectStatusBadge = ({ status }: { status: Project["status"] }) => {
   const variant: "default" | "secondary" | "outline" | "destructive" = {
@@ -94,7 +96,7 @@ const ProjectCard = ({ project, onEdit, onDelete }: { project: Project, onEdit: 
 };
 
 
-export default function ProjectsPage() {
+function ProjectsPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
@@ -205,3 +207,5 @@ export default function ProjectsPage() {
     </div>
   );
 }
+
+export default withRoleGuard(ProjectsPage, [PERMISSIONS.VIEW_PROJECTS]);

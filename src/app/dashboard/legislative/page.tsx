@@ -35,6 +35,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Editor } from '@tiptap/react';
 import { DraftTools } from './editor/draft-tools';
 import { useTenant } from '@/providers/tenant-provider';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 type OrdinanceFormValues = Omit<Ordinance, 'ordinanceId' | 'createdAt' | 'status'> & {
     relatedViolation?: string;
@@ -52,7 +54,7 @@ const initialFormValues: OrdinanceFormValues = {
     relatedViolation: ''
 };
 
-export default function LegislativePage() {
+function LegislativePage() {
     const firestore = useFirestore();
     const { data: ordinances, isLoading } = useOrdinances();
     const ordinancesRef = useLegislativeRef('ordinances');
@@ -713,3 +715,5 @@ function DeleteAction({ docId, ordNo, onDelete }: { docId: string, ordNo: string
         </AlertDialog>
     )
 }
+
+export default withRoleGuard(LegislativePage, [PERMISSIONS.VIEW_LEGISLATIVE]);
