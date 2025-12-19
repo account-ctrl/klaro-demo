@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from "react";
-import { Check, ChevronsUpDown, Search, User as UserIcon, Home, Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Search, User as UserIcon, Home, Loader2, MapPinOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export type SearchResult = {
     type: 'resident' | 'household';
     lat?: number;
     lng?: number;
+    hasLocation: boolean;
 };
 
 interface HouseholdSearchProps {
@@ -46,7 +47,7 @@ export function HouseholdSearch({ onSelectLocation }: HouseholdSearchProps) {
   const filteredData = React.useMemo(() => {
       if (!searchQuery || searchQuery.length < 2) return [];
 
-      const query = searchQuery.toLowerCase();
+      const query = searchQuery.toLowerCase().trim();
       const results: SearchResult[] = [];
 
       // Search Residents
@@ -54,23 +55,28 @@ export function HouseholdSearch({ onSelectLocation }: HouseholdSearchProps) {
           residents.forEach(r => {
               const fullName = `${r.firstName} ${r.lastName}`.toLowerCase();
               if (fullName.includes(query)) {
-                  // Find household for resident to get location if resident location is missing
-                  // Assuming resident has householdId, and we can look it up in households array
-                  // For now, let's assume resident might have lat/lng or we look up household.
-                  
-                  // Optimization: Create a map for households if needed, but for now find is okay for small datasets.
-                  // Realistically we need the location.
-                  // Checking if we can find the household location for this resident.
+                  // Try to find location from linked household
                   const hh = households?.find(h => h.householdId === r.householdId);
+                  
+                  // Try to find location from resident record itself (fallback)
+                  // @ts-ignore - Some legacy records might have direct lat/lng
+                  const lat = hh?.latitude || r.latitude || (r.address && typeof r.address === 'object' ? r.address.coordinates?.lat : undefined);
+                  // @ts-ignore
+                  const lng = hh?.longitude || r.longitude || (r.address && typeof r.address === 'object' ? r.address.coordinates?.lng : undefined);
 
-                  if (hh?.latitude && hh?.longitude) {
+                  const hasLocation = !!(lat && lng);
+
+                  // Only show if we found a location? Or show with warning?
+                  // Better to show it so user knows the resident exists, but maybe can't map them.
+                  if (hasLocation) {
                       results.push({
                           id: r.residentId,
                           label: `${r.firstName} ${r.lastName}`,
-                          subLabel: 'Resident',
+                          subLabel: hh ? `Household: ${hh.name || hh.householdId}` : 'Individual Record',
                           type: 'resident',
-                          lat: hh.latitude,
-                          lng: hh.longitude
+                          lat,
+                          lng,
+                          hasLocation: true
                       });
                   }
               }
@@ -80,7 +86,7 @@ export function HouseholdSearch({ onSelectLocation }: HouseholdSearchProps) {
       // Search Households
       if (households) {
           households.forEach(h => {
-              const name = (h.name || h.householdNumber).toLowerCase();
+              const name = (h.name || h.householdNumber || '').toLowerCase();
               if (name.includes(query)) {
                   if (h.latitude && h.longitude) {
                        results.push({
@@ -89,17 +95,20 @@ export function HouseholdSearch({ onSelectLocation }: HouseholdSearchProps) {
                           subLabel: h.address || 'Household',
                           type: 'household',
                           lat: h.latitude,
-                          lng: h.longitude
+                          lng: h.longitude,
+                          hasLocation: true
                       });
                   }
               }
           });
       }
 
-      return results.slice(0, 10); // Limit results
+      return results.slice(0, 15);
   }, [searchQuery, residents, households]);
 
   const handleSelect = (item: SearchResult) => {
+      if (!item.hasLocation) return;
+      
       setValue(item.label);
       setOpen(false);
       if (item.lat && item.lng) {
@@ -127,7 +136,7 @@ export function HouseholdSearch({ onSelectLocation }: HouseholdSearchProps) {
              <span className="truncate">{value}</span>
           ) : (
              <span className="text-zinc-400 flex items-center gap-2">
-                 <Search className="h-4 w-4" /> Search resident or household...
+                 <Search className="h-4 w-4" /> Search resident location...
              </span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -147,27 +156,26 @@ export function HouseholdSearch({ onSelectLocation }: HouseholdSearchProps) {
                  </div>
             )}
             {!isLoading && filteredData.length === 0 && searchQuery.length > 1 && (
-              <CommandEmpty>No results found.</CommandEmpty>
+              <CommandEmpty>No mapped residents found matching "{searchQuery}".</CommandEmpty>
             )}
             {!isLoading && filteredData.length > 0 && (
-                <CommandGroup heading="Suggestions">
+                <CommandGroup heading="Results">
                 {filteredData.map((item) => (
                     <CommandItem
                         key={item.id}
-                        value={item.id} // We use ID as value for uniqueness, but we handle selection manually
+                        value={item.id}
                         onSelect={() => handleSelect(item)}
-                        className="aria-selected:bg-zinc-800 aria-selected:text-white"
+                        className="aria-selected:bg-zinc-800 aria-selected:text-white cursor-pointer"
                     >
                         <div className="flex items-center gap-2 w-full">
                             {item.type === 'resident' ? <UserIcon className="h-4 w-4 text-blue-400" /> : <Home className="h-4 w-4 text-emerald-400" />}
                             <div className="flex flex-col overflow-hidden">
                                 <span className="truncate font-medium">{item.label}</span>
-                                <span className="text-xs text-zinc-500 truncate">{item.subLabel}</span>
+                                <span className="text-xs text-zinc-500 truncate flex items-center gap-1">
+                                    {item.subLabel}
+                                </span>
                             </div>
                         </div>
-                        {value === item.label && (
-                            <Check className="ml-auto h-4 w-4 opacity-100 text-blue-500" />
-                        )}
                     </CommandItem>
                 ))}
                 </CommandGroup>
