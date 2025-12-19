@@ -14,18 +14,24 @@ interface GeolocationResult {
     accuracy: number;
 }
 
+// Same options as SOS (useSmartGeolocation)
+const HIGH_ACCURACY_OPTIONS = {
+    enableHighAccuracy: true,
+    timeout: 30000, 
+    maximumAge: 0 
+};
+
 export const useGeolocation = (userId?: string, role?: string) => {
     const [location, setLocation] = useState<LocationState>({ lat: null, lng: null, accuracy: null, source: null });
     const [error, setError] = useState<string | null>(null);
     const watchIdRef = useRef<number | null>(null);
     const mountedRef = useRef(true);
     
-    // --- 1. One-time Location Request (Used for Map Center & Debugging) ---
-    // Updated to use the same "Watch & Improve" logic as SOS for consistency
+    // --- 1. One-time Location Request (Used for Map Center) ---
     const getCurrentCoordinates = (targetAccuracy: number = 10): Promise<GeolocationResult> => {
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {
-                const err = "Geolocation not supported by this browser.";
+                const err = "Geolocation not supported.";
                 setError(err);
                 reject(new Error(err));
                 return;
@@ -33,7 +39,6 @@ export const useGeolocation = (userId?: string, role?: string) => {
 
             setError(null);
             
-            // Similar strategy: Watch for 10s or until target accuracy
             let bestPosition: GeolocationPosition | null = null;
             let watchId: number;
             let timeoutId: NodeJS.Timeout;
@@ -56,7 +61,6 @@ export const useGeolocation = (userId?: string, role?: string) => {
                 });
             };
 
-            // 1. Start Watch
             watchId = navigator.geolocation.watchPosition(
                 (pos) => {
                     if (!mountedRef.current) return;
@@ -65,10 +69,7 @@ export const useGeolocation = (userId?: string, role?: string) => {
                         bestPosition = pos;
                     }
 
-                    // Log improvements for debugging
-                    console.log(`[useGeolocation] Update: Acc ${Math.round(pos.coords.accuracy)}m`);
-
-                    // Update UI immediately (don't wait for final)
+                    // Update UI immediately
                     setLocation({
                         lat: pos.coords.latitude,
                         lng: pos.coords.longitude,
@@ -84,26 +85,23 @@ export const useGeolocation = (userId?: string, role?: string) => {
                 (err) => {
                     if (!mountedRef.current) return;
                     console.warn(`[useGeolocation] Watch Error: ${err.message}`);
-                    if (err.code === 1) { // Denied
+                    if (err.code === 1) { 
                         navigator.geolocation.clearWatch(watchId);
                         clearTimeout(timeoutId);
                         setError("Permission Denied");
                         reject(new Error("Permission Denied"));
                     }
                 },
-                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+                HIGH_ACCURACY_OPTIONS
             );
 
-            // 2. Timeout (10s)
+            // Timeout (10s)
             timeoutId = setTimeout(() => {
                 if (bestPosition) {
-                    console.log("[useGeolocation] Timeout. Using best found.");
                     finish(bestPosition);
                 } else {
-                    console.log("[useGeolocation] Timeout. No GPS. Trying fallback.");
                     navigator.geolocation.clearWatch(watchId);
-                    
-                    // Fallback
+                    // Fallback to single shot
                     navigator.geolocation.getCurrentPosition(
                         (pos) => finish(pos),
                         (err) => {
@@ -118,7 +116,7 @@ export const useGeolocation = (userId?: string, role?: string) => {
         });
     };
 
-    // --- 2. Live Tracking (Used for Responders) ---
+    // --- 2. Live Tracking (Responders) - Improved Logic ---
     const startWatching = () => {
         if (!navigator.geolocation) {
             setError("Geolocation is not supported by your browser.");
@@ -129,28 +127,61 @@ export const useGeolocation = (userId?: string, role?: string) => {
             navigator.geolocation.clearWatch(watchIdRef.current);
         }
 
+        let lastPosition: GeolocationPosition | null = null;
+        
+        // Stricter tracking constants
+        const MIN_DISTANCE_METERS = 3; 
+        const ACCEPTABLE_ACCURACY = 20; // Ideally want < 20m
+        const REJECT_POOR_ACCURACY = 100; // Never accept > 100m unless first
+
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
+                if (!mountedRef.current) return;
+
                 const { latitude, longitude, accuracy } = position.coords;
-                // Update state continuously for tracking
-                if (mountedRef.current) {
-                    setLocation({ lat: latitude, lng: longitude, accuracy, source: 'high-accuracy' }); 
-                    setError(null);
+                
+                // 1. Logic: Prioritize Accuracy
+                // If this is the first point, accept it (so user sees something).
+                // If it's subsequent, apply filters.
+                if (lastPosition) {
+                    // Accuracy Check
+                    if (accuracy > REJECT_POOR_ACCURACY) {
+                        console.log(`[useGeolocation] Rejecting poor accuracy: ${Math.round(accuracy)}m`);
+                        return;
+                    }
+
+                    // Distance Check (Jitter Filter)
+                    const dist = getDistanceFromLatLonInKm(
+                        lastPosition.coords.latitude, lastPosition.coords.longitude,
+                        latitude, longitude
+                    ) * 1000;
+
+                    // If accurate (<20m) and moved > 3m -> Update
+                    // If inaccurate (>20m) but moved significant distance (> 20m) -> Update (Maybe driving?)
+                    // Otherwise -> Ignore noise
+                    if (accuracy <= ACCEPTABLE_ACCURACY) {
+                        if (dist < MIN_DISTANCE_METERS) return; 
+                    } else {
+                        // For poorer accuracy, require larger movement to verify it's real
+                        if (dist < 20) return; 
+                    }
                 }
+
+                // Accept Update
+                lastPosition = position;
+                console.log(`[useGeolocation] Tracking Update: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Acc: ${Math.round(accuracy)}m)`);
+                
+                setLocation({ lat: latitude, lng: longitude, accuracy, source: 'high-accuracy' }); 
+                setError(null);
             },
             (err) => {
                 console.error("Geolocation watch error:", err);
                 if (mountedRef.current) {
                     if (err.code === 1) setError("Location permission denied.");
                     else if (err.code === 2) setError("Position unavailable.");
-                    else if (err.code === 3) setError("Location request timed out.");
                 }
             },
-            {
-                enableHighAccuracy: true,
-                timeout: 30000, 
-                maximumAge: 0,
-            }
+            HIGH_ACCURACY_OPTIONS
         );
     };
 
@@ -177,3 +208,21 @@ export const useGeolocation = (userId?: string, role?: string) => {
         getCurrentCoordinates
     };
 };
+
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  var R = 6371; 
+  var dLat = deg2rad(lat2-lat1); 
+  var dLon = deg2rad(lon2-lon1); 
+  var a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+    ; 
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  var d = R * c; 
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI/180)
+}
