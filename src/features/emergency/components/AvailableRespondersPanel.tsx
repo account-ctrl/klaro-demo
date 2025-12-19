@@ -48,13 +48,14 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
             }
             return false;
         })
-        // 3. Responder Role Filter (Must be authorized personnel)
+        // 3. Responder Role Filter (STRICT: Only actual responders, no generic Admins)
         .filter(r => {
-            const isSystemResponder = ['responder', 'admin', 'health_worker'].includes(r.systemRole);
+            // Removed 'admin' from this list to prevent Captains from showing up unless they are also Tanods
+            const isSystemResponder = ['responder', 'health_worker'].includes(r.systemRole);
             const pos = r.position.toLowerCase();
             const hasKeyword = pos.includes('tanod') || pos.includes('bpso') || pos.includes('security') || 
                                pos.includes('driver') || pos.includes('ambulance') || pos.includes('health') || 
-                               pos.includes('doctor') || pos.includes('nurse');
+                               pos.includes('doctor') || pos.includes('nurse') || pos.includes('responder');
             
             return isSystemResponder || hasKeyword;
         });
