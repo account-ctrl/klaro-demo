@@ -36,6 +36,7 @@ import {
 import { PlusCircle, FilePen, Trash2 } from 'lucide-react';
 import type { User as Official } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ROLES, SystemRole } from '@/lib/config/roles'; // Import ROLES for label lookup
 
 export type OfficialFormValues = Omit<Official, 'userId'>
 
@@ -55,7 +56,7 @@ function OfficialForm({ record, onSave, onClose, positions, committees, systemRo
     password_hash: '', // Always clear password on open
     position: record?.position ?? '',
     committee: record?.committee ?? '',
-    systemRole: record?.systemRole ?? 'Viewer',
+    systemRole: record?.systemRole ?? 'staff', // Default to staff if undefined
     termStart: record?.termStart ?? '',
     termEnd: record?.termEnd ?? '',
     digitalSignatureUrl: record?.digitalSignatureUrl ?? '',
@@ -144,7 +145,15 @@ function OfficialForm({ record, onSave, onClose, positions, committees, systemRo
                             <Select onValueChange={(value) => handleSelectChange('systemRole', value as Official['systemRole'])} value={formData.systemRole} required>
                                 <SelectTrigger id="systemRole"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {systemRoles.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                    {systemRoles.map(r => {
+                                        // Look up the readable label from ROLES config
+                                        // If 'r' is not a valid key (legacy data), show it as-is
+                                        const roleConfig = ROLES[r as SystemRole];
+                                        const label = roleConfig ? roleConfig.label : r;
+                                        return (
+                                            <SelectItem key={r} value={r}>{label}</SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         </div>

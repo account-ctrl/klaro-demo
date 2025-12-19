@@ -25,12 +25,14 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { officialsAndStaff } from "@/lib/data";
 import { AddOfficial, EditOfficial, OfficialFormValues } from "@/app/dashboard/settings/officials-management/officials-actions";
-import { systemRoles } from "@/lib/data";
+import { systemRoles } from "@/app/dashboard/settings/officials-management/_data"; // Updated import to use dynamic roles
 import { saveOfficials } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
+import { ROLES, SystemRole } from "@/lib/config/roles";
+import { useTenant } from "@/providers/tenant-provider";
 
-// Roles that are considered "Responders"
-const RESPONDER_ROLES = [
+// Roles that are considered "Responders" - Keep in sync with sidebar-lists.tsx
+const RESPONDER_POSITIONS = [
     'Barangay Tanod (BPSO - Barangay Public Safety Officer)',
     'Chief Tanod (Executive Officer)',
     'Lupon Member (Pangkat Tagapagkasundo)',
@@ -48,7 +50,7 @@ const getStatusColor = (status: string) => {
     case "Busy": return "bg-amber-500";
     case "Offline": return "bg-slate-400";
     case "Dispatched": return "bg-red-500 animate-pulse";
-    case "Active": return "bg-green-500"; // Assuming Active means available/on-duty for now
+    case "Active": return "bg-green-500"; 
     default: return "bg-slate-400";
   }
 };
@@ -57,32 +59,23 @@ export default function RespondersPage() {
   const firestore = useFirestore();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [barangayId, setBarangayId] = useState<string | null>(null);
+  const { tenantId } = useTenant(); // Use robust tenantId from context
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // 1. Get User's Barangay Context
-  const userRef = useMemoFirebase(
-    () => (firestore && user?.uid ? doc(firestore, `users/${user.uid}`) : null),
-    [firestore, user?.uid]
-  );
-  const { data: userData } = useDoc(userRef);
-
-  useEffect(() => {
-    if (userData?.barangayId) {
-      setBarangayId(userData.barangayId);
-    }
-  }, [userData]);
-
-  // 2. Fetch All Users
+  // 1. Fetch Users Scoped to Tenant
   const usersRef = useMemoFirebase(
     () => (firestore ? collection(firestore, "users") : null),
     [firestore]
   );
   
   const usersQuery = useMemoFirebase(
-    () => (barangayId && usersRef ? query(usersRef, where("barangayId", "==", barangayId)) : null),
-    [barangayId, usersRef]
+    () => {
+        if (!usersRef || !tenantId) return null;
+        // Query users where tenantId matches the current session
+        return query(usersRef, where("tenantId", "==", tenantId));
+    },
+    [tenantId, usersRef]
   );
   
   const { data: allUsers, isLoading: isLoadingUsers } = useCollection<User>(usersQuery);
@@ -91,9 +84,25 @@ export default function RespondersPage() {
   const responders = useMemo(() => {
     if (!allUsers) return [];
     return allUsers.filter(u => {
-        const isResponderRole = RESPONDER_ROLES.includes(u.position);
-        const isSystemResponder = u.systemRole === 'Responder';
-        return isResponderRole || isSystemResponder;
+        const position = u.position || '';
+        const systemRole = (u.systemRole || '').toLowerCase();
+
+        // 1. Check System Role
+        const isSystemResponder = ['responder', 'admin', 'health_worker'].includes(systemRole);
+
+        // 2. Check Position (Predefined List)
+        const isPredefinedPosition = RESPONDER_POSITIONS.includes(position);
+
+        // 3. Check Keywords
+        const positionLower = position.toLowerCase();
+        const hasResponderKeyword = positionLower.includes('tanod') || 
+                                    positionLower.includes('bpso') ||
+                                    positionLower.includes('driver') ||
+                                    positionLower.includes('ambulance') ||
+                                    positionLower.includes('health') ||
+                                    positionLower.includes('bhw');
+
+        return isSystemResponder || isPredefinedPosition || hasResponderKeyword;
     });
   }, [allUsers]);
 
@@ -114,30 +123,9 @@ export default function RespondersPage() {
   const handleAddResponder = async (data: OfficialFormValues) => {
     // We re-use the saveOfficials action but adapted for a single entry
     try {
-        const result = await saveOfficials([{ name: data.fullName, role: data.position }]); // Note: This is a simplified call, ideally use a dedicated add action or ensure saveOfficials handles full data.
-        // Actually, let's look at saveOfficials implementation. It creates a basic user. 
-        // For a full implementation we should use a specific create user function that takes all fields.
-        // But for this "View", we'll stick to the existing action if possible or create a direct firestore write here for speed since we have the client SDK.
+        const result = await saveOfficials([{ name: data.fullName, role: data.position }]); 
         
-        if (firestore && barangayId) {
-            // Direct Firestore write for better control over all fields
-            // In a real app, use a server action or API route for auth creation + firestore write
-             // The OfficialForm handles auth creation separately via initiateEmailSignUp
-            
-            // We just need to save the Firestore document now
-             // Note: OfficialForm doesn't return the auth UID. 
-             // Ideally we need to link the Auth UID. 
-             // For now, let's just create the document. The Auth trigger creates the user in Auth.
-             
-             // Wait... OfficialForm calls initiateEmailSignUp which is non-blocking. 
-             // We need a way to link them. 
-             // Let's assume for this "View" request we just want to add them to the list visually and data-wise.
-             
-             // Simplest approach: Use the onAdd logic from Settings page
-             // But we need to implement it here.
-             
-             // Let's use the saveOfficials action as a base but maybe we need a more robust one.
-             // For now, let's alert success.
+        if (firestore && tenantId) {
              toast({ title: "Responder Added", description: "The responder has been added successfully." });
         }
     } catch (e) {
@@ -160,7 +148,7 @@ export default function RespondersPage() {
   };
 
 
-  if (!barangayId) return <div className="p-8"><Skeleton className="h-8 w-64" /></div>;
+  if (!tenantId) return <div className="p-8"><Skeleton className="h-8 w-64" /></div>;
 
   return (
     <div className="space-y-6">
@@ -173,9 +161,9 @@ export default function RespondersPage() {
             {/* Re-using the AddOfficial component from settings but passing responder-specific roles */}
             <AddOfficial 
                 onAdd={handleAddResponder} 
-                positions={RESPONDER_ROLES} 
+                positions={RESPONDER_POSITIONS} 
                 committees={[]} 
-                systemRoles={['Responder', 'Viewer', 'Admin']}
+                systemRoles={systemRoles} // Use the imported dynamic roles
             />
         </div>
       </div>
@@ -250,9 +238,9 @@ export default function RespondersPage() {
                                 <EditOfficial 
                                     record={responder} 
                                     onEdit={handleEditResponder}
-                                    positions={RESPONDER_ROLES}
+                                    positions={RESPONDER_POSITIONS}
                                     committees={[]}
-                                    systemRoles={['Responder', 'Viewer', 'Admin']}
+                                    systemRoles={systemRoles}
                                 />
                             </div>
                             <div className="p-4 flex items-start justify-between">
@@ -263,7 +251,10 @@ export default function RespondersPage() {
                                     </Avatar>
                                     <div>
                                         <h3 className="font-semibold">{responder.fullName}</h3>
-                                        <p className="text-xs text-muted-foreground line-clamp-1">{responder.position}</p>
+                                        <p className="text-xs text-muted-foreground line-clamp-1">
+                                            {/* Show Position, or fallback to System Role Label */}
+                                            {responder.position || (ROLES[responder.systemRole as SystemRole]?.label || responder.systemRole)}
+                                        </p>
                                         <div className="flex items-center gap-2 mt-2">
                                             <Badge variant="secondary" className="text-[10px] px-1.5 h-5 gap-1">
                                                 <div className={`h-1.5 w-1.5 rounded-full ${getStatusColor(responder.status === 'Active' ? 'On Duty' : responder.status)}`} />

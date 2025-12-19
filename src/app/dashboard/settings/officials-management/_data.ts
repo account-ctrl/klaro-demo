@@ -1,4 +1,6 @@
 
+import { ROLES, SystemRole } from '@/lib/config/roles';
+
 // Type definition to match the structure expected by the list component
 export type Official = {
     id?: string;
@@ -16,12 +18,11 @@ export type Official = {
 
 // Sample Data for Officials
 export const sampleOfficials: Official[] = [
-  { name: 'Juan Dela Cruz', position: 'Punong Barangay', status: 'Active' },
-  { name: 'Maria Clara', position: 'Barangay Secretary', status: 'Active' },
-  { name: 'Jose Rizal', position: 'Barangay Treasurer', status: 'Active' },
-  { name: 'Andres Bonifacio', position: 'Barangay Kagawad', committee: 'Peace and Order', status: 'Active' },
-  { name: 'Emilio Aguinaldo', position: 'Barangay Kagawad', committee: 'Health and Sanitation', status: 'Active' },
-  { name: 'Gabriela Silang', position: 'Barangay Kagawad', committee: 'Infrastructure', status: 'On Leave' },
+  { name: 'Juan Dela Cruz', position: 'Punong Barangay', status: 'Active', systemRole: 'admin' },
+  { name: 'Maria Clara', position: 'Barangay Secretary', status: 'Active', systemRole: 'secretary' },
+  { name: 'Jose Rizal', position: 'Barangay Treasurer', status: 'Active', systemRole: 'treasurer' },
+  { name: 'Andres Bonifacio', position: 'Barangay Kagawad', committee: 'Peace and Order', status: 'Active', systemRole: 'official' },
+  { name: 'Emilio Aguinaldo', position: 'Barangay Kagawad', committee: 'Health and Sanitation', status: 'Active', systemRole: 'official' },
 ];
 
 export const officialsAndStaff: string[] = [
@@ -46,8 +47,5 @@ export const committeeAssignments: string[] = [
     "Youth and Sports"
 ];
 
-export const systemRoles: string[] = [
-    "Admin",
-    "Staff",
-    "Read-Only"
-];
+// Export keys from ROLES config to ensure alignment
+export const systemRoles = Object.keys(ROLES) as SystemRole[];

@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ROLES, SystemRole } from "@/lib/config/roles";
 
-// Roles considered as Responders
-const RESPONDER_ROLES = [
+// Positions considered as Responders
+const RESPONDER_POSITIONS = [
     'Barangay Tanod (BPSO - Barangay Public Safety Officer)',
     'Chief Tanod (Executive Officer)',
     'Lupon Member (Pangkat Tagapagkasundo)',
@@ -28,38 +29,33 @@ const RESPONDER_ROLES = [
 export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
     const [isCollapsed, setIsCollapsed] = useState(false);
 
-    // Correctly filter responders based on user prompt
-    // 1. Must have a defined role (position or systemRole)
-    // 2. Filter logic:
-    //    - Has a position that is in the RESPONDER_ROLES list
-    //    - OR has 'Responder' in their systemRole
-    //    - OR has 'Tanod', 'Kagawad', or 'Responder' (case-insensitive) in their position string
-    
+    // Correctly filter responders based on the new Role System
     const responderList = useMemo(() => {
         if (!responders) return [];
         return responders.filter(u => {
             const position = u.position || '';
-            const systemRole = u.systemRole || '';
+            const systemRole = (u.systemRole || '').toLowerCase(); // Normalize
             
-            // Check direct match in predefined list
-            const isPredefinedResponder = RESPONDER_ROLES.includes(position);
+            // 1. Check System Role (Direct Assignment)
+            // Admins, Responders, and Health Workers are visible in the command center
+            const isSystemResponder = ['responder', 'admin', 'health_worker'].includes(systemRole);
+
+            // 2. Check Position (Legacy/Flexible Matching)
+            const isPredefinedPosition = RESPONDER_POSITIONS.includes(position);
             
-            // Check for keywords in position (flexible matching)
             const positionLower = position.toLowerCase();
             const hasResponderKeyword = positionLower.includes('tanod') || 
-                                        positionLower.includes('kagawad') || 
-                                        positionLower.includes('responder') ||
+                                        positionLower.includes('bpso') ||
+                                        positionLower.includes('kagawad') || // Officials might respond
+                                        positionLower.includes('security') ||
                                         positionLower.includes('driver') ||
                                         positionLower.includes('ambulance') ||
-                                        positionLower.includes('health worker') ||
-                                        positionLower.includes('bhw');
+                                        positionLower.includes('health') ||
+                                        positionLower.includes('bhw') ||
+                                        positionLower.includes('nurse') ||
+                                        positionLower.includes('doctor');
 
-            // Check system role
-            const isSystemResponder = systemRole === 'Responder';
-
-            // Must satisfy at least one condition AND generally be an active user (optional but good practice)
-            // Assuming we list all regardless of 'status' for visibility, but badge shows status.
-            return isPredefinedResponder || hasResponderKeyword || isSystemResponder;
+            return isSystemResponder || isPredefinedPosition || hasResponderKeyword;
         });
     }, [responders]);
 
@@ -113,7 +109,7 @@ export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
                                         </Avatar>
                                         <div className="flex flex-col min-w-0">
                                             <span className="font-medium text-xs text-zinc-200 truncate">{responder.fullName}</span>
-                                            <span className="text-[10px] text-zinc-500 truncate">{responder.position || responder.systemRole}</span>
+                                            <span className="text-[10px] text-zinc-500 truncate">{responder.position || (ROLES[responder.systemRole as SystemRole]?.label || responder.systemRole)}</span>
                                         </div>
                                     </div>
                                     <Badge
