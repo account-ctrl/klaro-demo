@@ -10,13 +10,14 @@ import { OnDutyToggle } from "./components/OnDutyToggle";
 import { SOSButton } from "./components/SosButton";
 import { WeatherHeader } from "../../app/dashboard/emergency/components/weather-header"; 
 import { useUser, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
-import { collection } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { User } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { GeolocationDebugger } from "./components/GeolocationDebugger";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { withRoleGuard } from '@/components/auth/role-guard';
 import { PERMISSIONS } from '@/lib/config/roles';
+import { useTenant } from "@/providers/tenant-provider";
 
 // Dynamically import map to avoid SSR issues
 const FeatureMap = dynamic(
@@ -35,14 +36,20 @@ function EmergencyCommandCenterPage() {
     // Auth & Data
     const { user: currentUser } = useUser();
     const firestore = useFirestore();
-    const usersCollection = useMemoFirebase(() => firestore ? collection(firestore, `/users`) : null, [firestore]);
-    const { data: users } = useCollection<User>(usersCollection);
+    const { tenantId } = useTenant();
+
+    // Fetch Tenant-Scoped Users Only
+    const usersQuery = useMemoFirebase(() => {
+        if (!firestore || !tenantId) return null;
+        return query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
+    }, [firestore, tenantId]);
+    
+    const { data: users } = useCollection<User>(usersQuery);
 
     // Geolocation for Debugger
-    // We use the hook here to pass the location to the map
     const { location: debugLocation, getCurrentCoordinates } = useGeolocation();
 
-    // Default center (placeholder)
+    // Default center
     const defaultCenter = { lat: 14.5995, lng: 120.9842 };
 
     const handleIncidentClick = (id: string) => {
@@ -60,14 +67,13 @@ function EmergencyCommandCenterPage() {
         }
     }, [incidents]);
 
-    // Auto-center on user location when it's first found (and no incident selected)
+    // Auto-center on user location
     useEffect(() => {
         if (debugLocation.lat && debugLocation.lng && !center) {
             setCenter({ lat: debugLocation.lat, lng: debugLocation.lng });
         }
     }, [debugLocation.lat, debugLocation.lng]);
 
-    // Initial fetch for debugger
     useEffect(() => {
         getCurrentCoordinates().catch(() => {});
     }, []);
@@ -107,7 +113,7 @@ function EmergencyCommandCenterPage() {
                 <WeatherHeader />
             </div>
 
-            {/* Left Panel: Geolocation Debugger (New) */}
+            {/* Left Panel: Geolocation Debugger */}
             <div className="absolute top-24 left-6 z-10 pointer-events-auto">
                 <GeolocationDebugger currentUser={currentUser} />
             </div>
@@ -123,7 +129,7 @@ function EmergencyCommandCenterPage() {
                 </div>
             </div>
 
-            {/* SOS Button (Bottom Right) */}
+            {/* SOS Button */}
             <div className="absolute bottom-10 right-96 z-50 pointer-events-auto">
                  <SOSButton />
             </div>
@@ -131,7 +137,6 @@ function EmergencyCommandCenterPage() {
     );
 }
 
-// Helper for dynamic map loading with container
 const MapContainerWrapper = dynamic(
     () => import('react-leaflet').then(mod => {
         return function MapWrapper({ children, center, zoom }: any) {

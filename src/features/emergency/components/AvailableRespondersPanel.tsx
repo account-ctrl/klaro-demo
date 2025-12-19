@@ -11,15 +11,33 @@ interface AvailableRespondersPanelProps {
 }
 
 export function AvailableRespondersPanel({ responders, users }: AvailableRespondersPanelProps) {
-    // Map responder location data to user profile data
-    const activeResponders = responders.map(r => {
-        const userProfile = users.find(u => u.userId === r.userId);
-        return {
-            ...r,
-            name: userProfile?.fullName || 'Unknown Officer',
-            role: userProfile?.position || userProfile?.systemRole || 'Responder'
-        };
-    });
+    // Threshold: 10 minutes in milliseconds
+    // If a responder hasn't pinged in 10 mins, they are likely offline/stale.
+    const STALE_THRESHOLD_MS = 10 * 60 * 1000;
+    const now = Date.now();
+
+    // 1. Map & Filter
+    const activeResponders = responders
+        .map(r => {
+            const userProfile = users.find(u => u.userId === r.userId);
+            return {
+                ...r,
+                userProfile, // Keep the profile for checking
+                name: userProfile?.fullName || 'Unknown Officer',
+                role: userProfile?.position || userProfile?.systemRole || 'Responder'
+            };
+        })
+        // 2. Strict Tenant Scope Check: 
+        // If userProfile is missing, it means this responder ID does NOT belong to the current tenant's user list.
+        .filter(r => r.userProfile !== undefined)
+        // 3. Stale Check: 
+        // Filter out if last_active is older than threshold.
+        .filter(r => {
+            if (!r.last_active) return false;
+            // Convert Firestore Timestamp to millis
+            const lastActiveMs = r.last_active.toMillis();
+            return (now - lastActiveMs) < STALE_THRESHOLD_MS;
+        });
 
     return (
         <div className="bg-zinc-900/90 backdrop-blur border border-zinc-800 rounded-lg overflow-hidden flex flex-col max-h-[30vh]">
@@ -33,7 +51,7 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
             <ScrollArea className="flex-1">
                 {activeResponders.length === 0 ? (
                     <div className="p-4 text-center text-zinc-500 text-sm">
-                        No responders currently online.
+                        No active responders online.
                     </div>
                 ) : (
                     <div className="divide-y divide-zinc-800">
