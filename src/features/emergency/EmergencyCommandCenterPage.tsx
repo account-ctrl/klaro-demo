@@ -36,7 +36,7 @@ function EmergencyCommandCenterPage() {
     // Auth & Data
     const { user: currentUser } = useUser();
     const firestore = useFirestore();
-    const { tenantId } = useTenant();
+    const { tenantId, tenantPath } = useTenant();
 
     // Fetch Tenant-Scoped Users Only
     const usersQuery = useMemoFirebase(() => {
@@ -45,6 +45,20 @@ function EmergencyCommandCenterPage() {
     }, [firestore, tenantId]);
     
     const { data: users } = useCollection<User>(usersQuery);
+
+    // DEBUGGING LOGS
+    useEffect(() => {
+        if (users && responders) {
+            console.group("Emergency Center Debug");
+            console.log("Tenant ID:", tenantId);
+            console.log("Tenant Path:", tenantPath);
+            console.log("Users Fetched (Tenant-Scoped):", users.length);
+            console.log("Users List:", users.map(u => u.fullName));
+            console.log("Responders (Location Docs):", responders.length);
+            console.log("Responder IDs:", responders.map(r => r.userId));
+            console.groupEnd();
+        }
+    }, [users, responders, tenantId, tenantPath]);
 
     // Geolocation for Debugger
     const { location: debugLocation, getCurrentCoordinates } = useGeolocation();

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EditOfficial, DeleteOfficial } from "./officials-actions";
 import { Briefcase, Users, Calendar, CheckSquare } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
+import { ROLES, SystemRole } from "@/lib/config/roles";
 
 type OfficialCardProps = { 
     official: Official;
@@ -18,17 +19,14 @@ type OfficialCardProps = {
 };
 
 const getSystemRoleBadgeVariant = (role: string) => {
-  switch (role) {
-    case "Super Admin":
-      return "destructive";
-    case "Admin":
-      return "default";
-    case "Encoder":
-    case "Responder":
-      return "secondary";
-    default:
-      return "outline";
-  }
+  const normalizedRole = role.toLowerCase();
+  
+  if (normalizedRole === 'superadmin') return 'destructive';
+  if (normalizedRole === 'admin') return 'default';
+  if (normalizedRole === 'secretary' || normalizedRole === 'treasurer') return 'secondary';
+  if (normalizedRole === 'responder') return 'default'; // Make responder prominent
+  
+  return 'outline';
 };
 
 const formatDate = (dateValue: any): string => {
@@ -65,6 +63,10 @@ export function OfficialCard({
   const displayName = official.fullName || "Unknown Official";
   const initials = displayName.charAt(0).toUpperCase();
   const displayEmail = official.email ? official.email.split('@')[0] : 'user';
+  
+  // Resolve readable role label
+  const roleKey = official.systemRole?.toLowerCase() as SystemRole;
+  const roleLabel = ROLES[roleKey]?.label || official.systemRole || 'User';
 
   return (
     <Card className="flex flex-col">
@@ -107,7 +109,7 @@ export function OfficialCard({
         <div className="flex justify-between items-center w-full mb-4">
              <div className="flex items-center gap-2">
                  <CheckSquare className="h-4 w-4 text-muted-foreground" />
-                 <Badge variant={getSystemRoleBadgeVariant(official.systemRole || 'User')}>{official.systemRole || 'User'}</Badge>
+                 <Badge variant={getSystemRoleBadgeVariant(official.systemRole || 'User')}>{roleLabel}</Badge>
             </div>
              <p className="text-xs text-muted-foreground">ID: ...{official.userId ? official.userId.slice(-6) : '???'}</p>
         </div>

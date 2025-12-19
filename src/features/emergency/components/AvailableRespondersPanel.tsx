@@ -35,8 +35,12 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
         .filter(r => {
             if (!r.last_active) return false;
             // Convert Firestore Timestamp to millis
-            const lastActiveMs = r.last_active.toMillis();
-            return (now - lastActiveMs) < STALE_THRESHOLD_MS;
+            // Check if last_active is a valid Timestamp object
+            if (typeof r.last_active.toMillis === 'function') {
+                const lastActiveMs = r.last_active.toMillis();
+                return (now - lastActiveMs) < STALE_THRESHOLD_MS;
+            }
+            return false;
         });
 
     return (
@@ -67,7 +71,7 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
                                     </div>
                                     <p className="text-xs text-zinc-400 truncate">{responder.role}</p>
                                     <p className="text-[10px] text-zinc-500 mt-0.5">
-                                        Active {responder.last_active ? formatDistanceToNow(responder.last_active.toDate()) : 'recently'} ago
+                                        Active {responder.last_active && typeof responder.last_active.toDate === 'function' ? formatDistanceToNow(responder.last_active.toDate()) : 'recently'} ago
                                     </p>
                                 </div>
                             </div>

@@ -217,6 +217,23 @@ export function FeatureMap({
         }).filter(Boolean);
     }, [blotterCases, residents, householdMap, visibleLayers.showBlotter]);
 
+    // Added Logic: Filter responders who are stale (Offline)
+    // We reuse the same logic from the panel to ensure the map matches the list
+    const STALE_THRESHOLD_MS = 10 * 60 * 1000;
+    const now = Date.now();
+    
+    const activeResponders = useMemo(() => {
+        return responders.filter(r => {
+            if (!r.last_active) return false;
+            // Check if last_active is a valid Timestamp
+            if (typeof r.last_active.toMillis === 'function') {
+                const lastActiveMs = r.last_active.toMillis();
+                return (now - lastActiveMs) < STALE_THRESHOLD_MS;
+            }
+            return false;
+        });
+    }, [responders, now]);
+
     return (
         <>
             {center && <RecenterMap lat={center.lat} lng={center.lng} />}
@@ -301,7 +318,7 @@ export function FeatureMap({
             {/* Assets / Responders Layer */}
             {visibleLayers.showAssets && (
                 <LayerGroup>
-                    {responders.map((responder) => (
+                    {activeResponders.map((responder) => (
                         <Marker 
                             key={responder.userId} 
                             position={[responder.latitude, responder.longitude]}
@@ -311,7 +328,7 @@ export function FeatureMap({
                                 <div className="text-sm">
                                     <strong>Responder</strong><br/>
                                     Status: {responder.status}<br/>
-                                    Last Active: {responder.last_active ? formatDistanceToNow(responder.last_active.toDate(), {addSuffix: true}) : 'Unknown'}
+                                    Last Active: {responder.last_active && typeof responder.last_active.toDate === 'function' ? formatDistanceToNow(responder.last_active.toDate(), {addSuffix: true}) : 'Unknown'}
                                 </div>
                             </Popup>
                         </Marker>
