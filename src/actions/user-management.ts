@@ -41,18 +41,16 @@ export async function createUserAction(params: CreateUserParams) {
         });
 
         // 3. Create User Document (Root 'users' collection)
-        // This is what the Emergency System queries for responders
         await adminDb.collection('users').doc(userRecord.uid).set({
             userId: userRecord.uid,
             fullName: params.fullName,
             email: params.email,
             position: params.position,
             systemRole: normalizedRole,
-            tenantId: params.tenantId, // Link to tenant
+            tenantId: params.tenantId, 
             tenantPath: params.tenantPath,
             status: 'Active',
             createdAt: FieldValue.serverTimestamp(),
-            // Store role in DB too for easy querying without decoding tokens
             role: normalizedRole 
         });
 
@@ -64,11 +62,63 @@ export async function createUserAction(params: CreateUserParams) {
         
         // Handle "Email already exists" gracefully
         if (error.code === 'auth/email-already-exists') {
-            // Option: Try to find the user and link them? 
-            // For now, return specific error
             return { success: false, error: "A user with this email already exists." };
         }
 
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Smart Sync: Checks if user exists. 
+ * If yes -> Updates claims/doc and returns ID.
+ * If no -> Creates new user.
+ */
+export async function syncCaptainAction(params: CreateUserParams) {
+    console.log("[Server Action] Syncing Captain:", params.email);
+
+    try {
+        // 1. Try to fetch existing user
+        const existingUser = await adminAuth.getUserByEmail(params.email);
+        
+        console.log(`[Server Action] Found existing captain user: ${existingUser.uid}`);
+        
+        // 2. Update their claims to ensure they are Admin of THIS tenant
+        const normalizedRole = 'admin'; // Captain is always admin
+        await adminAuth.setCustomUserClaims(existingUser.uid, {
+            tenantId: params.tenantId,
+            tenantPath: params.tenantPath,
+            role: normalizedRole
+        });
+
+        // 3. Update/Ensure User Doc exists
+        await adminDb.collection('users').doc(existingUser.uid).set({
+            userId: existingUser.uid,
+            fullName: params.fullName, // Update name from profile if changed
+            email: params.email,
+            position: params.position,
+            systemRole: normalizedRole,
+            tenantId: params.tenantId,
+            tenantPath: params.tenantPath,
+            status: 'Active',
+            role: normalizedRole,
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        return { success: true, userId: existingUser.uid, isNew: false };
+
+    } catch (error: any) {
+        // If user not found, create them
+        if (error.code === 'auth/user-not-found') {
+            console.log("[Server Action] Captain user not found. Creating new...");
+            const result = await createUserAction(params);
+            if (result.success) {
+                return { success: true, userId: result.userId, isNew: true };
+            }
+            return result;
+        }
+        
+        console.error("[Server Action] Sync error:", error);
         return { success: false, error: error.message };
     }
 }

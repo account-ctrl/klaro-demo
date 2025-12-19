@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ResponderLocation, User } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import { ShieldCheck, User as UserIcon } from "lucide-react";
+import { ROLES, SystemRole } from "@/lib/config/roles";
 
 interface AvailableRespondersPanelProps {
     responders: ResponderLocation[];
@@ -11,31 +12,31 @@ interface AvailableRespondersPanelProps {
 }
 
 export function AvailableRespondersPanel({ responders, users }: AvailableRespondersPanelProps) {
-    // Threshold: 10 minutes in milliseconds
-    // If a responder hasn't pinged in 10 mins, they are likely offline/stale.
     const STALE_THRESHOLD_MS = 10 * 60 * 1000;
     const now = Date.now();
 
-    // 1. Map & Filter
     const activeResponders = responders
         .map(r => {
             const userProfile = users.find(u => u.userId === r.userId);
+            
+            // Prioritize User Profile data for accuracy
+            const rawName = userProfile?.fullName || (userProfile as any)?.name;
+            const displayName = rawName && rawName !== 'undefined' ? rawName : 'Unknown Officer';
+            
+            // Resolve Role Label
+            const rawRoleKey = (userProfile?.systemRole || 'responder').toLowerCase() as SystemRole;
+            const roleLabel = userProfile?.position || ROLES[rawRoleKey]?.label || 'Responder';
+
             return {
                 ...r,
-                userProfile, // Keep the profile for checking
-                name: userProfile?.fullName || 'Unknown Officer',
-                role: userProfile?.position || userProfile?.systemRole || 'Responder'
+                userProfile, 
+                displayName, // Use strict display name
+                displayRole: roleLabel
             };
         })
-        // 2. Strict Tenant Scope Check: 
-        // If userProfile is missing, it means this responder ID does NOT belong to the current tenant's user list.
         .filter(r => r.userProfile !== undefined)
-        // 3. Stale Check: 
-        // Filter out if last_active is older than threshold.
         .filter(r => {
             if (!r.last_active) return false;
-            // Convert Firestore Timestamp to millis
-            // Check if last_active is a valid Timestamp object
             if (typeof r.last_active.toMillis === 'function') {
                 const lastActiveMs = r.last_active.toMillis();
                 return (now - lastActiveMs) < STALE_THRESHOLD_MS;
@@ -66,10 +67,14 @@ export function AvailableRespondersPanel({ responders, users }: AvailableRespond
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center">
-                                        <p className="text-sm font-medium text-white truncate">{responder.name}</p>
+                                        <p className="text-sm font-medium text-white truncate" title={responder.displayName}>
+                                            {responder.displayName}
+                                        </p>
                                         <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                                     </div>
-                                    <p className="text-xs text-zinc-400 truncate">{responder.role}</p>
+                                    <p className="text-xs text-zinc-400 truncate" title={responder.displayRole}>
+                                        {responder.displayRole}
+                                    </p>
                                     <p className="text-[10px] text-zinc-500 mt-0.5">
                                         Active {responder.last_active && typeof responder.last_active.toDate === 'function' ? formatDistanceToNow(responder.last_active.toDate()) : 'recently'} ago
                                     </p>

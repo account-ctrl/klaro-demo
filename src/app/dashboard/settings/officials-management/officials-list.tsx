@@ -19,7 +19,7 @@ import { Paths } from '@/lib/firebase/paths';
 // CORRECTED IMPORTS
 import { AddOfficial, EditOfficial } from './officials-actions';
 import { OfficialCard } from './official-card';
-import { createUserAction } from '@/actions/user-management'; // Import Server Action
+import { createUserAction, syncCaptainAction } from '@/actions/user-management'; // Import Server Actions
 
 // Sample Data
 import { officialsAndStaff, committeeAssignments, systemRoles, sampleOfficials } from './_data';
@@ -57,11 +57,7 @@ export const OfficialsList = () => {
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleAdd = async (newOfficial: any) => {
-        // Fallback: If tenantId is missing but path exists (legacy), use the last segment as ID
-        const effectiveTenantId = tenantId || (tenantPath ? tenantPath.split('/').pop() : '');
-
-        if (!firestore || !effectiveTenantId || !tenantPath) {
-            console.error("Missing Context:", { firestore: !!firestore, tenantId: effectiveTenantId, tenantPath });
+        if (!firestore || !tenantId || !tenantPath) {
             toast({ variant: 'destructive', title: 'Error', description: 'Missing tenant context.' });
             return;
         }
@@ -74,7 +70,7 @@ export const OfficialsList = () => {
                 fullName: newOfficial.name || newOfficial.fullName,
                 position: newOfficial.position,
                 systemRole: newOfficial.systemRole,
-                tenantId: effectiveTenantId,
+                tenantId: tenantId,
                 tenantPath: tenantPath
             });
 
@@ -85,7 +81,6 @@ export const OfficialsList = () => {
             const userId = result.userId;
 
             // 2. Add to Tenant's Officials List (Display Purpose)
-            // We force the ID to match the Auth UID for easy lookup
             const officialDocRef = doc(officialsCollectionRef!, userId);
             
             // Clean up data for official record (remove password)
@@ -150,11 +145,20 @@ export const OfficialsList = () => {
         if (!officialsCollectionRef) { console.log("Missing Officials Path"); return; }
         if (!profile) { console.log("Missing Profile"); return; }
         
-        const captainName = profile.captainProfile?.name || profile.name; 
+        // Logic: Check if "Punong Barangay" exists. If not, add using profile.captainProfile
+        const captainName = profile.captainProfile?.name || profile.name; // Fallback
         const captainEmail = profile.captainProfile?.email || profile.email;
         
+        console.log("Syncing Profile:", { captainName, captainEmail });
+
         if (!captainName) {
              toast({ variant: 'destructive', title: 'Missing Profile', description: 'No Captain profile found in settings.' });
+             return;
+        }
+
+        // Validate email presence before attempting create
+        if (!captainEmail) {
+             toast({ variant: 'destructive', title: 'Missing Email', description: 'Please set an official email address in Settings > Profile first.' });
              return;
         }
 
@@ -164,22 +168,55 @@ export const OfficialsList = () => {
             return;
         }
 
+        if (!tenantId || !tenantPath) {
+             toast({ variant: 'destructive', title: 'Error', description: 'Missing tenant context.' });
+             return;
+        }
+
         setIsProcessing(true);
         try {
-            // Use the Server Action for Captain too!
-            await handleAdd({
+            // Use SMART SYNC Action
+            const result = await syncCaptainAction({
                 fullName: captainName,
                 email: captainEmail,
                 position: 'Punong Barangay',
                 systemRole: 'admin',
-                password_hash: 'Captain123!', // Default password for synced captain
-                termStart: new Date(),
-                termEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 3)),
+                password_hash: 'Captain123!', // Default password ONLY used if creating new
+                termStart: new Date() as any, // Cast for type compat if needed
+                termEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 3)) as any,
+                tenantId,
+                tenantPath
             });
-            // Toast handled by handleAdd
-        } catch (error) {
+
+            if (!result.success || !result.userId) {
+                throw new Error(result.error || "Failed to sync captain.");
+            }
+
+            // Create Local Official Record linked to Auth ID
+            const officialDocRef = doc(officialsCollectionRef!, result.userId);
+            
+            await setDoc(officialDocRef, {
+                id: result.userId,
+                name: captainName,
+                position: 'Punong Barangay',
+                email: captainEmail,
+                systemRole: 'admin',
+                status: 'Active',
+                termStart: serverTimestamp(),
+                termEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 3)),
+                createdAt: serverTimestamp()
+            });
+
+            toast({ 
+                title: 'Captain Synced', 
+                description: result.isNew 
+                    ? `New account created for ${captainName}.` 
+                    : `Linked to existing account for ${captainName}.` 
+            });
+
+        } catch (error: any) {
             console.error("Sync Error:", error);
-            toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not sync Captain.' });
+            toast({ variant: 'destructive', title: 'Sync Failed', description: error.message || 'Could not sync Captain.' });
         } finally {
             setIsProcessing(false);
         }
