@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -37,6 +38,8 @@ import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import { updateDoc } from 'firebase/firestore';
 import { getRegionName } from '@/lib/data/psgc'; 
 import dynamic from 'next/dynamic';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 // Dynamically import TerritoryEditor to avoid SSR issues with Leaflet
 const TerritoryEditor = dynamic(() => import('@/components/settings/TerritoryEditor'), {
@@ -72,7 +75,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 type FinancialFormValues = z.infer<typeof financialFormSchema>;
 type SystemFormValues = z.infer<typeof systemFormSchema>;
 
-export default function SettingsPage() {
+function SettingsPage() {
     const { toast } = useToast();
     const { profile, isLoading, docRef } = useTenantProfile();
     
@@ -559,3 +562,6 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+// Protect: Only Admin/Secretary can change settings.
+export default withRoleGuard(SettingsPage, [PERMISSIONS.VIEW_SETTINGS]);

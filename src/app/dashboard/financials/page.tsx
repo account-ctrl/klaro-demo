@@ -12,8 +12,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialsTable } from "./financials-table";
 import { DisbursementsTable } from "./disbursements-table";
+import { withRoleGuard } from "@/components/auth/role-guard";
+import { PERMISSIONS } from "@/lib/config/roles";
 
-export default function FinancialsPage() {
+function FinancialsPage() {
   return (
     <div className="space-y-6">
       <div>
@@ -46,3 +48,6 @@ export default function FinancialsPage() {
     </div>
   );
 }
+
+// Protect this page: Only users with VIEW_FINANCIALS can see it.
+export default withRoleGuard(FinancialsPage, [PERMISSIONS.VIEW_FINANCIALS]);
