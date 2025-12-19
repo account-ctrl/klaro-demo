@@ -1,3 +1,4 @@
+'use client';
 
 import { InsightsGenerator } from "./insights-generator";
 import { withRoleGuard } from '@/components/auth/role-guard';
