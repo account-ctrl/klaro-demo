@@ -10,7 +10,13 @@ import { useBarangayRef } from './use-barangay-data';
  */
 export const useFixedAssets = () => {
   const assetsRef = useBarangayRef('fixed_assets');
-  const { data: assets, isLoading, error } = useCollection<FixedAsset>(assetsRef);
+  const { data: rawAssets, isLoading, error } = useCollection<FixedAsset>(assetsRef);
+
+  // Map Firestore 'id' to 'assetId' to match the type definition
+  const assets = rawAssets?.map(doc => ({
+    ...doc,
+    assetId: doc.id
+  })) as FixedAsset[] | null;
 
   return { data: assets, isLoading, error };
 };
@@ -21,7 +27,13 @@ export const useFixedAssets = () => {
  */
 export const useAssetBookings = () => {
   const bookingsRef = useBarangayRef('asset_bookings');
-  const { data: bookings, isLoading, error } = useCollection<AssetBooking>(bookingsRef);
+  const { data: rawBookings, isLoading, error } = useCollection<AssetBooking>(bookingsRef);
+
+  // Map Firestore 'id' to 'bookingId'
+  const bookings = rawBookings?.map(doc => ({
+    ...doc,
+    bookingId: doc.id
+  })) as AssetBooking[] | null;
 
   return { data: bookings, isLoading, error };
 };
@@ -38,7 +50,13 @@ export const useMaintenanceLogs = (assetId: string) => {
     return logsRef ? query(logsRef, where("assetId", "==", assetId)) : null;
   }, [logsRef, assetId]);
   
-  const { data: logs, isLoading, error } = useCollection<MaintenanceLog>(q);
+  const { data: rawLogs, isLoading, error } = useCollection<MaintenanceLog>(q);
+
+  // Map Firestore 'id' to 'logId'
+  const logs = rawLogs?.map(doc => ({
+    ...doc,
+    logId: doc.id
+  })) as MaintenanceLog[] | null;
 
   return { data: logs, isLoading, error };
 };
