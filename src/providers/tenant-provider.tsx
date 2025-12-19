@@ -53,14 +53,42 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       try {
         const tokenResult = await auth.currentUser.getIdTokenResult(true);
         // Normalize role: 'super_admin' -> 'superadmin' to match our config
-        let userRole = tokenResult.claims.role as string;
-        if (userRole === 'super_admin') userRole = 'superadmin';
+        let rawRole = (tokenResult.claims.role as string) || '';
         
-        if (isMounted) setRole(userRole);
+        // --- PRIORITY 3: Fallback to User Profile (Firestore) ---
+        // If claims are missing, fetch from DB
+        let dbRole = '';
+        const userRef = doc(firestore, 'users', auth.currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            dbRole = userData.role || '';
+            
+            // Resolve Tenant Path from DB if not in claim
+            if (!tokenResult.claims.tenantPath && userData.tenantId) {
+                 const path = await getTenantPath(firestore, userData.tenantId);
+                 if (path && isMounted) {
+                     setTenantPath(path);
+                     setTenantId(userData.tenantId);
+                 }
+            }
+        }
+
+        // Determine Final Role & Normalize
+        let finalRole = rawRole || dbRole;
+        if (finalRole) {
+            finalRole = finalRole.toLowerCase(); // Force lowercase 'Admin' -> 'admin'
+            if (finalRole === 'super_admin') finalRole = 'superadmin';
+            
+            if (isMounted) setRole(finalRole);
+        } else {
+            console.warn("User has no role assigned. Sidebar will be empty.");
+        }
 
         // --- PRIORITY 1: Super Admin Context Switching (URL Override) ---
         const overrideTenantId = searchParams.get('tenantId');
-        if (overrideTenantId && userRole === 'superadmin') {
+        if (overrideTenantId && finalRole === 'superadmin') {
             const path = await getTenantPath(firestore, overrideTenantId);
             if (path) {
                 if (isMounted) {
@@ -75,10 +103,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
 
         // --- PRIORITY 2: User's Assigned Tenant (Custom Claims) ---
+        // If we haven't already set tenant from override or DB fallback...
         const claimPath = tokenResult.claims.tenantPath as string;
         const claimId = tokenResult.claims.tenantId as string;
 
-        if (claimPath) {
+        if (claimPath && !tenantPath) { // Only set if not already set by override
           if (isMounted) {
               setTenantPath(claimPath);
               setTenantId(claimId); 
@@ -87,26 +116,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           return;
         }
         
-        // --- PRIORITY 3: Fallback to User Profile (Firestore) ---
-        const userRef = doc(firestore, 'users', auth.currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
-            // Fallback role from DB if claim is missing (legacy users)
-            if (!userRole && userData.role) {
-                 if (isMounted) setRole(userData.role === 'super_admin' ? 'superadmin' : userData.role);
-            }
-
-            if (userData.tenantId) {
-                 const path = await getTenantPath(firestore, userData.tenantId);
-                 if (path && isMounted) {
-                     setTenantPath(path);
-                     setTenantId(userData.tenantId);
-                     setIsLoading(false);
-                     return;
-                 }
-            }
+        // If we found a path via DB fallback earlier
+        if (tenantPath) {
+            if (isMounted) setIsLoading(false);
+            return;
         }
 
         // --- PRIORITY 4: No Tenant Found (Orphaned User) ---
