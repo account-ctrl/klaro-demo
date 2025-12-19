@@ -46,8 +46,9 @@ export function useBarangayRef(collectionName: string) {
 
 /**
  * Generic hook to fetch a collection under the current tenant.
+ * Includes mapping 'id' to specific ID fields based on type.
  */
-function useBarangayCollection<T>(collectionName: string, orderByField?: string, orderDirection?: 'asc' | 'desc') {
+function useBarangayCollection<T>(collectionName: string, orderByField?: string, orderDirection?: 'asc' | 'desc', idField?: string) {
   const collectionRef = useBarangayRef(collectionName);
   const q = useMemoFirebase(() => {
       if (!collectionRef) return null;
@@ -57,40 +58,53 @@ function useBarangayCollection<T>(collectionName: string, orderByField?: string,
       return collectionRef;
   }, [collectionRef, orderByField, orderDirection]);
 
-  return useCollection<T>(q);
+  const { data: rawData, isLoading, error, add, remove, update, set } = useCollection<T>(q);
+
+  // Map 'id' to the specific ID field if provided
+  const data = useMemoFirebase(() => {
+      if (!rawData) return null;
+      if (!idField) return rawData as unknown as T[];
+      
+      return rawData.map(item => ({
+          ...item,
+          [idField]: item.id
+      })) as unknown as T[];
+  }, [rawData, idField]);
+
+  return { data, isLoading, error, add, remove, update, set };
 }
 
 export function useResidents() {
-    return useBarangayCollection<Resident>('residents');
+    return useBarangayCollection<Resident>('residents', undefined, undefined, 'residentId');
 }
 
 export function useDocuments() {
     // Sort by dateRequested descending to show most recent first
-    return useBarangayCollection<CertificateRequest>('certificate_requests', 'dateRequested', 'desc');
+    return useBarangayCollection<CertificateRequest>('certificate_requests', 'dateRequested', 'desc', 'requestId');
 }
 
 export function useDocumentTypes() {
-    return useBarangayCollection<CertificateType>('certificate_types');
+    return useBarangayCollection<CertificateType>('certificate_types', undefined, undefined, 'certTypeId');
 }
 
 export function useFinancials() {
-    return useBarangayCollection<FinancialTransaction>('financial_transactions');
+    return useBarangayCollection<FinancialTransaction>('financial_transactions', undefined, undefined, 'transactionId');
 }
 
 export function useHouseholds() {
-    return useBarangayCollection<Household>('households');
+    return useBarangayCollection<Household>('households', undefined, undefined, 'householdId');
 }
 
 export function usePuroks() {
-    return useBarangayCollection<Purok>('puroks');
+    return useBarangayCollection<Purok>('puroks', undefined, undefined, 'purokId');
 }
 
 export function useDocumentTemplates() {
-    return useBarangayCollection<DocumentTemplate>('document_templates');
+    return useBarangayCollection<DocumentTemplate>('document_templates', undefined, undefined, 'templateId');
 }
 
 export function useEmergencyAlerts() {
-    return useBarangayCollection<EmergencyAlert>('emergency_alerts');
+    return useBarangayCollection<EmergencyAlert>('emergency_alerts', undefined, undefined, 'alertId');
 }
 
 export function useResponderLocations() {
@@ -98,7 +112,7 @@ export function useResponderLocations() {
 }
 
 export function useBlotterCases() {
-    return useBarangayCollection<BlotterCase>('blotter_cases', 'dateReported', 'desc');
+    return useBarangayCollection<BlotterCase>('blotter_cases', 'dateReported', 'desc', 'caseId');
 }
 
 export function useOfficials() {
@@ -110,5 +124,15 @@ export function useOfficials() {
         // But ideally, we should filter by tenantId in the query if they are stored globally.
         return collection(firestore, '/users');
     }, [firestore]);
-    return useCollection<User>(officialsCollectionRef);
+    const { data: rawData, isLoading, error } = useCollection<User>(officialsCollectionRef);
+    
+    const data = useMemoFirebase(() => {
+        if (!rawData) return null;
+        return rawData.map(item => ({
+            ...item,
+            userId: item.id
+        })) as unknown as User[];
+    }, [rawData]);
+
+    return { data, isLoading, error };
 }
