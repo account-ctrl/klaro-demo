@@ -88,8 +88,12 @@ export const useGeolocation = (userId?: string, role?: string) => {
                     if (err.code === 1) { 
                         navigator.geolocation.clearWatch(watchId);
                         clearTimeout(timeoutId);
-                        setError("Permission Denied");
-                        reject(new Error("Permission Denied"));
+                        const msg = "Location permission denied.";
+                        setError(msg);
+                        // Do NOT reject immediately here if it's the watch loop; 
+                        // let the timeout handle it or UI show the error state.
+                        // But for one-time request, we should probably fail.
+                        reject(new Error(msg));
                     }
                 },
                 HIGH_ACCURACY_OPTIONS
@@ -101,12 +105,15 @@ export const useGeolocation = (userId?: string, role?: string) => {
                     finish(bestPosition);
                 } else {
                     navigator.geolocation.clearWatch(watchId);
-                    // Fallback to single shot
+                    // Fallback to single shot (Low Accuracy) if high accuracy timed out
+                    // Note: If permission was DENIED, this will also fail immediately, which is fine.
                     navigator.geolocation.getCurrentPosition(
                         (pos) => finish(pos),
                         (err) => {
                             const msg = "Location failed completely.";
                             setError(msg);
+                            // Only reject if we haven't already (e.g. from permission denied above)
+                            // But promises settle only once so it's safe.
                             reject(new Error(msg));
                         },
                         { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
@@ -177,7 +184,9 @@ export const useGeolocation = (userId?: string, role?: string) => {
             (err) => {
                 console.error("Geolocation watch error:", err);
                 if (mountedRef.current) {
-                    if (err.code === 1) setError("Location permission denied.");
+                    if (err.code === 1) {
+                        setError("Location permission denied. Please enable GPS in your browser settings.");
+                    }
                     else if (err.code === 2) setError("Position unavailable.");
                 }
             },
