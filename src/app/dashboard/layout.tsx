@@ -27,9 +27,11 @@ import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
@@ -201,7 +203,7 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
                 <div className="h-6 w-[1px] bg-white/20 mx-1 hidden xl:block"></div>
                 
                 <Link href="/dashboard/settings" passHref>
-                    <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9">
+                    <Button variant="ghost" size="icon" className="text-white/80 hover:bg-white/10 hover:text-white h-9 w-9" title="Settings">
                         <Settings size={18} />
                     </Button>
                 </Link>
@@ -228,6 +230,29 @@ const InnerLayout = ({ children }: { children: React.ReactNode }) => {
                         </p>
                         </div>
                     </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                        <DropdownMenuItem asChild>
+                            <Link href="/dashboard/profile" className="cursor-pointer">
+                                <User className="mr-2 h-4 w-4" />
+                                <span>My Profile</span>
+                                <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href="/dashboard/settings" className="cursor-pointer">
+                                <Settings className="mr-2 h-4 w-4" />
+                                <span>Settings</span>
+                                <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href="/dashboard/notifications" className="cursor-pointer">
+                                <Bell className="mr-2 h-4 w-4" />
+                                <span>Notifications</span>
+                            </Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuGroup>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
                         onSelect={(e) => {

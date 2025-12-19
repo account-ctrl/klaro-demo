@@ -9,6 +9,8 @@ import {
   FileText,
   Megaphone,
   Users,
+  Settings,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,17 +58,41 @@ export function SidebarNav() {
     { href: "/resident/directory", label: "Directory", icon: <Users size={20} /> },
   ];
 
+  const systemItems = [
+    { href: "/resident/profile", label: "My Profile", icon: <User size={20} /> },
+    { href: "/resident/settings", label: "Settings", icon: <Settings size={20} /> },
+  ];
+
   return (
-    <nav>
-      {navItems.map((item) => (
-        <NavItem
-          key={item.href}
-          icon={item.icon}
-          label={item.label}
-          href={item.href}
-          pathname={pathname}
-        />
-      ))}
+    <nav className="flex flex-col h-full">
+      <div className="space-y-1">
+        {navItems.map((item) => (
+          <NavItem
+            key={item.href}
+            icon={item.icon}
+            label={item.label}
+            href={item.href}
+            pathname={pathname}
+          />
+        ))}
+      </div>
+      
+      <div className="mt-6">
+        <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            Account
+        </div>
+        <div className="space-y-1">
+            {systemItems.map((item) => (
+            <NavItem
+                key={item.href}
+                icon={item.icon}
+                label={item.label}
+                href={item.href}
+                pathname={pathname}
+            />
+            ))}
+        </div>
+      </div>
     </nav>
   );
 }
