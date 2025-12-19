@@ -13,12 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useResidents, useHouseholds, useBarangayRef } from '@/hooks/use-barangay-data';
 import { updateSystemStats } from "@/lib/trigger-simulation";
 import { useTenant } from '@/providers/tenant-provider';
-import { withRoleGuard } from '@/components/auth/role-guard';
+import { RoleGuard } from '@/components/auth/role-guard';
 import { PERMISSIONS } from '@/lib/config/roles';
 
 type ResidentWithId = Resident & { id?: string };
 
-function ResidentsPage() {
+export default function ResidentsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const { tenantPath } = useTenant();
@@ -100,22 +100,22 @@ function ResidentsPage() {
   const columns = React.useMemo(() => getColumns(handleEdit, handleDelete, households ?? []), [households, tenantPath]); // Added tenantPath dependency
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Resident Profiles</h1>
-        <p className="text-muted-foreground">
-          Manage your barangay's resident records.
-        </p>
+    <RoleGuard permissions={[PERMISSIONS.VIEW_RESIDENTS]}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Resident Profiles</h1>
+          <p className="text-muted-foreground">
+            Manage your barangay's resident records.
+          </p>
+        </div>
+        <DataTable
+          columns={columns}
+          data={records ?? []}
+          isLoading={isLoadingResidents || isLoadingHouseholds}
+          onAdd={handleAdd}
+          households={households ?? []}
+        />
       </div>
-      <DataTable
-        columns={columns}
-        data={records ?? []}
-        isLoading={isLoadingResidents || isLoadingHouseholds}
-        onAdd={handleAdd}
-        households={households ?? []}
-      />
-    </div>
+    </RoleGuard>
   );
 }
-
-export default withRoleGuard(ResidentsPage, [PERMISSIONS.VIEW_RESIDENTS]);

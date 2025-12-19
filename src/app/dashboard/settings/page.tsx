@@ -38,7 +38,7 @@ import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import { updateDoc } from 'firebase/firestore';
 import { getRegionName } from '@/lib/data/psgc'; 
 import dynamic from 'next/dynamic';
-import { withRoleGuard } from '@/components/auth/role-guard';
+import { RoleGuard } from '@/components/auth/role-guard';
 import { PERMISSIONS } from '@/lib/config/roles';
 
 // Dynamically import TerritoryEditor to avoid SSR issues with Leaflet
@@ -75,7 +75,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 type FinancialFormValues = z.infer<typeof financialFormSchema>;
 type SystemFormValues = z.infer<typeof systemFormSchema>;
 
-function SettingsPage() {
+export default function SettingsPage() {
     const { toast } = useToast();
     const { profile, isLoading, docRef } = useTenantProfile();
     
@@ -218,350 +218,349 @@ function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your barangay's profile, officials, and system settings.
-        </p>
-      </div>
+    <RoleGuard permissions={[PERMISSIONS.VIEW_SETTINGS]}>
+        <div className="space-y-6">
+        <div>
+            <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+            <p className="text-muted-foreground">
+            Manage your barangay's profile, officials, and system settings.
+            </p>
+        </div>
 
-      <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="profile">Barangay Profile</TabsTrigger>
-          <TabsTrigger value="puroks">Puroks</TabsTrigger>
-          <TabsTrigger value="officials">Officials &amp; Staff</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="programs">Programs</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
-        </TabsList>
-        <TabsContent value="profile">
-            <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                    <CardTitle>Barangay Identity &amp; Letterhead</CardTitle>
-                    <CardDescription>
-                        This information populates the header and footer of all generated documents and reports.
-                    </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                    <Form {...profileForm}>
-                        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-8">
-                        
-                        <div className="space-y-4">
-                            <h4 className="font-semibold text-primary">Official Details</h4>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <FormField
-                                control={profileForm.control}
-                                name="barangayName"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Barangay Name</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} placeholder="e.g., Barangay San Antonio" />
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                                <FormField
-                                control={profileForm.control}
-                                name="city"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>City / Municipality</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} placeholder="e.g., Pasig City"/>
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                            </div>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <FormField
-                                control={profileForm.control}
-                                name="province"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Province</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} placeholder="e.g., Metro Manila"/>
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                                <FormField
-                                control={profileForm.control}
-                                name="region"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Region</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} placeholder="e.g., NCR"/>
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                            </div>
-                            <FormField
-                                control={profileForm.control}
-                                name="barangayHallAddress"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Barangay Hall Address</FormLabel>
-                                    <FormControl>
-                                        <Textarea {...field} placeholder="The specific street address used on official forms."/>
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <FormField
-                                control={profileForm.control}
-                                name="zipCode"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Zip Code</FormLabel>
-                                    <FormControl>
-                                        <Input {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                                <FormField
+        <Tabs defaultValue="profile" className="w-full">
+            <TabsList className="grid w-full grid-cols-7">
+            <TabsTrigger value="profile">Barangay Profile</TabsTrigger>
+            <TabsTrigger value="puroks">Puroks</TabsTrigger>
+            <TabsTrigger value="officials">Officials &amp; Staff</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="programs">Programs</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
+            <TabsTrigger value="system">System</TabsTrigger>
+            </TabsList>
+            <TabsContent value="profile">
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                        <CardTitle>Barangay Identity &amp; Letterhead</CardTitle>
+                        <CardDescription>
+                            This information populates the header and footer of all generated documents and reports.
+                        </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                        <Form {...profileForm}>
+                            <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-8">
+                            
+                            <div className="space-y-4">
+                                <h4 className="font-semibold text-primary">Official Details</h4>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <FormField
                                     control={profileForm.control}
-                                    name="contactNumber"
+                                    name="barangayName"
                                     render={({ field }) => (
                                         <FormItem>
-                                        <FormLabel>Official Contact Number</FormLabel>
+                                        <FormLabel>Barangay Name</FormLabel>
                                         <FormControl>
-                                            <Input {...field} placeholder="Hotline/Landline for public display"/>
+                                            <Input {...field} placeholder="e.g., Barangay San Antonio" />
                                         </FormControl>
                                         <FormMessage />
                                         </FormItem>
                                     )}
                                     />
-                            </div>
-                            <FormField
+                                    <FormField
                                     control={profileForm.control}
-                                    name="email"
+                                    name="city"
                                     render={({ field }) => (
                                         <FormItem>
-                                        <FormLabel>Official Email Address</FormLabel>
+                                        <FormLabel>City / Municipality</FormLabel>
                                         <FormControl>
-                                            <Input {...field} placeholder="Used for system notifications and public inquiries"/>
+                                            <Input {...field} placeholder="e.g., Pasig City"/>
                                         </FormControl>
                                         <FormMessage />
                                         </FormItem>
                                     )}
                                     />
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-4">
-                            <h4 className="font-semibold text-primary">Branding &amp; Logos</h4>
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <FormField
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <FormField
                                     control={profileForm.control}
-                                    name="logoUrl"
+                                    name="province"
                                     render={({ field }) => (
                                         <FormItem>
-                                        <FormLabel>Barangay Logo URL (or Base64)</FormLabel>
+                                        <FormLabel>Province</FormLabel>
                                         <FormControl>
-                                            <Input {...field} placeholder="https://... or data:image/..." />
+                                            <Input {...field} placeholder="e.g., Metro Manila"/>
                                         </FormControl>
-                                        <FormDescription>URL to a high-resolution PNG/JPG of the barangay logo.</FormDescription>
                                         <FormMessage />
                                         </FormItem>
                                     )}
-                                />
-                                <FormField
+                                    />
+                                    <FormField
                                     control={profileForm.control}
-                                    name="cityLogoUrl"
+                                    name="region"
                                     render={({ field }) => (
                                         <FormItem>
-                                        <FormLabel>City/Municipal Logo URL</FormLabel>
+                                        <FormLabel>Region</FormLabel>
+                                        <FormControl>
+                                            <Input {...field} placeholder="e.g., NCR"/>
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                    />
+                                </div>
+                                <FormField
+                                    control={profileForm.control}
+                                    name="barangayHallAddress"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Barangay Hall Address</FormLabel>
+                                        <FormControl>
+                                            <Textarea {...field} placeholder="The specific street address used on official forms."/>
+                                        </FormControl>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                    />
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <FormField
+                                    control={profileForm.control}
+                                    name="zipCode"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Zip Code</FormLabel>
                                         <FormControl>
                                             <Input {...field} />
                                         </FormControl>
-                                        <FormDescription>URL to a high-resolution PNG/JPG of the city/municipal logo.</FormDescription>
                                         <FormMessage />
                                         </FormItem>
                                     )}
-                                />
-                            </div>
-                        </div>
-                        
-                        <Button type="submit" disabled={isProfilePending}>
-                            {isProfilePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Changes
-                        </Button>
-                        </form>
-                    </Form>
-                    </CardContent>
-                </Card>
-                
-                {/* Territory Editor Section */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Territory & Boundaries</CardTitle>
-                        <CardDescription>Define the physical jurisdiction of your barangay on the map. This is used for mapping households and incidents.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <TerritoryEditor 
-                            initialBoundary={profile?.territory?.boundary} 
-                            onSave={handleSaveTerritory} 
-                        />
-                    </CardContent>
-                </Card>
-            </div>
-        </TabsContent>
-        <TabsContent value="puroks">
-           <Card>
-            <CardHeader>
-                <CardTitle>Geographic Divisions</CardTitle>
-                <CardDescription>Manage the Puroks, Sitios, or Zones within your barangay.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <PurokList />
-            </CardContent>
-           </Card>
-        </TabsContent>
-        <TabsContent value="officials">
-           <Card>
-            <CardHeader>
-                <CardTitle>Officials &amp; Staff</CardTitle>
-                <CardDescription>Manage user accounts, positions, and system permissions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <OfficialsList />
-            </CardContent>
-           </Card>
-        </TabsContent>
-         <TabsContent value="documents">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Document &amp; Certificate Configuration</CardTitle>
-                    <CardDescription>Define the types of documents residents can request.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <DocumentTypeList />
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="programs">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Programs, Projects, and Activities (PPAs)</CardTitle>
-                    <CardDescription>Manage the list of official PPAs for budgeting and obligations.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ProgramsList />
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="templates">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Document Templates</CardTitle>
-                    <CardDescription>Manage the HTML layouts for your certificates and documents.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <TemplateList />
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="system">
-             <Card>
-                <CardHeader>
-                    <CardTitle>System &amp; Notifications</CardTitle>
-                    <CardDescription>Configure system-wide preferences for printing and messaging.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                     <Form {...systemForm}>
-                        <form onSubmit={systemForm.handleSubmit(onSystemSubmit)} className="space-y-8">
-                            <div className="space-y-4">
-                                <h4 className="font-semibold text-primary">Printing</h4>
-                                <FormField
-                                    control={systemForm.control}
-                                    name="paperSize"
-                                    render={({ field }) => (
-                                        <FormItem className="max-w-xs">
-                                            <FormLabel>Default Paper Size</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="A4">A4</SelectItem>
-                                                        <SelectItem value="Letter">Letter (8.5" x 11")</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            <FormDescription>Set the default paper size for all printable documents.</FormDescription>
+                                    />
+                                    <FormField
+                                        control={profileForm.control}
+                                        name="contactNumber"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Official Contact Number</FormLabel>
+                                            <FormControl>
+                                                <Input {...field} placeholder="Hotline/Landline for public display"/>
+                                            </FormControl>
                                             <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                                            </FormItem>
+                                        )}
+                                        />
+                                </div>
+                                <FormField
+                                        control={profileForm.control}
+                                        name="email"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Official Email Address</FormLabel>
+                                            <FormControl>
+                                                <Input {...field} placeholder="Used for system notifications and public inquiries"/>
+                                            </FormControl>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                        />
                             </div>
 
                             <Separator />
-                            
-                            <div className="space-y-4">
-                                <h4 className="font-semibold text-primary">Notification Templates</h4>
-                                <FormField
-                                    control={systemForm.control}
-                                    name="pickupSmsTemplate"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                        <FormLabel>Document Pickup SMS Template</FormLabel>
-                                        <FormControl>
-                                            <Textarea {...field} />
-                                        </FormControl>
-                                        <FormDescription>
-                                            Use placeholders like `'{'{DOC_TYPE}'}'`.
-                                        </FormDescription>
-                                        <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                 <FormField
-                                    control={systemForm.control}
-                                    name="sosSmsTemplate"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                        <FormLabel>Emergency "SOS" Alert Template</FormLabel>
-                                        <FormControl>
-                                            <Textarea {...field} />
-                                        </FormControl>
-                                         <FormDescription>
-                                            Use placeholders like `'{'{RESIDENT_NAME}'}'` and `'{'{LOCATION}'}'`.
-                                        </FormDescription>
-                                        <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
 
-                             <Button type="submit" disabled={isSystemPending}>
-                                {isSystemPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Save System Settings
+                            <div className="space-y-4">
+                                <h4 className="font-semibold text-primary">Branding &amp; Logos</h4>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <FormField
+                                        control={profileForm.control}
+                                        name="logoUrl"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Barangay Logo URL (or Base64)</FormLabel>
+                                            <FormControl>
+                                                <Input {...field} placeholder="https://... or data:image/..." />
+                                            </FormControl>
+                                            <FormDescription>URL to a high-resolution PNG/JPG of the barangay logo.</FormDescription>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={profileForm.control}
+                                        name="cityLogoUrl"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>City/Municipal Logo URL</FormLabel>
+                                            <FormControl>
+                                                <Input {...field} />
+                                            </FormControl>
+                                            <FormDescription>URL to a high-resolution PNG/JPG of the city/municipal logo.</FormDescription>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <Button type="submit" disabled={isProfilePending}>
+                                {isProfilePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Changes
                             </Button>
-                        </form>
-                    </Form>
+                            </form>
+                        </Form>
+                        </CardContent>
+                    </Card>
+                    
+                    {/* Territory Editor Section */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Territory & Boundaries</CardTitle>
+                            <CardDescription>Define the physical jurisdiction of your barangay on the map. This is used for mapping households and incidents.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <TerritoryEditor 
+                                initialBoundary={profile?.territory?.boundary} 
+                                onSave={handleSaveTerritory} 
+                            />
+                        </CardContent>
+                    </Card>
+                </div>
+            </TabsContent>
+            <TabsContent value="puroks">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Geographic Divisions</CardTitle>
+                    <CardDescription>Manage the Puroks, Sitios, or Zones within your barangay.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <PurokList />
                 </CardContent>
             </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+            </TabsContent>
+            <TabsContent value="officials">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Officials &amp; Staff</CardTitle>
+                    <CardDescription>Manage user accounts, positions, and system permissions.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <OfficialsList />
+                </CardContent>
+            </Card>
+            </TabsContent>
+            <TabsContent value="documents">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Document &amp; Certificate Configuration</CardTitle>
+                        <CardDescription>Define the types of documents residents can request.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <DocumentTypeList />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="programs">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Programs, Projects, and Activities (PPAs)</CardTitle>
+                        <CardDescription>Manage the list of official PPAs for budgeting and obligations.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ProgramsList />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="templates">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Document Templates</CardTitle>
+                        <CardDescription>Manage the HTML layouts for your certificates and documents.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <TemplateList />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="system">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>System &amp; Notifications</CardTitle>
+                        <CardDescription>Configure system-wide preferences for printing and messaging.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Form {...systemForm}>
+                            <form onSubmit={systemForm.handleSubmit(onSystemSubmit)} className="space-y-8">
+                                <div className="space-y-4">
+                                    <h4 className="font-semibold text-primary">Printing</h4>
+                                    <FormField
+                                        control={systemForm.control}
+                                        name="paperSize"
+                                        render={({ field }) => (
+                                            <FormItem className="max-w-xs">
+                                                <FormLabel>Default Paper Size</FormLabel>
+                                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="A4">A4</SelectItem>
+                                                            <SelectItem value="Letter">Letter (8.5" x 11")</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                <FormDescription>Set the default paper size for all printable documents.</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+
+                                <Separator />
+                                
+                                <div className="space-y-4">
+                                    <h4 className="font-semibold text-primary">Notification Templates</h4>
+                                    <FormField
+                                        control={systemForm.control}
+                                        name="pickupSmsTemplate"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Document Pickup SMS Template</FormLabel>
+                                            <FormControl>
+                                                <Textarea {...field} />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Use placeholders like `'{'{DOC_TYPE}'}'`.
+                                            </FormDescription>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={systemForm.control}
+                                        name="sosSmsTemplate"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Emergency "SOS" Alert Template</FormLabel>
+                                            <FormControl>
+                                                <Textarea {...field} />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Use placeholders like `'{'{RESIDENT_NAME}'}'` and `'{'{LOCATION}'}'`.
+                                            </FormDescription>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+
+                                <Button type="submit" disabled={isSystemPending}>
+                                    {isSystemPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Save System Settings
+                                </Button>
+                            </form>
+                        </Form>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
+        </div>
+    </RoleGuard>
   );
 }
-
-// Protect: Only Admin/Secretary can change settings.
-export default withRoleGuard(SettingsPage, [PERMISSIONS.VIEW_SETTINGS]);
