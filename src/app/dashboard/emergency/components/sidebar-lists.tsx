@@ -37,8 +37,8 @@ export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
             const systemRole = (u.systemRole || '').toLowerCase(); // Normalize
             
             // 1. Check System Role (Direct Assignment)
-            // Admins, Responders, and Health Workers are visible in the command center
-            const isSystemResponder = ['responder', 'admin', 'health_worker'].includes(systemRole);
+            // STRICT: Admins are NOT automatically responders anymore unless they have the specific role/position
+            const isSystemResponder = ['responder', 'health_worker'].includes(systemRole);
 
             // 2. Check Position (Legacy/Flexible Matching)
             const isPredefinedPosition = RESPONDER_POSITIONS.includes(position);
@@ -46,14 +46,14 @@ export const ResponderStatusList = ({ responders }: { responders: User[] }) => {
             const positionLower = position.toLowerCase();
             const hasResponderKeyword = positionLower.includes('tanod') || 
                                         positionLower.includes('bpso') ||
-                                        positionLower.includes('kagawad') || // Officials might respond
                                         positionLower.includes('security') ||
                                         positionLower.includes('driver') ||
                                         positionLower.includes('ambulance') ||
                                         positionLower.includes('health') ||
                                         positionLower.includes('bhw') ||
                                         positionLower.includes('nurse') ||
-                                        positionLower.includes('doctor');
+                                        positionLower.includes('doctor') ||
+                                        positionLower.includes('responder');
 
             return isSystemResponder || isPredefinedPosition || hasResponderKeyword;
         });
