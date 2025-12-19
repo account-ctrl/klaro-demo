@@ -26,6 +26,7 @@ export const useSmartGeolocation = () => {
     const watchIdRef = useRef<number | null>(null);
     const hardTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const convergeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Helper to add logs
     const addLog = (message: string) => {
@@ -46,6 +47,10 @@ export const useSmartGeolocation = () => {
             clearTimeout(fastTimeoutRef.current);
             fastTimeoutRef.current = null;
         }
+        if (convergeTimeoutRef.current) {
+            clearTimeout(convergeTimeoutRef.current);
+            convergeTimeoutRef.current = null;
+        }
     };
 
     const startLocating = () => {
@@ -54,7 +59,7 @@ export const useSmartGeolocation = () => {
         setError(null);
         setLocation(null);
         setLogs([]); 
-        addLog("Starting location request...");
+        addLog("Starting triangulation...");
 
         if (!navigator.geolocation) {
             const err = "Geolocation is not supported by this browser.";
@@ -65,25 +70,37 @@ export const useSmartGeolocation = () => {
         }
 
         let bestLocation: GeolocationPosition | null = null;
+        let convergeStarted = false;
         
         // Thresholds
-        const TARGET_ACCURACY = 12; // Excellent (GPS) - Stop immediately
-        const ACCEPTABLE_ACCURACY = 50; // Good (Wi-Fi/Cell) - Stop after fast timeout
-        const HARD_TIMEOUT_MS = 20000; // Increased to 20s - Give more time for GPS lock
-        const FAST_TIMEOUT_MS = 5000; // 5s - If we have "acceptable", take it
+        const TARGET_ACCURACY = 12; // Excellent (GPS)
+        const ACCEPTABLE_ACCURACY = 40; // Good (Wi-Fi/Cell)
+        const HARD_TIMEOUT_MS = 20000; // 20s Max
+        const FAST_TIMEOUT_MS = 6000; // 6s for Acceptable
+        const CONVERGE_DELAY_MS = 3000; // Wait 3s after hitting target to see if it gets better
+
+        const checkAndFinalize = (pos: GeolocationPosition, reason: string) => {
+            finalizeLocation(
+                pos.coords.latitude,
+                pos.coords.longitude,
+                pos.coords.accuracy,
+                'high_accuracy_gps'
+            );
+            addLog(`Finalized (${reason}): Acc ${Math.round(pos.coords.accuracy)}m`);
+        };
 
         // 1. Start Watching
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude, accuracy } = position.coords;
-                addLog(`Update: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Acc: ${Math.round(accuracy)}m)`);
+                addLog(`Signal: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Acc: ${Math.round(accuracy)}m)`);
 
-                // Keep track of the best location so far
+                // Update "Best"
                 if (!bestLocation || accuracy < bestLocation.coords.accuracy) {
                     bestLocation = position;
                 }
 
-                // Temporary state update for UI feedback
+                // UI Update
                 setLocation({
                     lat: latitude,
                     lng: longitude,
@@ -92,17 +109,27 @@ export const useSmartGeolocation = () => {
                     isFinal: false
                 });
 
-                // Check Thresholds
+                // Logic: Triangulation / Convergence
                 if (accuracy <= TARGET_ACCURACY) {
-                    addLog("Target accuracy met. Finalizing.");
-                    finalizeLocation(latitude, longitude, accuracy, 'high_accuracy_gps');
+                    if (!convergeStarted) {
+                        convergeStarted = true;
+                        setStatus('improving');
+                        addLog("Target met. Triangulating for best precision...");
+                        
+                        // Wait a bit to see if we get an even better one
+                        convergeTimeoutRef.current = setTimeout(() => {
+                            if (bestLocation) {
+                                checkAndFinalize(bestLocation, "Converged");
+                            }
+                        }, CONVERGE_DELAY_MS);
+                    }
                 } else {
-                    setStatus('improving');
+                    if (!convergeStarted) setStatus('improving');
                 }
             },
             (err) => {
-                addLog(`Watch Error: ${err.message} (Code: ${err.code})`);
-                if (err.code === 1) { // Permission Denied
+                addLog(`Signal Lost/Error: ${err.message}`);
+                if (err.code === 1) { 
                     stopWatching();
                     setError("Location permission denied.");
                     setLoading(false);
@@ -111,63 +138,49 @@ export const useSmartGeolocation = () => {
             HIGH_ACCURACY_OPTIONS
         );
 
-        // 2. Fast Timeout: If we have an "acceptable" location after 5s, stop waiting for perfect.
+        // 2. Fast Timeout (If good enough)
         fastTimeoutRef.current = setTimeout(() => {
-            if (watchIdRef.current !== null && bestLocation) {
-                if (bestLocation.coords.accuracy <= ACCEPTABLE_ACCURACY) {
-                    addLog(`Fast timeout. Acc ${Math.round(bestLocation.coords.accuracy)}m is good enough.`);
-                    finalizeLocation(
-                        bestLocation.coords.latitude, 
-                        bestLocation.coords.longitude, 
-                        bestLocation.coords.accuracy, 
-                        'high_accuracy_gps'
-                    );
-                } else {
-                    addLog(`Fast timeout. Acc ${Math.round(bestLocation.coords.accuracy)}m not acceptable. Continuing...`);
-                }
+            if (!convergeStarted && bestLocation && bestLocation.coords.accuracy <= ACCEPTABLE_ACCURACY) {
+                addLog("Fast timeout. Signal acceptable.");
+                checkAndFinalize(bestLocation, "Fast Timeout");
             }
         }, FAST_TIMEOUT_MS);
 
-        // 3. Hard Timeout: After 20s, take whatever we have or try fallback.
+        // 3. Hard Timeout (Give up)
         hardTimeoutRef.current = setTimeout(() => {
-            if (watchIdRef.current !== null) {
-                if (bestLocation) {
-                    addLog("Hard timeout. Using best available location.");
-                    finalizeLocation(
-                        bestLocation.coords.latitude, 
-                        bestLocation.coords.longitude, 
-                        bestLocation.coords.accuracy, 
-                        'low_accuracy_fallback'
-                    );
-                } else {
-                     // No location from watch? Try one last single-shot with low accuracy
-                     addLog("Hard timeout. No location found. Trying low-accuracy fallback...");
-                     stopWatching(); // clear the watch first
-                     
-                     navigator.geolocation.getCurrentPosition(
-                         (pos) => {
-                             addLog(`Fallback success. Acc: ${pos.coords.accuracy}m`);
-                             finalizeLocation(
-                                 pos.coords.latitude, 
-                                 pos.coords.longitude, 
-                                 pos.coords.accuracy, 
-                                 'low_accuracy_fallback'
-                             );
-                         },
-                         (err) => {
-                             addLog(`Fallback failed: ${err.message}`);
-                             setError("Unable to retrieve location. Please check your GPS settings.");
-                             setLoading(false);
-                         },
-                         { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
-                     );
-                }
+            if (convergeStarted) return; // Already finishing up
+
+            if (bestLocation) {
+                addLog("Hard timeout. Using best signal available.");
+                checkAndFinalize(bestLocation, "Hard Timeout");
+            } else {
+                 // Fallback
+                 addLog("No GPS signal. Attempting network fallback...");
+                 stopWatching(); 
+                 
+                 navigator.geolocation.getCurrentPosition(
+                     (pos) => {
+                         addLog(`Fallback found: Acc ${Math.round(pos.coords.accuracy)}m`);
+                         finalizeLocation(
+                             pos.coords.latitude, 
+                             pos.coords.longitude, 
+                             pos.coords.accuracy, 
+                             'low_accuracy_fallback'
+                         );
+                     },
+                     (err) => {
+                         addLog(`Fallback failed: ${err.message}`);
+                         setError("Unable to detect location.");
+                         setLoading(false);
+                     },
+                     { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+                 );
             }
         }, HARD_TIMEOUT_MS); 
     };
 
     const finalizeLocation = (lat: number, lng: number, acc: number, prov: 'high_accuracy_gps' | 'low_accuracy_fallback') => {
-        stopWatching(); // Ensure everything is stopped
+        stopWatching();
         
         setLocation({
             lat,
@@ -178,7 +191,6 @@ export const useSmartGeolocation = () => {
         });
         setLoading(false);
         setStatus('final');
-        addLog(`Finalized: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     };
 
     // Cleanup on unmount
@@ -193,6 +205,6 @@ export const useSmartGeolocation = () => {
         error,
         status,
         stopWatching,
-        logs // Export logs
+        logs 
     };
 };
