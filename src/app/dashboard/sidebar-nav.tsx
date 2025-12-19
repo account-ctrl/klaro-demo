@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -35,6 +36,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePermission } from '@/hooks/use-permission';
 
 const NavItem = ({
   icon,
@@ -118,6 +120,7 @@ const NavGroupHeader = ({ label, isCollapsed }: { label: string, isCollapsed: bo
 export function SidebarNav({ isCollapsed, toggleSidebar }: { isCollapsed: boolean, toggleSidebar: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { has, hasAny, PERMISSIONS, role } = usePermission();
 
   const getHref = (href: string) => {
     const params = new URLSearchParams(searchParams);
@@ -125,76 +128,135 @@ export function SidebarNav({ isCollapsed, toggleSidebar }: { isCollapsed: boolea
     return queryString ? `${href}?${queryString}` : href;
   };
 
+  // Helper to hide empty groups if no items are visible
+  const Group = ({ title, children }: { title: string, children: React.ReactNode }) => {
+      // Very simple heuristic: if children is empty or all null, don't show.
+      // But React.Children is tricky with conditional rendering. 
+      // Instead, we rely on the parent rendering only if it makes sense.
+      // For now, we just render. Optimizing empty headers can be a future UI polish.
+      return (
+          <>
+            <NavGroupHeader label={title} isCollapsed={isCollapsed} />
+            <div className="space-y-0">{children}</div>
+          </>
+      )
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#f5f8fa] relative">
       <div className="py-2 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-        <div className="space-y-0">
-          <NavItem
-              icon={<Home size={20} />}
-              label="Overview"
-              href="/dashboard"
-              pathname={pathname}
-              getHref={getHref}
-              active={pathname === '/dashboard'}
-              isCollapsed={isCollapsed}
-          />
-        </div>
         
-        <div>
-            <NavGroupHeader label="Command Center" isCollapsed={isCollapsed} />
+        {/* Dashboard is for everyone */}
+        {has(PERMISSIONS.VIEW_DASHBOARD) && (
             <div className="space-y-0">
-              <NavItem
-                  icon={<ShieldAlert size={20} />}
-                  label="Emergency Response"
-                  href="/dashboard/emergency"
-                  pathname={pathname}
-                  getHref={getHref}
-                  className={pathname === '/dashboard/emergency' ? "!text-[#f2545b] !bg-[#fff5f5]" : ""}
-                  active={pathname === '/dashboard/emergency' && !pathname.includes('/staffing')}
-                  isCollapsed={isCollapsed}
-              />
+            <NavItem
+                icon={<Home size={20} />}
+                label="Overview"
+                href="/dashboard"
+                pathname={pathname}
+                getHref={getHref}
+                active={pathname === '/dashboard'}
+                isCollapsed={isCollapsed}
+            />
             </div>
+        )}
+        
+        {has(PERMISSIONS.VIEW_EMERGENCY) && (
+            <div>
+                <NavGroupHeader label="Command Center" isCollapsed={isCollapsed} />
+                <div className="space-y-0">
+                <NavItem
+                    icon={<ShieldAlert size={20} />}
+                    label="Emergency Response"
+                    href="/dashboard/emergency"
+                    pathname={pathname}
+                    getHref={getHref}
+                    className={pathname === '/dashboard/emergency' ? "!text-[#f2545b] !bg-[#fff5f5]" : ""}
+                    active={pathname === '/dashboard/emergency' && !pathname.includes('/staffing')}
+                    isCollapsed={isCollapsed}
+                />
+                </div>
+            </div>
+        )}
 
-            <NavGroupHeader label="Constituents" isCollapsed={isCollapsed} />
-            <div className="space-y-0">
-              <NavItem icon={<Users size={20} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<HomeIcon size={20} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Map size={20} />} label="Mapped Households" href="/dashboard/mapped-households" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<PawPrint size={20} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              {/* <NavItem icon={<HandHeart size={20} />} label="Social Welfare" href="/dashboard/social-welfare" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} /> */}
-            </div>
+        {hasAny([PERMISSIONS.VIEW_RESIDENTS, PERMISSIONS.VIEW_DOCUMENTS]) && (
+             <div>
+                <NavGroupHeader label="Constituents" isCollapsed={isCollapsed} />
+                <div className="space-y-0">
+                    {has(PERMISSIONS.VIEW_RESIDENTS) && (
+                        <>
+                            <NavItem icon={<Users size={20} />} label="Residents" href="/dashboard/residents" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                            <NavItem icon={<HomeIcon size={20} />} label="Households" href="/dashboard/households" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                            <NavItem icon={<Map size={20} />} label="Mapped Households" href="/dashboard/mapped-households" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                            <NavItem icon={<PawPrint size={20} />} label="Animal Registry" href="/dashboard/pets" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                        </>
+                    )}
+                </div>
+             </div>
+        )}
 
-            <NavGroupHeader label="Peace & Order" isCollapsed={isCollapsed} />
-            <div className="space-y-0">
-              <NavItem icon={<AlertTriangle size={20} />} label="Blotter & Incidents" href="/dashboard/blotter" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Scale size={20} />} label="Legislative" href="/dashboard/legislative" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+        {hasAny([PERMISSIONS.VIEW_BLOTTER, PERMISSIONS.VIEW_LEGISLATIVE]) && (
+            <div>
+                <NavGroupHeader label="Peace & Order" isCollapsed={isCollapsed} />
+                <div className="space-y-0">
+                {has(PERMISSIONS.VIEW_BLOTTER) && (
+                    <NavItem icon={<AlertTriangle size={20} />} label="Blotter & Incidents" href="/dashboard/blotter" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                )}
+                {has(PERMISSIONS.VIEW_LEGISLATIVE) && (
+                    <NavItem icon={<Scale size={20} />} label="Legislative" href="/dashboard/legislative" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                )}
+                </div>
             </div>
+        )}
 
-            <NavGroupHeader label="Operations" isCollapsed={isCollapsed} />
-            <div className="space-y-0">
-              <NavItem icon={<FileText size={20} />} label="Documents" href="/dashboard/documents" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Megaphone size={20} />} label="Announcements" href="/dashboard/announcements" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<FolderOpen size={20} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<BarChart size={20} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Truck size={20} />} label="Assets & Fleet" href="/dashboard/assets" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<CalendarDays size={20} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+        {hasAny([PERMISSIONS.VIEW_DOCUMENTS, PERMISSIONS.VIEW_PROJECTS, PERMISSIONS.VIEW_FINANCIALS, PERMISSIONS.VIEW_ASSETS]) && (
+            <div>
+                <NavGroupHeader label="Operations" isCollapsed={isCollapsed} />
+                <div className="space-y-0">
+                {has(PERMISSIONS.VIEW_DOCUMENTS) && (
+                    <>
+                        <NavItem icon={<FileText size={20} />} label="Documents" href="/dashboard/documents" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                        <NavItem icon={<Megaphone size={20} />} label="Announcements" href="/dashboard/announcements" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                        <NavItem icon={<CalendarDays size={20} />} label="Scheduler" href="/dashboard/scheduler" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                    </>
+                )}
+                {has(PERMISSIONS.VIEW_PROJECTS) && (
+                    <NavItem icon={<FolderOpen size={20} />} label="Projects" href="/dashboard/projects" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                )}
+                {has(PERMISSIONS.VIEW_FINANCIALS) && (
+                    <NavItem icon={<BarChart size={20} />} label="Financials" href="/dashboard/financials" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                )}
+                {has(PERMISSIONS.VIEW_ASSETS) && (
+                    <NavItem icon={<Truck size={20} />} label="Assets & Fleet" href="/dashboard/assets" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                )}
+                </div>
             </div>
+        )}
 
-            <NavGroupHeader label="eHealth Center" isCollapsed={isCollapsed} />
-            <div className="space-y-0">
-              <NavItem icon={<Pill size={20} />} label="Inventory" href="/dashboard/ehealth/inventory" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Stethoscope size={20} />} label="Dispensing" href="/dashboard/ehealth/dispensing" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<HeartPulse size={20} />} label="Patient Records" href="/dashboard/ehealth/patients" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Baby size={20} />} label="Maternal & Child" href="/dashboard/ehealth/mch" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Microscope size={20} />} label="Disease Surveillance" href="/dashboard/ehealth/epidemiology" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+        {has(PERMISSIONS.VIEW_HEALTH) && (
+            <div>
+                <NavGroupHeader label="eHealth Center" isCollapsed={isCollapsed} />
+                <div className="space-y-0">
+                <NavItem icon={<Pill size={20} />} label="Inventory" href="/dashboard/ehealth/inventory" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                <NavItem icon={<Stethoscope size={20} />} label="Dispensing" href="/dashboard/ehealth/dispensing" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                <NavItem icon={<HeartPulse size={20} />} label="Patient Records" href="/dashboard/ehealth/patients" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                <NavItem icon={<Baby size={20} />} label="Maternal & Child" href="/dashboard/ehealth/mch" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                <NavItem icon={<Microscope size={20} />} label="Disease Surveillance" href="/dashboard/ehealth/epidemiology" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                </div>
             </div>
+        )}
 
-            <NavGroupHeader label="System" isCollapsed={isCollapsed} />
-            <div className="space-y-0 mb-6">
-              <NavItem icon={<Activity size={20} />} label="Activity Logs" href="/dashboard/activity" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
-              <NavItem icon={<Settings size={20} />} label="Settings" href="/dashboard/settings" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+        {has(PERMISSIONS.VIEW_SETTINGS) && (
+            <div>
+                <NavGroupHeader label="System" isCollapsed={isCollapsed} />
+                <div className="space-y-0 mb-6">
+                <NavItem icon={<Activity size={20} />} label="Activity Logs" href="/dashboard/activity" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                {has(PERMISSIONS.MANAGE_SETTINGS) && (
+                    <NavItem icon={<Settings size={20} />} label="Settings" href="/dashboard/settings" pathname={pathname} getHref={getHref} isCollapsed={isCollapsed} />
+                )}
+                </div>
             </div>
-        </div>
+        )}
       </div>
 
       {/* Toggle Button at Bottom */}
