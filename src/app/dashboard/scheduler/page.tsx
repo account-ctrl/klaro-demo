@@ -11,8 +11,10 @@ import { AddEvent, EventFormValues } from './event-actions';
 import { useToast } from '@/hooks/use-toast';
 import { DateSelectArg } from '@fullcalendar/core';
 import { useTenant } from '@/providers/tenant-provider';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
-export default function SchedulerPage() {
+function SchedulerPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const { tenantPath } = useTenant();
@@ -101,3 +103,5 @@ export default function SchedulerPage() {
       </div>
     );
 }
+
+export default withRoleGuard(SchedulerPage, [PERMISSIONS.VIEW_DOCUMENTS]); // Often managed by Secretariat

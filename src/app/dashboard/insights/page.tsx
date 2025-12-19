@@ -1,6 +1,9 @@
-import { InsightsGenerator } from "./insights-generator";
 
-export default function InsightsPage() {
+import { InsightsGenerator } from "./insights-generator";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
+
+function InsightsPage() {
   return (
     <div className="space-y-6">
       <div>
@@ -14,3 +17,6 @@ export default function InsightsPage() {
     </div>
   );
 }
+
+// Insights access sensitive data across modules, so restrict to Admin/Secretary/Official
+export default withRoleGuard(InsightsPage, [PERMISSIONS.MANAGE_SETTINGS]);

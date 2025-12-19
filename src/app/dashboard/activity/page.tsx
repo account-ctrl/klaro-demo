@@ -7,8 +7,10 @@ import {
     CardTitle,
   } from "@/components/ui/card";
 import { ActivityFeed } from "./activity-feed";
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
   
-export default function ActivityLogPage() {
+function ActivityLogPage() {
     return (
       <div className="space-y-6">
         <div>
@@ -30,3 +32,4 @@ export default function ActivityLogPage() {
     );
 }
 
+export default withRoleGuard(ActivityLogPage, [PERMISSIONS.VIEW_SETTINGS]);

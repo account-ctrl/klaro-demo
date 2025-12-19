@@ -23,13 +23,15 @@ import { EpidemiologyCase } from '@/lib/ehealth-types';
 import { useTenantProfile } from '@/hooks/use-tenant-profile';
 import dynamic from 'next/dynamic';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 const DiseaseMap = dynamic(() => import('@/components/maps/DiseaseMap'), { 
     ssr: false,
     loading: () => <div className="h-full w-full flex items-center justify-center bg-slate-100 text-muted-foreground">Loading Map...</div>
 });
 
-export default function EpidemiologyPage() {
+function EpidemiologyPage() {
     const { data: cases } = useEpidemiologyCases();
     const { data: residents } = useResidents();
     const { data: puroks } = usePuroks();
@@ -432,3 +434,5 @@ function CaseDetailView({ caseData, resident }: { caseData: WithId<EpidemiologyC
         </>
     )
 }
+
+export default withRoleGuard(EpidemiologyPage, [PERMISSIONS.VIEW_HEALTH]);

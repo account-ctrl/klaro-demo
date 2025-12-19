@@ -23,8 +23,10 @@ import { formatDistanceToNow } from 'date-fns';
 import { Progress } from "@/components/ui/progress";
 import { WithId } from '@/firebase/firestore/use-collection';
 import { MchRecord } from '@/lib/ehealth-advanced-types';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
-export default function MchPage() {
+function MchPage() {
     const { data: mchRecords } = useMchRecords();
     const { data: residents } = useResidents();
     const mchRef = useEHealthAdvancedRef('mch_records');
@@ -513,3 +515,5 @@ function MchDetailView({ record, resident, onUnenroll }: { record: WithId<MchRec
         </>
     )
 }
+
+export default withRoleGuard(MchPage, [PERMISSIONS.VIEW_HEALTH]);

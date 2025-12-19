@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -9,6 +10,7 @@ import { doc, getDoc } from 'firebase/firestore';
 interface TenantContextProps {
   tenantPath: string | null;
   tenantId: string | null;
+  role: string | null; // Added role to context
   isLoading: boolean;
   error: string | null;
 }
@@ -16,6 +18,7 @@ interface TenantContextProps {
 const TenantContext = createContext<TenantContextProps>({
   tenantPath: null,
   tenantId: null,
+  role: null,
   isLoading: true,
   error: null,
 });
@@ -30,6 +33,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   
   const [tenantPath, setTenantPath] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null); // State for role
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,17 +51,16 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        // FORCE REFRESH: This is critical after provisioning.
-        // The custom claims (role: admin, tenantPath) are set by the backend,
-        // but the client's existing token doesn't have them yet.
-        // We must force a refresh to get the new claims.
         const tokenResult = await auth.currentUser.getIdTokenResult(true);
-        const role = tokenResult.claims.role;
+        // Normalize role: 'super_admin' -> 'superadmin' to match our config
+        let userRole = tokenResult.claims.role as string;
+        if (userRole === 'super_admin') userRole = 'superadmin';
+        
+        if (isMounted) setRole(userRole);
 
         // --- PRIORITY 1: Super Admin Context Switching (URL Override) ---
-        // Super Admins can "visit" any tenant via ?tenantId=...
         const overrideTenantId = searchParams.get('tenantId');
-        if (overrideTenantId && role === 'super_admin') {
+        if (overrideTenantId && userRole === 'superadmin') {
             const path = await getTenantPath(firestore, overrideTenantId);
             if (path) {
                 if (isMounted) {
@@ -72,8 +75,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
 
         // --- PRIORITY 2: User's Assigned Tenant (Custom Claims) ---
-        // This is the standard path for Captains/Officials.
-        // We trust the token claim first for speed.
         const claimPath = tokenResult.claims.tenantPath as string;
         const claimId = tokenResult.claims.tenantId as string;
 
@@ -87,14 +88,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
         
         // --- PRIORITY 3: Fallback to User Profile (Firestore) ---
-        // If claims are delayed or missing (rare), check the user document.
         const userRef = doc(firestore, 'users', auth.currentUser.uid);
         const userSnap = await getDoc(userRef);
         
         if (userSnap.exists()) {
             const userData = userSnap.data();
+            // Fallback role from DB if claim is missing (legacy users)
+            if (!userRole && userData.role) {
+                 if (isMounted) setRole(userData.role === 'super_admin' ? 'superadmin' : userData.role);
+            }
+
             if (userData.tenantId) {
-                 // Resolve path from directory if we only have ID
                  const path = await getTenantPath(firestore, userData.tenantId);
                  if (path && isMounted) {
                      setTenantPath(path);
@@ -126,7 +130,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, [auth?.currentUser, firestore, searchParams]);
 
   return (
-    <TenantContext.Provider value={{ tenantPath, tenantId, isLoading, error }}>
+    <TenantContext.Provider value={{ tenantPath, tenantId, role, isLoading, error }}>
       {children}
     </TenantContext.Provider>
   );

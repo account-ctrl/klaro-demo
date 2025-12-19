@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { executeDispenseTransaction, BatchAllocation } from '@/lib/ehealth-logic';
+import { withRoleGuard } from '@/components/auth/role-guard';
+import { PERMISSIONS } from '@/lib/config/roles';
 
 interface CartItem {
     itemId: string;
@@ -26,7 +28,7 @@ interface CartItem {
     allocation: { batch: any, deduct: number }[];
 }
 
-export default function DispensingPage() {
+function DispensingPage() {
     const { data: residents } = useResidents();
     const { data: items } = useInventoryItems();
     const { data: allBatches } = useInventoryBatches();
@@ -300,3 +302,5 @@ export default function DispensingPage() {
         </div>
     );
 }
+
+export default withRoleGuard(DispensingPage, [PERMISSIONS.VIEW_HEALTH]);

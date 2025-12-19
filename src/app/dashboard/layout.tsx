@@ -42,16 +42,28 @@ import { TenantProvider, useTenant } from '@/providers/tenant-provider';
 const TenantGuard = ({ children }: { children: React.ReactNode }) => {
     const { tenantPath, isLoading, error } = useTenant();
     const router = useRouter();
-    const { user } = useUser();
+    const { user, isUserLoading } = useUser();
 
     useEffect(() => {
-        // If loaded but no tenant and no error (meaning user is logged out or invalid)
-        if (!isLoading && !tenantPath && !error) {
-             // Let the layout handle it via AuthProvider logic or error boundary
-        }
-    }, [isLoading, tenantPath, error]);
+        // If everything is done loading...
+        if (!isLoading && !isUserLoading) {
+            // Case 1: Not logged in at all -> Login
+            if (!user) {
+                console.log("[AuthGuard] No user found. Redirecting to login.");
+                router.push('/login');
+                return;
+            }
 
-    if (isLoading) {
+            // Case 2: Logged in but failed to resolve tenant (and no explicit error like 'Orphaned') -> Login/Error
+            // This happens if the user auth object exists but TenantProvider couldn't match a tenant.
+            if (!tenantPath && !error) {
+                 console.warn("[TenantGuard] User logged in but no tenant resolved. Redirecting.");
+                 router.push('/login');
+            }
+        }
+    }, [isLoading, isUserLoading, tenantPath, error, user, router]);
+
+    if (isLoading || isUserLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-slate-50">
                 <div className="text-center space-y-4">
@@ -76,9 +88,8 @@ const TenantGuard = ({ children }: { children: React.ReactNode }) => {
         );
     }
     
-    // Strict Role Check: Block Super Admins from "visiting" without explicit Context
-    // This prevents accidental edits to the wrong tenant if state bleeds.
-    // (Handled by TenantProvider logic already, but double-check visually if needed)
+    // Safety check: If we are here, we MUST have a tenantPath (or be Super Admin in specific mode)
+    if (!tenantPath && !error) return null; // Wait for redirect
 
     return <>{children}</>;
 };
