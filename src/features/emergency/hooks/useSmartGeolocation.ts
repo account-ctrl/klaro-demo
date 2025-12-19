@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 // Enhanced options for better accuracy
 const HIGH_ACCURACY_OPTIONS = {
