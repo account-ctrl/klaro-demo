@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,13 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/lib/hooks/useTenant';
 import { useTenantProfile } from '@/hooks/use-tenant-profile'; 
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useFirestore, useMemoFirebase } from '@/firebase'; // Import useMemoFirebase
 import { Paths } from '@/lib/firebase/paths';
 
 // CORRECTED IMPORTS
 import { AddOfficial, EditOfficial } from './officials-actions';
 import { OfficialCard } from './official-card';
+import { createUserAction } from '@/actions/user-management'; // Import Server Action
 
 // Sample Data
 import { officialsAndStaff, committeeAssignments, systemRoles, sampleOfficials } from './_data';
@@ -40,7 +42,7 @@ export const OfficialsList = () => {
     const [view, setView] = useState<'card' | 'list'>('card');
     const { toast } = useToast();
     const firestore = useFirestore();
-    const { tenantPath } = useTenant(); 
+    const { tenantPath, tenantId } = useTenant(); 
     const { profile } = useTenantProfile(); 
 
     // CORRECTED: Create a CollectionReference, NOT just a string path
@@ -54,18 +56,77 @@ export const OfficialsList = () => {
 
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const handleAdd = async (newOfficial: Omit<Official, 'id' | 'status'>) => {
+    const handleAdd = async (newOfficial: any) => {
+        // Fallback: If tenantId is missing but path exists (legacy), use the last segment as ID
+        const effectiveTenantId = tenantId || (tenantPath ? tenantPath.split('/').pop() : '');
+
+        if (!firestore || !effectiveTenantId || !tenantPath) {
+            console.error("Missing Context:", { firestore: !!firestore, tenantId: effectiveTenantId, tenantPath });
+            toast({ variant: 'destructive', title: 'Error', description: 'Missing tenant context.' });
+            return;
+        }
+        setIsProcessing(true);
         try {
-            await add({ ...newOfficial, status: 'Active' });
-            toast({ title: 'Success', description: 'Official has been added.' });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to add official.' });
+            // 1. Create Auth User & Global User Doc via Server Action
+            const result = await createUserAction({
+                email: newOfficial.email,
+                password: newOfficial.password_hash, // Pass initial password
+                fullName: newOfficial.name || newOfficial.fullName,
+                position: newOfficial.position,
+                systemRole: newOfficial.systemRole,
+                tenantId: effectiveTenantId,
+                tenantPath: tenantPath
+            });
+
+            if (!result.success || !result.userId) {
+                throw new Error(result.error || "Failed to create user account.");
+            }
+
+            const userId = result.userId;
+
+            // 2. Add to Tenant's Officials List (Display Purpose)
+            // We force the ID to match the Auth UID for easy lookup
+            const officialDocRef = doc(officialsCollectionRef!, userId);
+            
+            // Clean up data for official record (remove password)
+            const { password_hash, ...officialData } = newOfficial;
+            
+            await setDoc(officialDocRef, {
+                ...officialData,
+                id: userId,
+                name: newOfficial.fullName || newOfficial.name,
+                status: 'Active',
+                createdAt: serverTimestamp()
+            });
+
+            toast({ title: 'Success', description: 'Official account created and synced.' });
+        } catch (error: any) {
+            console.error("Add Official Error:", error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to add official.' });
+        } finally {
+            setIsProcessing(false);
         }
     };
 
     const handleEdit = async (updatedOfficial: Official) => {
         try {
             await update(updatedOfficial.id, updatedOfficial);
+            
+            // Also update the user document if it exists (Client-side update for non-auth fields is okay)
+            if (firestore) {
+                const userDocRef = doc(firestore, 'users', updatedOfficial.id);
+                try {
+                    await setDoc(userDocRef, {
+                        fullName: updatedOfficial.name,
+                        position: updatedOfficial.position,
+                        systemRole: updatedOfficial.systemRole,
+                        // Don't overwrite sensitive fields
+                    }, { merge: true });
+                } catch (e) {
+                    console.warn("Could not sync to users collection", e);
+                }
+            }
+
             toast({ title: 'Success', description: 'Official has been updated.' });
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to update official.' });
@@ -75,7 +136,9 @@ export const OfficialsList = () => {
     const handleDelete = async (id: string) => {
         try {
             await remove(id);
-            toast({ title: 'Success', description: 'Official has been removed.' });
+            // Note: Deleting the Auth user requires Admin SDK. 
+            // We could add a deleteUserAction, but usually we just deactivate/remove from official list.
+            toast({ title: 'Success', description: 'Official has been removed from list.' });
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to remove official.' });
         }
@@ -87,12 +150,9 @@ export const OfficialsList = () => {
         if (!officialsCollectionRef) { console.log("Missing Officials Path"); return; }
         if (!profile) { console.log("Missing Profile"); return; }
         
-        // Logic: Check if "Punong Barangay" exists. If not, add using profile.captainProfile
-        const captainName = profile.captainProfile?.name || profile.name; // Fallback
+        const captainName = profile.captainProfile?.name || profile.name; 
         const captainEmail = profile.captainProfile?.email || profile.email;
         
-        console.log("Syncing Profile:", { captainName, captainEmail });
-
         if (!captainName) {
              toast({ variant: 'destructive', title: 'Missing Profile', description: 'No Captain profile found in settings.' });
              return;
@@ -106,20 +166,20 @@ export const OfficialsList = () => {
 
         setIsProcessing(true);
         try {
-            await add({
-                name: captainName,
-                position: 'Punong Barangay',
-                status: 'Active',
+            // Use the Server Action for Captain too!
+            await handleAdd({
+                fullName: captainName,
                 email: captainEmail,
-                systemRole: 'Admin',
-                termStart: serverTimestamp() as any, // Use server timestamp
+                position: 'Punong Barangay',
+                systemRole: 'admin',
+                password_hash: 'Captain123!', // Default password for synced captain
+                termStart: new Date(),
                 termEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 3)),
-            } as any);
-            
-            toast({ title: 'Captain Synced', description: `${captainName} has been added to the officials list.` });
+            });
+            // Toast handled by handleAdd
         } catch (error) {
             console.error("Sync Error:", error);
-            toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not add Captain.' });
+            toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not sync Captain.' });
         } finally {
             setIsProcessing(false);
         }
