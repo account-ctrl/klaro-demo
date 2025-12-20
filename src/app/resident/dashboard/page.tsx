@@ -12,7 +12,8 @@ import {
   Clock,
   Calendar,
   ScrollText,
-  Megaphone
+  Megaphone,
+  ShieldAlert
 } from "lucide-react";
 import { useUser, useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -45,13 +46,17 @@ interface ActionCardProps {
   colorClass: string;
   bgClass: string;
   onClick: () => void;
+  disabled?: boolean; // Added disabled prop
 }
 
-const ActionCard = ({ icon: Icon, label, colorClass, bgClass, onClick }: ActionCardProps) => {
+const ActionCard = ({ icon: Icon, label, colorClass, bgClass, onClick, disabled }: ActionCardProps) => {
   return (
     <div 
-        onClick={onClick}
-        className="group relative w-full h-40 md:h-56 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-8 hover:-translate-y-1 active:scale-95 hover:shadow-md hover:border-blue-100 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center select-none"
+        onClick={!disabled ? onClick : undefined}
+        className={cn(
+            "group relative w-full h-40 md:h-56 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-8 transition-all duration-200 flex flex-col items-center justify-center select-none",
+            !disabled ? "cursor-pointer hover:-translate-y-1 active:scale-95 hover:shadow-md hover:border-blue-100" : "opacity-60 cursor-not-allowed grayscale"
+        )}
     >
         <div className={cn("p-3 md:p-4 rounded-full transition-colors duration-300 mb-3 md:mb-4", bgClass)}>
             <Icon className={cn("h-8 w-8 md:h-12 md:w-12", colorClass)} strokeWidth={1.5} />
@@ -59,6 +64,11 @@ const ActionCard = ({ icon: Icon, label, colorClass, bgClass, onClick }: ActionC
         <h3 className="text-slate-800 font-bold text-base md:text-xl tracking-tight group-hover:text-blue-600 transition-colors text-center">
             {label}
         </h3>
+        {disabled && (
+            <div className="absolute top-2 right-2">
+                <ShieldAlert className="h-5 w-5 text-amber-500" />
+            </div>
+        )}
     </div>
   );
 };
@@ -95,9 +105,18 @@ export default function ResidentDashboardPage() {
 
   // --- DATA FETCHING ---
 
-  // 0. Resident Profile (For Address in SOS)
+  // 0. User & Resident Profile
+  const userDocRef = useMemoFirebase(() => {
+      if (!firestore || !user) return null;
+      return doc(firestore, `users/${user.uid}`);
+  }, [firestore, user]);
+  const { data: userProfile } = useDoc(userDocRef);
+  const isVerified = userProfile?.kycStatus === 'verified';
+
+  // 0b. Resident Record (For Address in SOS) - Only if verified/linked
   const residentDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
+        // Ideally fetch tenantId from user profile first
         return doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
   }, [firestore, user]);
   const { data: residentProfile } = useDoc<Resident>(residentDocRef);
@@ -149,6 +168,18 @@ export default function ResidentDashboardPage() {
 
 
   // HANDLERS
+
+  const handleRestrictedAction = (action: () => void) => {
+      if (!isVerified) {
+          toast({
+              title: "Verification Required",
+              description: "You must verify your identity to access this feature.",
+              variant: "destructive"
+          });
+          return;
+      }
+      action();
+  };
 
   const handleSOS = async () => {
     setSosLoading(true);
@@ -213,6 +244,25 @@ export default function ResidentDashboardPage() {
   return (
     <div className="flex flex-col gap-6 md:gap-12 max-w-6xl mx-auto pt-2 md:pt-10 pb-20">
       
+      {/* Verification Warning Banner */}
+      {!isVerified && (
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 mx-4 md:mx-0">
+              <div className="flex items-start gap-3">
+                  <ShieldAlert className="h-6 w-6 text-amber-600 mt-1 shrink-0" />
+                  <div>
+                      <h3 className="font-bold text-amber-800">Identity Verification Required</h3>
+                      <p className="text-sm text-amber-700">
+                          Some features like document requests and incident reporting are locked. 
+                          Please verify your identity to unlock full access.
+                      </p>
+                  </div>
+              </div>
+              <Button asChild variant="outline" className="bg-white border-amber-300 text-amber-800 hover:bg-amber-100 whitespace-nowrap">
+                  <Link href="/verify-identity">Verify Now</Link>
+              </Button>
+          </div>
+      )}
+
       {/* Header Section */}
       <div className="text-center space-y-2 md:space-y-3 px-4">
         <h1 className="text-2xl md:text-4xl lg:text-5xl font-extrabold text-[#1E293B] tracking-tight">
@@ -230,32 +280,35 @@ export default function ResidentDashboardPage() {
             icon={FileText} 
             colorClass="text-cyan-500" 
             bgClass="bg-cyan-50 group-hover:bg-cyan-100" 
-            onClick={() => setActiveModal('request')}
+            disabled={!isVerified}
+            onClick={() => handleRestrictedAction(() => setActiveModal('request'))}
         />
         <ActionCard 
             label="Report Incident" 
             icon={AlertTriangle} 
             colorClass="text-rose-500" 
             bgClass="bg-rose-50 group-hover:bg-rose-100" 
-            onClick={() => setActiveModal('blotter')}
+            disabled={!isVerified}
+            onClick={() => handleRestrictedAction(() => setActiveModal('blotter'))}
         />
         <ActionCard 
             label="My Digital ID" 
             icon={QrCode} 
             colorClass="text-slate-700" 
             bgClass="bg-slate-100 group-hover:bg-slate-200" 
-            onClick={() => window.location.href = '/resident/profile'} // Simple redirect
+            disabled={!isVerified}
+            onClick={() => handleRestrictedAction(() => window.location.href = '/resident/profile')} 
         />
         <ActionCard 
             label="Community News" 
             icon={Megaphone} 
             colorClass="text-amber-500" 
             bgClass="bg-amber-50 group-hover:bg-amber-100" 
-            onClick={() => setActiveModal('news')}
+            onClick={() => setActiveModal('news')} // Always allowed
         />
       </div>
 
-      {/* SOS Button (Separate for emphasis) */}
+      {/* SOS Button (Separate for emphasis - ALWAYS ALLOWED) */}
       <div className="flex justify-center px-4">
           <Button 
             size="lg" 
@@ -270,48 +323,50 @@ export default function ResidentDashboardPage() {
       {/* --- INFO SECTIONS --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-2 md:px-0">
           
-          {/* Recent Activity */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h2 className="font-bold text-slate-800 flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-500" /> Recent Requests
-                    </h2>
-                    <Link href="/resident/my-requests" className="text-xs font-semibold text-blue-600 hover:text-blue-700">View All</Link>
-                </div>
-                <div className="flex-1">
-                    {myRequests && myRequests.length > 0 ? (
-                        <div className="divide-y divide-slate-100">
-                            {myRequests.slice(0, 3).map((req) => (
-                                <div key={req.requestId} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-full ${req.status === 'Ready for Pickup' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-                                            <FileText className="h-4 w-4" />
+          {/* Recent Activity (Only visible if verified or has data) */}
+          {isVerified && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-blue-500" /> Recent Requests
+                        </h2>
+                        <Link href="/resident/my-requests" className="text-xs font-semibold text-blue-600 hover:text-blue-700">View All</Link>
+                    </div>
+                    <div className="flex-1">
+                        {myRequests && myRequests.length > 0 ? (
+                            <div className="divide-y divide-slate-100">
+                                {myRequests.slice(0, 3).map((req) => (
+                                    <div key={req.requestId} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-full ${req.status === 'Ready for Pickup' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+                                                <FileText className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-slate-800 text-sm">{req.certificateName}</p>
+                                                <p className="text-xs text-slate-500">{req.dateRequested ? format(req.dateRequested.toDate(), 'MMM dd, yyyy') : 'N/A'}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-semibold text-slate-800 text-sm">{req.certificateName}</p>
-                                            <p className="text-xs text-slate-500">{req.dateRequested ? format(req.dateRequested.toDate(), 'MMM dd, yyyy') : 'N/A'}</p>
+                                        <div className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                            req.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                            req.status === 'Ready for Pickup' ? 'bg-green-50 text-green-700 border-green-200' :
+                                            'bg-slate-50 text-slate-600 border-slate-200'
+                                        }`}>
+                                            {req.status}
                                         </div>
                                     </div>
-                                    <div className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                                        req.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                        req.status === 'Ready for Pickup' ? 'bg-green-50 text-green-700 border-green-200' :
-                                        'bg-slate-50 text-slate-600 border-slate-200'
-                                    }`}>
-                                        {req.status}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-8 text-center text-slate-500">
-                            <p className="text-sm">No recent requests.</p>
-                        </div>
-                    )}
-                </div>
-          </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center text-slate-500">
+                                <p className="text-sm">No recent requests.</p>
+                            </div>
+                        )}
+                    </div>
+            </div>
+          )}
 
-          {/* Legislative & Health (Tabbed or Stacked) */}
-          <div className="space-y-6">
+          {/* Legislative & Health (Always Visible) */}
+          <div className="space-y-6 w-full">
               
               {/* Legislative Corner */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">

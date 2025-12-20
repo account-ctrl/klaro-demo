@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck, ArrowRight, Phone } from "lucide-react";
+import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck, ArrowRight, Phone, LayoutDashboard } from "lucide-react";
 import { RecaptchaVerifier, signInWithPhoneNumber, getAuth } from "firebase/auth";
 
 // Import Geo Data
@@ -27,7 +27,7 @@ import citiesData from '@/lib/data/cities-municipalities.json';
 // 3. Geolocation
 // 4. ID Upload
 // 5. Selfie (Liveness)
-// 6. Phone Verification (OTP) - NEW
+// 6. Phone Verification (OTP)
 
 export default function VerificationWizard() {
   const { user } = useUser();
@@ -401,6 +401,12 @@ export default function VerificationWizard() {
     }
   };
 
+  const handleSkip = async () => {
+      // Ensure current state is saved before leaving
+      await saveProgress(step, formData);
+      router.push('/resident/dashboard');
+  };
+
   // --- HELPER: Haversine ---
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371; // km
@@ -428,7 +434,7 @@ export default function VerificationWizard() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl shadow-lg">
-        <CardHeader className="bg-slate-900 text-white rounded-t-xl">
+        <CardHeader className="bg-slate-900 text-white rounded-t-xl relative">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-6 w-6 text-green-400" />
             <CardTitle>Identity Verification</CardTitle>
@@ -442,6 +448,15 @@ export default function VerificationWizard() {
                 step === 5 ? "Live Selfie" : "Phone Verification"
             }
           </CardDescription>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="absolute top-4 right-4 text-slate-300 hover:text-white hover:bg-slate-800"
+            onClick={handleSkip}
+          >
+              <LayoutDashboard className="mr-2 h-4 w-4" /> Skip to Dashboard
+          </Button>
         </CardHeader>
         <CardContent className="pt-6 min-h-[400px]">
             
