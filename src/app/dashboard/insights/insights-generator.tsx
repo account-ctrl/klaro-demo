@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, BarChart2, TrendingUp, AlertCircle } from "lucide-react";
-import { generateBarangayInsights } from '@/ai/flows/barangay-data-insights';
+import { generateInsightsAction } from '@/lib/actions';
 
 export default function InsightsGenerator() {
   const [loading, setLoading] = useState(false);
@@ -15,25 +15,13 @@ export default function InsightsGenerator() {
     setLoading(true);
     setInsight(null);
     try {
-      // In a real scenario, this fetches data from Firestore first
-      // For now, we simulate the flow call or call the server action
-      // Since `generateBarangayInsights` is a Genkit flow, we usually call it via an API route or Server Action wrapper.
-      // Assuming we have an API route or direct server action capability:
+      const result = await generateInsightsAction();
       
-      // Simulating a delay for effect if direct call isn't set up in this snippet context
-      // In production: const result = await runFlow(generateBarangayInsights, currentData);
-      
-      // Placeholder for the actual integration
-      await new Promise(r => setTimeout(r, 2000)); 
-      setInsight(`
-        **Key Insights for Barangay San Isidro:**
-        
-        1. **Demographic Shift:** There has been a 5% increase in the youth population (ages 18-24) over the last quarter. Consider launching more youth engagement programs.
-        
-        2. **Blotter Trends:** Noise complaints have spiked by 15% in Purok 3 during weekends. Targeted tanod patrols on Friday and Saturday nights are recommended.
-        
-        3. **Health Advisory:** Cases of Dengue are slightly above average for this season. Initiate a clean-up drive in flood-prone areas immediately.
-      `);
+      if (result.success && result.insights) {
+        setInsight(result.insights);
+      } else {
+        setInsight("Unable to generate insights at this time. Please try again.");
+      }
       
     } catch (error) {
       console.error(error);

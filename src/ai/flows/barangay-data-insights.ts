@@ -18,7 +18,11 @@ const BarangayDataInsightsInputSchema = z.object({
 export type BarangayDataInsightsInput = z.infer<typeof BarangayDataInsightsInputSchema>;
 
 const BarangayDataInsightsOutputSchema = z.object({
-  insights: z.string().describe('Insights generated from the Barangay data.'),
+  summary: z.string().describe('A concise summary of overall insights.'),
+  demographicInsights: z.array(z.string()).describe('Specific insights related to resident demographics.'),
+  projectInsights: z.array(z.string()).describe('Specific insights related to project status.'),
+  blotterInsights: z.array(z.string()).describe('Specific insights related to blotter resolutions.'),
+  recommendations: z.array(z.string()).describe('Actionable recommendations for Barangay officials.')
 });
 export type BarangayDataInsightsOutput = z.infer<typeof BarangayDataInsightsOutputSchema>;
 
@@ -38,7 +42,13 @@ const prompt = ai.definePrompt({
   Project Status: {{{projectStatus}}}
   Blotter Resolutions: {{{blotterResolutions}}}
 
-  Insights:`,
+  Generate a structured analysis containing:
+  1. A concise summary of the overall situation.
+  2. Specific insights derived from the resident demographics (e.g., age distribution shifts, vulnerable groups).
+  3. Insights related to project statuses (e.g., delays, successes, resource allocation).
+  4. Observations from blotter resolutions (e.g., crime trends, resolution efficiency).
+  5. Actionable recommendations for the Barangay officials based on the analysis.
+  `,
 });
 
 const barangayDataInsightsFlow = ai.defineFlow(

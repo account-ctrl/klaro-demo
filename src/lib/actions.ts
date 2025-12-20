@@ -77,13 +77,34 @@ export async function generateInsightsAction(): Promise<{ success: boolean; insi
     // In a real scenario, you would fetch these from Firestore based on the current tenant context.
     // For now, we use the imported sample data.
     const input = {
-      residentDemographics: JSON.stringify(barangayDataForAI.residentDemographics),
-      projectStatus: JSON.stringify(barangayDataForAI.projectStatus),
-      blotterResolutions: JSON.stringify(barangayDataForAI.blotterResolutions),
+      residentDemographics: JSON.stringify(barangayDataForAI.residents),
+      projectStatus: JSON.stringify(barangayDataForAI.projects),
+      blotterResolutions: JSON.stringify(barangayDataForAI.cases),
     };
 
     const result = await getBarangayInsights(input);
-    return { success: true, insights: result.insights };
+    
+    // Format the structured result back into a string for the frontend,
+    // or we could update the frontend to handle the object structure.
+    // For now, let's construct a readable string.
+    const formattedInsights = `
+      **Summary:**
+      ${result.summary}
+
+      **Demographic Insights:**
+      ${result.demographicInsights.map(i => `- ${i}`).join('\n')}
+
+      **Project Insights:**
+      ${result.projectInsights.map(i => `- ${i}`).join('\n')}
+
+      **Blotter Insights:**
+      ${result.blotterInsights.map(i => `- ${i}`).join('\n')}
+
+      **Recommendations:**
+      ${result.recommendations.map(i => `- ${i}`).join('\n')}
+    `;
+
+    return { success: true, insights: formattedInsights };
   } catch (error) {
     console.error("Error generating insights:", error);
     return { success: false, error: "Failed to generate insights." };
