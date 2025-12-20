@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useFirebaseApp } from '@/firebase'; 
-import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'; // Added doc, getDoc, setDoc
-// import { getFunctions, httpsCallable } from 'firebase/functions'; // REMOVED
+import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
 import Webcam from 'react-webcam';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck, ArrowRight } from "lucide-react";
+import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck, ArrowRight, Smartphone, KeyRound } from "lucide-react";
 
 // Import Geo Data
 import provincesData from '@/lib/data/provinces.json';
@@ -26,6 +26,7 @@ import citiesData from '@/lib/data/cities-municipalities.json';
 // 3. Geolocation
 // 4. ID Upload
 // 5. Selfie (Liveness)
+// 6. Phone Verification (OTP)
 
 export default function VerificationWizard() {
   const { user } = useUser();
@@ -33,10 +34,11 @@ export default function VerificationWizard() {
   const { toast } = useToast();
   const firestore = useFirestore(); 
   const firebaseApp = useFirebaseApp(); 
+  const auth = firebaseApp ? getAuth(firebaseApp) : null;
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [isResuming, setIsResuming] = useState(false); // State to show resume loading
+  const [isResuming, setIsResuming] = useState(false);
   
   // Location Data State
   const [tenants, setTenants] = useState<{id: string, name: string, province: string, city: string, center: {lat: number, lng: number}}[]>([]);
@@ -45,6 +47,11 @@ export default function VerificationWizard() {
   
   const [filteredCities, setFilteredCities] = useState<any[]>([]);
   const [filteredBarangays, setFilteredBarangays] = useState<any[]>([]);
+
+  // Phone Auth State
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [phoneVerified, setPhoneVerified] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -55,10 +62,34 @@ export default function VerificationWizard() {
     longitude: null as number | null,
     distanceKm: 0,
     idImage: null as string | null, // base64
-    selfieImage: null as string | null // base64
+    selfieImage: null as string | null, // base64
+    phoneNumber: ''
   });
 
   const webcamRef = useRef<Webcam>(null);
+
+  // Initialize Recaptcha
+  useEffect(() => {
+    if (!auth) return;
+    
+    // Ensure the element exists before initializing
+    const recaptchaContainer = document.getElementById('recaptcha-container');
+    if (recaptchaContainer && !window.recaptchaVerifier) {
+        try {
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                'size': 'invisible',
+                'callback': (response: any) => {
+                    // reCAPTCHA solved, allow signInWithPhoneNumber.
+                },
+                'expired-callback': () => {
+                    // Response expired. Ask user to solve reCAPTCHA again.
+                }
+            });
+        } catch (e) {
+            console.error("Recaptcha Init Error", e);
+        }
+    }
+  }, [auth, step]); // Re-run if step changes to ensure container is mounted when needed
 
   // Load Tenants on Mount
   useEffect(() => {
@@ -105,10 +136,12 @@ export default function VerificationWizard() {
                     
                     // Restore Form Data
                     setFormData(prev => ({ ...prev, ...draft.formData }));
+                    
+                    // Restore Phone Verified Status (if stored securely, otherwise user must re-verify)
+                    // For security, usually force re-verify if sensitive, but for draft we can persist state
+                    if (draft.phoneVerified) setPhoneVerified(true);
 
-                    // Restore Location Dropdowns if tenantId is saved (Logic to reconstruct selection)
-                    // Note: This logic is complex because we rely on derived state (filtered lists).
-                    // Ideally we should save province/city codes in draft too.
+                    // Restore Location Dropdowns
                     if (draft.selectedProvinceCode) {
                         setSelectedProvinceCode(draft.selectedProvinceCode);
                         const cities = citiesData.filter(c => c.provinceCode === draft.selectedProvinceCode);
@@ -116,7 +149,6 @@ export default function VerificationWizard() {
                     }
                     if (draft.selectedCityCode) {
                         setSelectedCityCode(draft.selectedCityCode);
-                        // Trigger filtering barangays (need to wait for tenants to load, so might need effect dependency)
                     }
                     
                     toast({ title: "Progress Restored", description: "Continuing from where you left off." });
@@ -160,7 +192,7 @@ export default function VerificationWizard() {
 
 
   // Helper to save progress
-  const saveProgress = async (newStep: number, currentData: any) => {
+  const saveProgress = async (newStep: number, currentData: any, verified = false) => {
       if (!user || !firestore) return;
       try {
           const userRef = doc(firestore, 'users', user.uid);
@@ -170,6 +202,7 @@ export default function VerificationWizard() {
                   formData: currentData,
                   selectedProvinceCode,
                   selectedCityCode,
+                  phoneVerified: verified,
                   lastUpdated: new Date()
               }
           }, { merge: true });
@@ -204,13 +237,13 @@ export default function VerificationWizard() {
   const nextStep = () => {
       const next = step + 1;
       setStep(next);
-      saveProgress(next, formData); // Auto-save
+      saveProgress(next, formData, phoneVerified); 
   };
 
   const prevStep = () => {
       const prev = step - 1;
       setStep(prev);
-      saveProgress(prev, formData); // Auto-save
+      saveProgress(prev, formData, phoneVerified); 
   };
 
   // --- STEP 3: Geolocation ---
@@ -240,7 +273,7 @@ export default function VerificationWizard() {
                     longitude: lng,
                     distanceKm: dist
                 };
-                saveProgress(step, newData); // Save immediately after location
+                saveProgress(step, newData, phoneVerified); 
                 return newData;
             });
             setLoading(false);
@@ -262,9 +295,7 @@ export default function VerificationWizard() {
             const base64 = reader.result as string;
             setFormData(prev => {
                 const newData = { ...prev, idImage: base64 };
-                // We typically don't autosave large base64 strings to Firestore frequently due to size limits/cost, 
-                // but for draft purposes it's okay for now. Optimally upload to Storage.
-                saveProgress(step, newData); 
+                saveProgress(step, newData, phoneVerified); 
                 return newData;
             });
         };
@@ -277,8 +308,56 @@ export default function VerificationWizard() {
     const imageSrc = webcamRef.current?.getScreenshot();
     if (imageSrc) {
         setFormData(prev => ({ ...prev, selfieImage: imageSrc }));
-        // Don't auto-save selfie immediately to allow retake, or save it if you want.
     }
+  };
+
+  // --- STEP 6: Phone Verification ---
+  const sendOtp = async () => {
+      if (!formData.phoneNumber || !auth) {
+          toast({ variant: "destructive", title: "Error", description: "Please enter a valid phone number." });
+          return;
+      }
+      setLoading(true);
+      try {
+          // Format phone: ensure it starts with +63
+          let phone = formData.phoneNumber.replace(/^0+/, '');
+          if (!phone.startsWith('+63')) {
+              phone = `+63${phone}`;
+          }
+
+          const appVerifier = window.recaptchaVerifier;
+          const result = await signInWithPhoneNumber(auth, phone, appVerifier);
+          setConfirmationResult(result);
+          toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
+      } catch (error: any) {
+          console.error("SMS Error:", error);
+          toast({ variant: "destructive", title: "Failed to send OTP", description: error.message });
+          // Reset recaptcha if error
+          if (window.recaptchaVerifier) {
+              window.recaptchaVerifier.clear();
+              window.recaptchaVerifier = undefined;
+          }
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const verifyOtp = async () => {
+      if (!confirmationResult || !otpCode) return;
+      setLoading(true);
+      try {
+          const result = await confirmationResult.confirm(otpCode);
+          if (result.user) {
+              setPhoneVerified(true);
+              toast({ title: "Phone Verified", description: "You can now proceed." });
+              saveProgress(step, formData, true); // Save verified state
+          }
+      } catch (error: any) {
+          console.error("Verify Error:", error);
+          toast({ variant: "destructive", title: "Invalid Code", description: "Please try again." });
+      } finally {
+          setLoading(false);
+      }
   };
 
   // --- SUBMIT ---
@@ -287,7 +366,6 @@ export default function VerificationWizard() {
     setLoading(true);
 
     try {
-        // --- CHANGED: Use Next.js API Route instead of Cloud Function ---
         const token = await user.getIdToken();
         const res = await fetch('/api/resident/verify-identity', {
             method: 'POST',
@@ -305,7 +383,8 @@ export default function VerificationWizard() {
                     distance: formData.distanceKm
                 },
                 idImage: formData.idImage,
-                selfieImage: formData.selfieImage
+                selfieImage: formData.selfieImage,
+                phoneNumber: formData.phoneNumber // Include phone in profile update
             })
         });
 
@@ -370,11 +449,12 @@ export default function VerificationWizard() {
             <CardTitle>Identity Verification</CardTitle>
           </div>
           <CardDescription className="text-slate-400">
-            Step {step} of 5: {
+            Step {step} of 6: {
                 step === 1 ? "Select Barangay" :
                 step === 2 ? "Security Questions" :
                 step === 3 ? "Location Check" :
-                step === 4 ? "Upload ID" : "Live Selfie"
+                step === 4 ? "Upload ID" :
+                step === 5 ? "Live Selfie" : "Phone Verification"
             }
           </CardDescription>
         </CardHeader>
@@ -483,7 +563,7 @@ export default function VerificationWizard() {
                 </div>
             )}
 
-            {/* STEP 4: ID Upload --- */}
+            {/* STEP 4: ID UPLOAD */}
             {step === 4 && (
                 <div className="space-y-6">
                     <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 flex flex-col items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer relative">
@@ -547,25 +627,87 @@ export default function VerificationWizard() {
                 </div>
             )}
 
+            {/* STEP 6: PHONE VERIFICATION */}
+            {step === 6 && (
+                <div className="space-y-6">
+                    <div className="flex justify-center mb-4">
+                        <div className="p-4 bg-purple-50 rounded-full">
+                            <Smartphone className="h-12 w-12 text-purple-600" />
+                        </div>
+                    </div>
+                    
+                    {!confirmationResult ? (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Mobile Number</Label>
+                                <div className="flex gap-2">
+                                    <div className="flex items-center px-3 border rounded-md bg-slate-50 text-slate-500">
+                                        🇵🇭 +63
+                                    </div>
+                                    <Input 
+                                        placeholder="917 123 4567" 
+                                        value={formData.phoneNumber} 
+                                        onChange={e => setFormData({...formData, phoneNumber: e.target.value})} 
+                                        className="flex-1"
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500">We will send a 6-digit code to verify this number.</p>
+                            </div>
+                            <Button onClick={sendOtp} disabled={loading || !formData.phoneNumber} className="w-full">
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send Code
+                            </Button>
+                            {/* Hidden Recaptcha Container */}
+                            <div id="recaptcha-container"></div>
+                        </div>
+                    ) : !phoneVerified ? (
+                        <div className="space-y-4">
+                            <div className="space-y-2 text-center">
+                                <Label>Enter Verification Code</Label>
+                                <Input 
+                                    className="text-center text-2xl tracking-widest" 
+                                    maxLength={6} 
+                                    placeholder="000000"
+                                    value={otpCode}
+                                    onChange={e => setOtpCode(e.target.value)}
+                                />
+                                <p className="text-xs text-slate-500 cursor-pointer hover:text-purple-600" onClick={() => setConfirmationResult(null)}>
+                                    Wrong number? Change it.
+                                </p>
+                            </div>
+                            <Button onClick={verifyOtp} disabled={loading || otpCode.length !== 6} className="w-full bg-purple-600 hover:bg-purple-700">
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify OTP
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-2 p-6 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                            <CheckCircle className="h-12 w-12" />
+                            <h3 className="font-semibold text-lg">Phone Verified!</h3>
+                            <p className="text-sm">Your number {formData.phoneNumber} has been confirmed.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
         </CardContent>
         <CardFooter className="flex justify-between border-t p-6">
             <Button variant="ghost" onClick={prevStep} disabled={step === 1 || loading}>
                 Back
             </Button>
             
-            {step < 5 ? (
+            {step < 6 ? (
                 <Button onClick={nextStep} disabled={
                     (step === 1 && !formData.tenantId) ||
                     (step === 2 && (!formData.birthDate || !formData.mothersMaidenName)) ||
                     (step === 3 && !formData.latitude) ||
-                    (step === 4 && !formData.idImage)
+                    (step === 4 && !formData.idImage) ||
+                    (step === 5 && !formData.selfieImage)
                 }>
                     Next Step <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
             ) : (
-                <Button onClick={handleSubmit} disabled={loading || !formData.selfieImage} className="bg-green-600 hover:bg-green-500">
+                <Button onClick={handleSubmit} disabled={loading || !phoneVerified} className="bg-green-600 hover:bg-green-500">
                     {loading ? <Loader2 className="animate-spin mr-2" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                    Verify Identity
+                    Complete Verification
                 </Button>
             )}
         </CardFooter>
