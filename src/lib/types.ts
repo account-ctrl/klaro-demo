@@ -360,7 +360,7 @@ export type Pet = {
     ownerResidentId: string;
     householdId?: string;
     name: string;
-    species: 'Dog' | 'Cat' | 'Other';
+    species: 'Dog' | 'Cat' | 'Bird' | 'Fish' | 'Rabbit' | 'Hamster' | 'Reptile' | 'Pig' | 'Chicken' | 'Goat' | 'Cattle' | 'Carabao' | 'Horse' | 'Other';
     breed?: string;
     colorMarkings?: string;
     gender?: 'Male' | 'Female';

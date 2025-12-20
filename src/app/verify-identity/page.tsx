@@ -23,7 +23,7 @@ import citiesData from '@/lib/data/cities-municipalities.json';
 
 // --- STEPS ---
 // 1. Tenant Selection (Province -> City -> Barangay)
-// 2. Personal Info (DOB, MMN)
+// 2. Personal Info (Name, DOB, MMN, Gender)
 // 3. Geolocation
 // 4. ID Upload
 // 5. Selfie (Liveness)
@@ -58,6 +58,10 @@ export default function VerificationWizard() {
   // Form State
   const [formData, setFormData] = useState({
     tenantId: '',
+    firstName: '',
+    lastName: '',
+    middleName: '',
+    gender: 'Male',
     birthDate: '',
     mothersMaidenName: '',
     latitude: null as number | null,
@@ -360,6 +364,10 @@ export default function VerificationWizard() {
             },
             body: JSON.stringify({
                 tenantId: formData.tenantId,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                middleName: formData.middleName,
+                gender: formData.gender,
                 birthDate: formData.birthDate,
                 mothersMaidenName: formData.mothersMaidenName,
                 location: {
@@ -387,7 +395,7 @@ export default function VerificationWizard() {
         }
 
         if (data.status === 'verified') {
-            toast({ title: "Success!", description: "Identity Verified. Redirecting..." });
+            toast({ title: "Success!", description: "Identity Verified & Registered. Redirecting..." });
             router.push('/resident/dashboard');
         } else {
             toast({ variant: "destructive", title: "Verification Pending", description: "Manual review required." });
@@ -442,7 +450,7 @@ export default function VerificationWizard() {
           <CardDescription className="text-slate-400">
             Step {step} of 6: { // Increased total steps
                 step === 1 ? "Select Barangay" :
-                step === 2 ? "Security Questions" :
+                step === 2 ? "Personal Information" :
                 step === 3 ? "Location Check" :
                 step === 4 ? "Upload ID" :
                 step === 5 ? "Live Selfie" : "Phone Verification"
@@ -512,7 +520,7 @@ export default function VerificationWizard() {
                     </div>
 
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
-                        We will cross-reference your data with this Barangay's Master List.
+                        We will register you to this Barangay.
                     </div>
                 </div>
             )}
@@ -520,6 +528,34 @@ export default function VerificationWizard() {
             {/* STEP 2: BIO DATA */}
             {step === 2 && (
                 <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>First Name</Label>
+                            <Input placeholder="Juan" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Last Name</Label>
+                            <Input placeholder="Dela Cruz" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Middle Name</Label>
+                            <Input placeholder="Reyes" value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Gender</Label>
+                            <Select onValueChange={v => setFormData({...formData, gender: v})} value={formData.gender}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Male">Male</SelectItem>
+                                    <SelectItem value="Female">Female</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
                     <div className="space-y-2">
                         <Label>Date of Birth</Label>
                         <Input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
@@ -531,7 +567,7 @@ export default function VerificationWizard() {
                             value={formData.mothersMaidenName} 
                             onChange={e => setFormData({...formData, mothersMaidenName: e.target.value})} 
                         />
-                        <p className="text-xs text-slate-500">Used for deep verification against civil records.</p>
+                        <p className="text-xs text-slate-500">Used for identity verification.</p>
                     </div>
                 </div>
             )}
@@ -700,7 +736,7 @@ export default function VerificationWizard() {
             {step < 6 ? (
                 <Button onClick={nextStep} disabled={
                     (step === 1 && !formData.tenantId) ||
-                    (step === 2 && (!formData.birthDate || !formData.mothersMaidenName)) ||
+                    (step === 2 && (!formData.firstName || !formData.lastName || !formData.birthDate || !formData.mothersMaidenName)) ||
                     (step === 3 && !formData.latitude) ||
                     (step === 4 && !formData.idImage) ||
                     (step === 5 && !formData.selfieImage)

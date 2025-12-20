@@ -97,7 +97,7 @@ export const PetIDCard: React.FC<PetIDCardProps> = ({ pet, owner, barangay }) =>
                 <div className="info-grid">
                     <div className="info-item">
                         <label>SPECIES</label>
-                        <span>{pet.species || '-'}</span>
+                        <span className="truncate">{pet.species || '-'}</span>
                     </div>
                     <div className="info-item">
                         <label>BREED</label>

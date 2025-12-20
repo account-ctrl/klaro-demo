@@ -65,6 +65,24 @@ type PetFormProps = {
   households: Household[];
 };
 
+const SPECIES_OPTIONS = [
+    { value: 'Dog', label: 'Dog' },
+    { value: 'Cat', label: 'Cat' },
+    { value: 'Bird', label: 'Bird' },
+    { value: 'Fish', label: 'Fish' },
+    { value: 'Rabbit', label: 'Rabbit' },
+    { value: 'Hamster', label: 'Hamster' },
+    { value: 'Reptile', label: 'Reptile' },
+    { value: 'Pig', label: 'Pig' },
+    { value: 'Chicken', label: 'Chicken' },
+    { value: 'Goat', label: 'Goat' },
+    { value: 'Cattle', label: 'Cattle' },
+    { value: 'Carabao', label: 'Carabao' },
+    { value: 'Horse', label: 'Horse' },
+    { value: 'Other', label: 'Other' }
+];
+
+
 function PetForm({ record, onSave, onClose, residents, households }: PetFormProps) {
   const { profile } = useTenantProfile();
   
@@ -111,13 +129,13 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
-  const handleSelectChange = (id: 'gender' | 'behaviorStatus' | 'status' | 'ownerResidentId', value: string) => {
+  const handleSelectChange = (id: 'gender' | 'behaviorStatus' | 'status' | 'ownerResidentId' | 'species', value: string) => {
     setFormData((prev) => ({ ...prev, [id]: value }));
   }
 
-  const handleRadioChange = (id: 'species', value: 'Dog' | 'Cat' | 'Other') => {
-      setFormData(prev => ({...prev, [id]: value }));
-  }
+  // const handleRadioChange = (id: 'species', value: 'Dog' | 'Cat' | 'Other') => {
+  //     setFormData(prev => ({...prev, [id]: value }));
+  // }
 
   const handleSwitchChange = (id: 'isNeutered', checked: boolean) => {
     setFormData((prev) => ({ ...prev, [id]: checked }));
@@ -219,11 +237,14 @@ function PetForm({ record, onSave, onClose, residents, households }: PetFormProp
                     </div>
                      <div className="space-y-2">
                         <Label>Species</Label>
-                         <RadioGroup onValueChange={(val: 'Dog' | 'Cat' | 'Other') => handleRadioChange('species', val)} value={formData.species} className="flex gap-4 pt-2">
-                            <div className="flex items-center space-x-2"><RadioGroupItem value="Dog" id="dog" /><Label htmlFor="dog">Dog</Label></div>
-                            <div className="flex items-center space-x-2"><RadioGroupItem value="Cat" id="cat" /><Label htmlFor="cat">Cat</Label></div>
-                            <div className="flex items-center space-x-2"><RadioGroupItem value="Other" id="other" /><Label htmlFor="other">Other</Label></div>
-                        </RadioGroup>
+                        <Select onValueChange={(val) => handleSelectChange('species', val)} value={formData.species}>
+                            <SelectTrigger><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                                {SPECIES_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
                  <div className="grid grid-cols-2 gap-4">

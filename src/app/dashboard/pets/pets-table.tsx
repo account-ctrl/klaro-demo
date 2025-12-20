@@ -40,6 +40,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTenant } from '@/providers/tenant-provider'; // Import useTenant
 
+const SPECIES_OPTIONS = [
+    { value: 'Dog', label: 'Dog' },
+    { value: 'Cat', label: 'Cat' },
+    { value: 'Bird', label: 'Bird' },
+    { value: 'Fish', label: 'Fish' },
+    { value: 'Rabbit', label: 'Rabbit' },
+    { value: 'Hamster', label: 'Hamster' },
+    { value: 'Reptile', label: 'Reptile' },
+    { value: 'Pig', label: 'Pig' },
+    { value: 'Chicken', label: 'Chicken' },
+    { value: 'Goat', label: 'Goat' },
+    { value: 'Cattle', label: 'Cattle' },
+    { value: 'Carabao', label: 'Carabao' },
+    { value: 'Horse', label: 'Horse' },
+    { value: 'Other', label: 'Other' }
+];
+
 export function PetsTable() {
   const firestore = useFirestore();
   const { user } = useUser();
@@ -198,9 +215,9 @@ export function PetsTable() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Species</SelectItem>
-                                            <SelectItem value="Dog">Dog</SelectItem>
-                                            <SelectItem value="Cat">Cat</SelectItem>
-                                            <SelectItem value="Other">Other</SelectItem>
+                                            {SPECIES_OPTIONS.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>

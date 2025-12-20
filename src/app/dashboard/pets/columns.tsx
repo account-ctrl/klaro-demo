@@ -4,7 +4,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Pet, Resident, Household } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, MoreHorizontal, Dog, Cat, Rabbit } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Dog, Cat, Rabbit, Bird, Fish, HelpCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +46,17 @@ function PetsTableActions({ pet, onEdit, onDelete, residents, households }: Pets
   );
 }
 
+const getSpeciesIcon = (species: string) => {
+    switch (species) {
+        case 'Dog': return Dog;
+        case 'Cat': return Cat;
+        case 'Bird': return Bird;
+        case 'Fish': return Fish;
+        case 'Rabbit': return Rabbit;
+        default: return HelpCircle;
+    }
+}
+
 
 export const getColumns = (
     onEdit: (pet: Pet) => void, 
@@ -66,12 +77,12 @@ export const getColumns = (
       ),
       cell: ({ row }) => {
         const pet = row.original;
-        const Icon = pet.species === 'Dog' ? Dog : pet.species === 'Cat' ? Cat : Rabbit;
+        const Icon = getSpeciesIcon(pet.species);
         return (
             <div className="flex items-center gap-3 pl-4">
                 <Avatar>
                     <AvatarImage src={pet.photoUrl} alt={pet.name} />
-                    <AvatarFallback><Icon /></AvatarFallback>
+                    <AvatarFallback><Icon className="h-4 w-4" /></AvatarFallback>
                 </Avatar>
                  <div className="font-medium">{pet.name}</div>
             </div>
