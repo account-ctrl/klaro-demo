@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,10 +15,19 @@ service cloud.firestore {
       return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
     }
     
-    // Check if the user belongs to the tenant (regardless of role)
+    // Check if the user belongs to the tenant (regardless of role - admin, staff, or resident)
+    // Note: We need a reliable way to check tenant membership for residents. 
+    // Residents might not have 'tenantPath' in token initially or it might be different.
+    // For residents, we rely on the document matching the user's ID within the tenant structure.
     function isTenantUser(province, city, barangay) {
       let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
+      // This is primarily for officials/staff who have tenantPath
       return request.auth.token.tenantPath == expectedPath;
+    }
+
+    // Check if the request is from the authenticated user themselves
+    function isOwner(userId) {
+        return request.auth.uid == userId;
     }
 
     // --- GLOBAL RULES ---
@@ -29,22 +37,18 @@ service cloud.firestore {
       allow read, write: if isSuperAdmin();
     }
 
-    // 2. Tenant Directory
+    // 2. Tenant Directory (Public Read for Tenant Selection)
     match /tenant_directory/{tenantSlug} {
-      allow read: if request.auth != null;
+      allow read: if true; 
       allow write: if false; 
     }
     
-    // 3. Global User Profiles
+    // 3. Global User Profiles (The connection point)
     match /users/{userId} {
-        allow read, write: if request.auth != null;
-    }
-
-    // --- LEGACY / FLAT STRUCTURE SUPPORT (For Demo/Dev) ---
-    match /barangays/{barangayId}/{document=**} {
-        // Allow authenticated users to access this path for now
-        // This is crucial for the Resident Dashboard demo connecting to 'barangay_san_isidro'
-        allow read, write: if request.auth != null;
+        // Users can read/write their own profile
+        // Admins can read profiles to link them
+        allow read: if isOwner(userId) || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin';
+        allow write: if isOwner(userId) || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin';
     }
 
     // --- THE VAULT (Strict Isolation) ---
@@ -52,11 +56,33 @@ service cloud.firestore {
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
       // The Barangay Root Document 
-      allow read: if isTenantUser(province, city, barangay); // Allow all tenant users to read the root config
+      // Allow tenant admins/staff to read config
+      // Allow residents to read basic config if they belong to this tenant (logic handled in app by checking user.tenantId)
+      // Since we can't easily check resident's tenantId from token in all cases yet without custom claims sync, 
+      // we'll rely on specific subcollection rules for residents.
+      allow read: if isTenantUser(province, city, barangay); 
       allow write: if false; 
 
-      // Specific Collections with broader access
-      
+      // --- RESIDENT RECORDS (The Source of Truth) ---
+      match /resident_records/{residentId} {
+         // Admins can read/write all records
+         allow read, write: if isTenantAdmin(province, city, barangay);
+         
+         // A resident can READ their own record if the document ID matches their Auth UID (or a field links them)
+         // Assuming we link by Auth UID or store Auth UID in a field 'linkedUserId'
+         allow read: if resource.data.linkedUserId == request.auth.uid;
+      }
+
+      // --- DOCUMENTS (Strict Isolation) ---
+      match /users/{userId}/documents/{documentId} {
+         // 1. The User (Owner) can read/write their own documents
+         allow read, write: if isOwner(userId);
+
+         // 2. The Tenant Admin can read/write documents for users in their tenant
+         // (This assumes the user actually belongs to this tenant path, which is implicit by the path structure)
+         allow read, write: if isTenantAdmin(province, city, barangay);
+      }
+
       // Emergency Alerts: Allow any tenant user (e.g. Responders) to read/write
       match /emergency_alerts/{alertId} {
         allow read, write: if isTenantUser(province, city, barangay);
