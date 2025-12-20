@@ -65,12 +65,13 @@ export default function VerificationWizard() {
 
     const fetchTenants = async () => {
       try {
-        const snap = await getDocs(collection(firestore, 'tenants'));
+        // Changed from 'tenants' to 'tenant_directory' to match provisioning script
+        const snap = await getDocs(collection(firestore, 'tenant_directory'));
         const list = snap.docs.map(d => {
             const data = d.data();
             return {
                 id: d.id,
-                name: data.name || "Unknown Barangay",
+                name: data.barangay || data.name || "Unknown Barangay", // data.barangay is what provisioning sets
                 province: data.province || "", 
                 city: data.city || "",
                 center: data.centerCoordinates || { lat: 14.5995, lng: 120.9842 }
@@ -106,14 +107,25 @@ export default function VerificationWizard() {
     const provObj = provincesData.find(p => p.code === selectedProvinceCode);
 
     if (cityObj && provObj) {
-        // Filter Tenants (Barangays)
-        // We match loosely on name because tenant data might be slightly different string format
-        // Ideally tenant data should store codes, but for now we fallback to name matching or list all if fuzzy
-        const matches = tenants.filter(t => 
-            (t.city.toLowerCase() === cityObj.name.toLowerCase() || t.city.includes(cityObj.name) || cityObj.name.includes(t.city)) &&
-            (t.province.toLowerCase() === provObj.name.toLowerCase() || t.province.includes(provObj.name))
-        );
-        setFilteredBarangays(matches);
+        const sCity = cityObj.name.trim().toLowerCase();
+        const sProv = provObj.name.trim().toLowerCase();
+
+        // Filter Tenants (Barangays) using robust case-insensitive matching
+        const matches = tenants.filter(t => {
+            const tCity = (t.city || "").trim().toLowerCase();
+            const tProv = (t.province || "").trim().toLowerCase();
+
+            // Check Province (Exact or Partial)
+            const provMatch = tProv === sProv || tProv.includes(sProv) || sProv.includes(tProv);
+            if (!provMatch) return false;
+
+            // Check City (Exact or Partial)
+            // Handle cases like "City of X" matching "X"
+            const cityMatch = tCity === sCity || tCity.includes(sCity) || sCity.includes(tCity);
+            return cityMatch;
+        });
+        
+        setFilteredBarangays(matches.sort((a, b) => a.name.localeCompare(b.name)));
     } else {
         setFilteredBarangays([]);
     }
