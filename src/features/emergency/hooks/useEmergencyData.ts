@@ -28,10 +28,12 @@ export const useIncidents = () => {
 
     // Listen to incidents in the tenant's subcollection
     const incidentsRef = collection(firestore, `${tenantPath}/emergency_alerts`);
+    
+    // SIMPLIFIED QUERY: Removed orderBy to prevent 'Missing Index' (400) error.
+    // Sorting will be done client-side.
     const q = query(
       incidentsRef, 
-      where('status', 'in', ['New', 'Acknowledged', 'Dispatched', 'On Scene']),
-      orderBy('timestamp', 'desc')
+      where('status', 'in', ['New', 'Acknowledged', 'Dispatched', 'On Scene'])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -39,6 +41,14 @@ export const useIncidents = () => {
       snapshot.forEach((doc) => {
         results.push({ ...doc.data(), alertId: doc.id } as EmergencyAlert);
       });
+      
+      // Client-side Sort (Newest first)
+      results.sort((a, b) => {
+          const tA = a.timestamp?.seconds || 0;
+          const tB = b.timestamp?.seconds || 0;
+          return tB - tA;
+      });
+
       setIncidents(results);
       setLoading(false);
     });
