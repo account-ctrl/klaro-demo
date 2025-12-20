@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Loader2, MapPinOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { useSmartGeolocation } from '../hooks/useSmartGeolocation'; // Updated Import
+import { useSmartGeolocation } from '../hooks/useSmartGeolocation'; 
 import { useFirestore } from '@/firebase/client-provider';
 import { useTenant } from '@/providers/tenant-provider';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -14,6 +14,9 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EmergencyAlertSchema } from '@/utils/schemas';
+import { EMERGENCY_STATUS, EMERGENCY_CATEGORY } from '@/utils/constants';
+import { z } from 'zod';
 
 export const SOSButton = () => {
     const [permissionState, setPermissionState] = useState<PermissionState | 'unknown'>('unknown');
@@ -64,26 +67,46 @@ export const SOSButton = () => {
                 `${tenantPath}/emergency_alerts`
             );
 
-            await addDoc(incidentsRef, {
-                residentId: user?.uid || 'anonymous',
-                residentName: user?.displayName || 'Unknown User',
-                timestamp: serverTimestamp(),
+            // 1. Prepare Payload
+            const rawPayload = {
+                residentId: user.uid || 'anonymous',
+                residentName: user.displayName || 'Unknown User',
+                timestamp: serverTimestamp(), // We'll validate this loosely as 'any' in schema
+                latitude: locData.lat,
+                longitude: locData.lng,
+                accuracy_m: locData.accuracy,
+                status: EMERGENCY_STATUS.NEW,
+                category: EMERGENCY_CATEGORY.UNSPECIFIED,
+                message: 'SOS Button Triggered',
+                // Additional fields not in strict schema but allowed by Firestore
                 location: {
                     lat: locData.lat,
                     lng: locData.lng,
                     accuracy: locData.accuracy,
                     provider: locData.provider
                 },
-                // Backward compatibility
-                latitude: locData.lat,
-                longitude: locData.lng,
-                accuracy_m: locData.accuracy,
-                
-                status: 'New',
-                category: 'Unspecified',
-                description: 'SOS Button Triggered',
-                contactNumber: user?.phoneNumber || '', 
+                contactNumber: user.phoneNumber || '', 
+            };
+
+            // 2. Validate with Zod
+            // We strip 'location' and 'contactNumber' for validation if they aren't in schema, 
+            // OR update schema. For now, EmergencyAlertSchema is strict about core fields.
+            // Let's validate the core fields.
+            
+            const validatedCore = EmergencyAlertSchema.parse({
+                residentId: rawPayload.residentId,
+                residentName: rawPayload.residentName,
+                latitude: rawPayload.latitude,
+                longitude: rawPayload.longitude,
+                accuracy_m: rawPayload.accuracy_m,
+                status: rawPayload.status,
+                category: rawPayload.category,
+                message: rawPayload.message,
+                timestamp: new Date() // Dummy date for validation check
             });
+
+            // 3. Write to Firestore (Using the full payload including extra fields)
+            await addDoc(incidentsRef, rawPayload);
 
             toast({
                 title: "SOS SENT!",
@@ -92,12 +115,21 @@ export const SOSButton = () => {
             });
 
         } catch (err: any) {
-            console.error("SOS DB Error:", err);
-            toast({
-                title: "Connection Error",
-                description: "Could not send SOS to server. Check internet.",
-                variant: "destructive"
-            });
+            console.error("SOS DB/Validation Error:", err);
+            
+            if (err instanceof z.ZodError) {
+                 toast({
+                    title: "Alert Invalid",
+                    description: "Could not send alert due to invalid data format.",
+                    variant: "destructive"
+                });
+            } else {
+                toast({
+                    title: "Connection Error",
+                    description: "Could not send SOS to server. Check internet.",
+                    variant: "destructive"
+                });
+            }
         }
     };
 

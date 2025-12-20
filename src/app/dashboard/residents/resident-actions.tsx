@@ -51,9 +51,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ResidentActivity } from './resident-activity';
-import { useTenantContext } from '@/lib/hooks/useTenant'; // Use secure context for fetching puroks
+import { useTenantContext } from '@/lib/hooks/useTenant'; 
 import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
 import { collection, orderBy, query } from 'firebase/firestore';
+import { ResidentSchema } from '@/utils/schemas'; // Import Zod Schema
+import { z } from 'zod';
 
 export type ResidentFormValues = Omit<Resident, 'residentId'>;
 
@@ -88,7 +90,7 @@ const defaultResidentData: ResidentFormValues = {
             accuracy_meters: 0
         }
     },
-    purokId: "", // Added Purok Field
+    purokId: "", 
     status: "Active",
     civilStatus: "Single",
     nationality: "Filipino",
@@ -103,7 +105,8 @@ const defaultResidentData: ResidentFormValues = {
 
 function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps) {
   const firestore = useFirestore();
-  const { tenantPath } = useTenantContext();
+  const { tenantPath, tenantId } = useTenantContext();
+  const { toast } = useToast();
   const [formData, setFormData] = useState<ResidentFormValues>(
     record ?? defaultResidentData
   );
@@ -111,7 +114,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
   // Helper to safely access structured address fields
   const getAddressField = (path: 'street' | 'blockLot' | 'unit' | 'landmark' | 'purok') => {
       const addr = formData.address;
-      if (typeof addr === 'string') return path === 'street' ? addr : ''; // Fallback for legacy data
+      if (typeof addr === 'string') return path === 'street' ? addr : ''; 
       if (!addr) return '';
       
       if (path === 'purok') return addr.purok || '';
@@ -121,7 +124,7 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
   const handleAddressChange = (field: 'street' | 'blockLot' | 'unit' | 'landmark', value: string) => {
       setFormData(prev => {
           const currentAddr = typeof prev.address === 'object' && prev.address ? prev.address : {
-              purok: prev.purokId || '', // Fallback to flat ID if exists
+              purok: prev.purokId || '',
               mapAddress: { street: '', blockLot: '', unit: '', landmark: '' },
               coordinates: { lat: 0, lng: 0, accuracy_meters: 0 }
           };
@@ -140,7 +143,6 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
   };
 
   const handlePurokChange = (value: string) => {
-       // Update both purokId (relational) and address.purok (denormalized)
        setFormData(prev => {
           const currentAddr = typeof prev.address === 'object' && prev.address ? prev.address : {
               purok: '',
@@ -153,17 +155,14 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
                purokId: value,
                address: {
                    ...currentAddr,
-                   purok: value // Ideally fetch Name, but ID is okay for internal ref
+                   purok: value 
                }
            }
        });
   };
 
-
-  // Fetch Puroks dynamically
   const puroksRef = useMemoFirebase(() => {
       if (!firestore || !tenantPath) return null;
-      // Ensure path doesn't have double slash or missing slash issues, though Firestore is lenient
       const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
       return query(collection(firestore, `${safePath}/puroks`), orderBy('name'));
   }, [firestore, tenantPath]);
@@ -185,17 +184,62 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const dataToSave = {
-        ...formData,
-        householdId: formData.householdId === 'NO_HOUSEHOLD' ? undefined : formData.householdId,
-    };
-    // Ensure we are passing ResidentWithId correctly if it's an edit
-    if (record) {
-      // Cast the merged object as ResidentWithId to satisfy the type checker
-      const updatedRecord = { ...record, ...dataToSave } as ResidentWithId;
-      onSave(updatedRecord);
-    } else {
-      onSave(dataToSave);
+    
+    // 1. Prepare Data for Zod
+    // We need to match the schema structure. 
+    // ResidentSchema expects simple address string for now (based on schemas.ts), 
+    // but our form uses structured address.
+    // Let's serialize the address for validation if needed, or update schema to support structured.
+    // For now, we'll validate the core fields.
+    
+    try {
+        // Flatten address for the basic schema check if it expects a string
+        // Or better, let's update schemas.ts to accept structured address later.
+        // For now, we construct a display address string to pass validation
+        const displayAddress = typeof formData.address === 'string' 
+            ? formData.address 
+            : `${getAddressField('blockLot')} ${getAddressField('street')}, ${getAddressField('purok')}`;
+
+        const dataToValidate = {
+            ...formData,
+            address: displayAddress || "Unspecified Address", // Fallback to pass string min(5) check
+            tenantId: tenantId || 'unknown-tenant' // Inject tenant context
+        };
+
+        // 2. Validate
+        const parsed = ResidentSchema.parse(dataToValidate);
+        
+        // 3. Transform Back (The schema automatically UPPERCASES names)
+        // We merge the transformed fields (names) back into our rich formData
+        const finalData = {
+            ...formData,
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            middleName: parsed.middleName,
+            // Keep original structured address object, don't overwrite with the string representation
+            householdId: formData.householdId === 'NO_HOUSEHOLD' ? undefined : formData.householdId,
+        };
+
+        // 4. Save
+        if (record) {
+            const updatedRecord = { ...record, ...finalData } as ResidentWithId;
+            onSave(updatedRecord);
+        } else {
+            onSave(finalData);
+        }
+        
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            // Show the first error message
+            const firstError = error.errors[0];
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: `${firstError.path.join('.')}: ${firstError.message}`
+            });
+        } else {
+            console.error("Form Error:", error);
+        }
     }
   };
 

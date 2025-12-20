@@ -148,8 +148,8 @@ export function requestSecureLocation(
                     console.error("[SecureGeo] Fallback Failed:", err);
                     onError(`Location Failed: ${err.message}`);
                 },
-                // Increased fallback timeout to 15s to give low-accuracy providers (WiFi/Cell) enough time
-                { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 } 
+                // Increased fallback timeout to 30s to be extremely safe for environments like Cloud Workstations
+                { enableHighAccuracy: false, timeout: 30000, maximumAge: 0 } 
             );
         }
     }, CONFIG.SOS.HARD_TIMEOUT);
