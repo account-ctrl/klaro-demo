@@ -98,6 +98,7 @@
     "react-leaflet": "^4.2.1",
     "react-leaflet-draw": "^0.21.0",
     "react-qr-code": "^2.0.18",
+    "react-webcam": "^7.2.0",
     "recharts": "^2.12.7",
     "select-philippines-address": "^1.0.6",
     "tailwind-merge": "^3.0.1",

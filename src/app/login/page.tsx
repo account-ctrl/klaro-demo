@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { Shield, User, Loader2, Lock, ArrowRight, Activity, MapPin, Eye, EyeOff } from "lucide-react";
 import { useAuth, initiateEmailSignIn } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { sendPasswordResetEmail } from 'firebase/auth'; // Import Reset Function
+import { sendPasswordResetEmail } from 'firebase/auth'; 
 import Image from 'next/image';
 
 export default function LoginPage() {
@@ -25,7 +25,7 @@ export default function LoginPage() {
     const [isPending, startTransition] = React.useTransition();
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
-    const [showPassword, setShowPassword] = React.useState(false); // Toggle State
+    const [showPassword, setShowPassword] = React.useState(false); 
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
@@ -40,24 +40,14 @@ export default function LoginPage() {
                     const tokenResult = await user.getIdTokenResult(true);
                     const role = tokenResult.claims.role;
 
-                    if (role === 'super_admin') {
-                        await auth.signOut();
-                        toast({
-                            variant: "destructive",
-                            title: "Security Alert",
-                            description: "Super Admins are forbidden on this public node. Use the secure channel."
-                        });
-                        return;
-                    }
-
-                    // CHANGED: Removed 'captain', only allowing 'admin' as the primary role.
-                    const ALLOWED_ROLES = ['admin', 'official', 'staff'];
+                    // STRICT ROLE CHECK FOR THIS PORTAL
+                    const ALLOWED_ROLES = ['admin', 'official', 'staff', 'super_admin'];
                     if (!ALLOWED_ROLES.includes(role as string)) {
                          await auth.signOut();
                          toast({
                              variant: "destructive",
                              title: "Access Denied",
-                             description: "This portal is for Barangay Officials only. Residents should use the Resident App."
+                             description: "Residents must use the Resident Portal. This access point is for Officials only."
                          });
                          return;
                     }
@@ -67,13 +57,9 @@ export default function LoginPage() {
             } catch (error: any) {
                 console.error(error);
                 let message = error.message;
+                if (error.code === 'auth/user-disabled') message = "Account deactivated.";
+                if (error.code === 'auth/invalid-credential') message = "Incorrect email or password.";
                 
-                if (error.code === 'auth/user-disabled') {
-                    message = "This account has been deactivated. Please contact your administrator.";
-                } else if (error.code === 'auth/invalid-credential') {
-                    message = "Incorrect email or password. Please try again.";
-                }
-
                 toast({
                     variant: "destructive",
                     title: "Authentication Failed",
@@ -83,33 +69,16 @@ export default function LoginPage() {
         });
     };
 
-    // Forgot Password Logic
     const handleForgotPassword = async () => {
-        if (!auth) return;
-        if (!email) {
-            toast({
-                variant: "destructive",
-                title: "Email Required",
-                description: "Please enter your official email address first so we can send the reset link."
-            });
+        if (!auth || !email) {
+            toast({ variant: "destructive", title: "Email Required", description: "Enter your email first." });
             return;
         }
-
         try {
             await sendPasswordResetEmail(auth, email);
-            toast({
-                title: "Reset Link Sent",
-                description: `A password reset link has been sent to ${email}. Check your inbox (and spam folder).`
-            });
+            toast({ title: "Reset Link Sent", description: `Check ${email} for the link.` });
         } catch (error: any) {
-            console.error(error);
-            let msg = "Failed to send reset email.";
-            if (error.code === 'auth/user-not-found') msg = "No account found with this email.";
-            toast({
-                variant: "destructive",
-                title: "Request Failed",
-                description: msg
-            });
+            toast({ variant: "destructive", title: "Error", description: error.message });
         }
     };
 
@@ -117,12 +86,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen bg-[#0a0a0a] text-white overflow-hidden font-sans">
         {/* LEFT COLUMN: VISUALS */}
         <div className="hidden lg:flex w-1/2 relative flex-col justify-between p-12 bg-black">
-             {/* Background Effects */}
              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,_rgba(255,255,255,0.03),_transparent_40%)]" />
              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-[128px] -translate-y-1/2 translate-x-1/2 opacity-50" />
              <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[128px] translate-y-1/3 -translate-x-1/4 opacity-40" />
 
-             {/* Content */}
              <div className="relative z-10 space-y-6 mt-20">
                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-xs text-white/70">
                     <Activity className="w-3 h-3 text-green-400" />
@@ -156,17 +123,13 @@ export default function LoginPage() {
              <div className="relative z-10 text-xs text-white/30 flex justify-between items-end">
                  <div>
                     <p>© 2024 KlaroGov Systems.</p>
-                    <p>Powered by Lithium Tech.</p>
                  </div>
-                 <div className="opacity-50">
-                    v2.4.0-stable
-                 </div>
+                 <div className="opacity-50">v2.5.0-production</div>
              </div>
         </div>
 
         {/* RIGHT COLUMN: LOGIN FORM */}
         <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative bg-[#0f0f0f]">
-             {/* Mobile/Tablet Background Gradient */}
              <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-transparent lg:hidden pointer-events-none" />
 
              <Card className="w-full max-w-[420px] bg-black/40 border-white/10 backdrop-blur-md shadow-2xl text-white">
@@ -259,7 +222,7 @@ export default function LoginPage() {
                     </div>
 
                     <div className="text-center text-[10px] text-white/30 leading-relaxed px-4">
-                        Unauthorized access is monitored and logged. By logging in, you agree to the <a href="#" className="underline hover:text-white/60">Acceptable Use Policy</a>.
+                        Unauthorized access is monitored and logged. Residents should use the <a href="/resident-portal" className="underline hover:text-white/60">Resident App</a>.
                     </div>
 
                 </CardContent>

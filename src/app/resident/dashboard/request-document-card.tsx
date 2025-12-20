@@ -83,8 +83,8 @@ export function RequestDocumentCard() {
     startTransition(() => {
         const documentsCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`);
         const docToAdd: Omit<CertificateRequest, 'requestId' | 'requestNumber'> = {
-            residentId: user.uid, // Using user UID as residentId for demo
-            residentName: user.displayName || 'Anonymous Resident',
+            residentId: user.uid,
+            residentName: user.displayName || 'Resident',
             certTypeId: certTypeId,
             certificateName: selectedCert.name,
             purpose: purpose,
