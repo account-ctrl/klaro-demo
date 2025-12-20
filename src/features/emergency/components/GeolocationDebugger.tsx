@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useGeolocation } from "../hooks/useGeolocation";
+import { useSOSLocation } from "../hooks/useSOSLocation";
 import { useEffect, useState, useRef } from "react";
 import { Loader2, RefreshCw, MapPin, AlertTriangle, User as UserIcon, Terminal } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -13,7 +13,7 @@ interface GeolocationDebuggerProps {
 }
 
 export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
-    const { location, error, getCurrentCoordinates } = useGeolocation();
+    const { location, error, getImmediateFix } = useSOSLocation();
     const [loading, setLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
@@ -22,7 +22,7 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
     const handleRefresh = async () => {
         setLoading(true);
         try {
-            await getCurrentCoordinates();
+            await getImmediateFix();
             setLastUpdated(new Date());
         } catch (e) {
             console.error(e);
@@ -121,22 +121,22 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
                 <div className="space-y-2 shrink-0">
                     <div className="flex justify-between items-center text-xs text-zinc-400">
                         <span>Latitude:</span>
-                        <span className="font-mono text-zinc-100">{location.lat?.toFixed(6) || '---'}</span>
+                        <span className="font-mono text-zinc-100">{location?.lat?.toFixed(6) || '---'}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-zinc-400">
                         <span>Longitude:</span>
-                        <span className="font-mono text-zinc-100">{location.lng?.toFixed(6) || '---'}</span>
+                        <span className="font-mono text-zinc-100">{location?.lng?.toFixed(6) || '---'}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-zinc-400">
                         <span>Accuracy:</span>
-                        <span className={`font-mono ${getAccuracyColor(location.accuracy)}`}>
-                            {location.accuracy ? `±${Math.round(location.accuracy)}m` : '---'}
+                        <span className={`font-mono ${getAccuracyColor(location?.accuracy || null)}`}>
+                            {location?.accuracy ? `±${Math.round(location.accuracy)}m` : '---'}
                         </span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-zinc-400">
                         <span>Source:</span>
-                        <span className={`font-mono ${location.source === 'high-accuracy' ? 'text-green-400' : 'text-orange-400'}`}>
-                            {location.source === 'high-accuracy' ? 'GPS/High' : location.source === 'low-accuracy' ? 'IP/Cell' : '---'}
+                        <span className={`font-mono ${location?.source === 'gps' ? 'text-green-400' : 'text-orange-400'}`}>
+                            {location?.source === 'gps' ? 'GPS/High' : location?.source === 'network' ? 'IP/Cell' : '---'}
                         </span>
                     </div>
                 </div>

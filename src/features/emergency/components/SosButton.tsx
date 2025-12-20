@@ -1,12 +1,12 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Loader2, MapPinOff } from 'lucide-react';
+import { AlertCircle, Loader2, MapPinOff, Send } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { useSmartGeolocation } from '../hooks/useSmartGeolocation'; 
+import { useSOSLocation, SOSLocationData } from '../hooks/useSOSLocation'; 
 import { useFirestore } from '@/firebase/client-provider';
 import { useTenant } from '@/providers/tenant-provider';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useUser } from '@/firebase';
 import {
     Tooltip,
@@ -14,51 +14,48 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { EmergencyAlertSchema } from '@/utils/schemas';
 import { EMERGENCY_STATUS, EMERGENCY_CATEGORY } from '@/utils/constants';
-import { z } from 'zod';
 
 export const SOSButton = () => {
-    const [permissionState, setPermissionState] = useState<PermissionState | 'unknown'>('unknown');
     const { toast } = useToast();
     const firestore = useFirestore();
     const { tenantPath } = useTenant();
     const { user } = useUser();
     
-    // New Smart Geolocation Hook
-    const { startLocating, location, loading, error, status, stopWatching } = useSmartGeolocation();
+    const { 
+        status, 
+        location, 
+        error, 
+        permissionState, 
+        getImmediateFix, 
+        startTracking, 
+        stopTracking,
+        checkPermission 
+    } = useSOSLocation();
 
+    const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
+    const [isSending, setIsSending] = useState(false);
+
+    // Initial permission check
     useEffect(() => {
-        if (navigator.permissions && navigator.permissions.query) {
-            navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-                setPermissionState(result.state);
-                result.onchange = () => setPermissionState(result.state);
-            });
-        }
+        checkPermission();
     }, []);
-
-    // Effect: Trigger Database Write ONLY when location is "Final"
-    useEffect(() => {
-        if (status === 'final' && location && location.isFinal) {
-            submitSOS(location);
-        }
-    }, [status, location]);
 
     // Effect: Handle Errors
     useEffect(() => {
         if (error) {
             toast({
-                title: "SOS Failed",
+                title: "Location Error",
                 description: error,
                 variant: "destructive"
             });
         }
     }, [error]);
 
-    const submitSOS = async (locData: any) => {
+    const createSOSEvent = async (initialLoc?: SOSLocationData) => {
         if (!firestore || !tenantPath || !user) {
             toast({ title: "System Error", description: "Service not available.", variant: "destructive" });
-            return;
+            return null;
         }
 
         try {
@@ -67,74 +64,114 @@ export const SOSButton = () => {
                 `${tenantPath}/emergency_alerts`
             );
 
-            // 1. Prepare Payload
-            const rawPayload = {
+            // Basic payload (always create immediately even if location is pending)
+            const payload: any = {
                 residentId: user.uid || 'anonymous',
                 residentName: user.displayName || 'Unknown User',
-                timestamp: serverTimestamp(), // We'll validate this loosely as 'any' in schema
-                latitude: locData.lat,
-                longitude: locData.lng,
-                accuracy_m: locData.accuracy,
+                timestamp: serverTimestamp(),
                 status: EMERGENCY_STATUS.NEW,
                 category: EMERGENCY_CATEGORY.UNSPECIFIED,
                 message: 'SOS Button Triggered',
-                // Additional fields not in strict schema but allowed by Firestore
-                location: {
-                    lat: locData.lat,
-                    lng: locData.lng,
-                    accuracy: locData.accuracy,
-                    provider: locData.provider
-                },
-                contactNumber: user.phoneNumber || '', 
+                contactNumber: user.phoneNumber || '',
+                // Initialize location fields with null or initial fix
+                latitude: initialLoc?.lat || null,
+                longitude: initialLoc?.lng || null,
+                accuracy_m: initialLoc?.accuracy || null,
+                location: initialLoc ? {
+                    lat: initialLoc.lat,
+                    lng: initialLoc.lng,
+                    accuracy: initialLoc.accuracy,
+                    source: initialLoc.source,
+                    timestamp: initialLoc.timestamp
+                } : null
             };
 
-            // 2. Validate with Zod
-            // We strip 'location' and 'contactNumber' for validation if they aren't in schema, 
-            // OR update schema. For now, EmergencyAlertSchema is strict about core fields.
-            // Let's validate the core fields.
-            
-            const validatedCore = EmergencyAlertSchema.parse({
-                residentId: rawPayload.residentId,
-                residentName: rawPayload.residentName,
-                latitude: rawPayload.latitude,
-                longitude: rawPayload.longitude,
-                accuracy_m: rawPayload.accuracy_m,
-                status: rawPayload.status,
-                category: rawPayload.category,
-                message: rawPayload.message,
-                timestamp: new Date() // Dummy date for validation check
-            });
+            const docRef = await addDoc(incidentsRef, payload);
+            console.log("SOS Created:", docRef.id);
+            setActiveIncidentId(docRef.id);
+            return docRef.id;
 
-            // 3. Write to Firestore (Using the full payload including extra fields)
-            await addDoc(incidentsRef, rawPayload);
-
+        } catch (err) {
+            console.error("SOS Creation Error:", err);
             toast({
-                title: "SOS SENT!",
-                description: `Help is on the way. Location pinned (Accuracy: ${Math.round(locData.accuracy)}m).`,
-                className: "bg-red-600 text-white border-none"
+                title: "Connection Error",
+                description: "Could not initiate SOS. Check connection.",
+                variant: "destructive"
             });
-
-        } catch (err: any) {
-            console.error("SOS DB/Validation Error:", err);
-            
-            if (err instanceof z.ZodError) {
-                 toast({
-                    title: "Alert Invalid",
-                    description: "Could not send alert due to invalid data format.",
-                    variant: "destructive"
-                });
-            } else {
-                toast({
-                    title: "Connection Error",
-                    description: "Could not send SOS to server. Check internet.",
-                    variant: "destructive"
-                });
-            }
+            return null;
         }
     };
 
-    const handleSosClick = () => {
-        startLocating();
+    const updateSOSLocation = async (incidentId: string, loc: SOSLocationData) => {
+        if (!firestore || !tenantPath || !incidentId) return;
+        
+        try {
+            const docRef = doc(firestore, `${tenantPath}/emergency_alerts/${incidentId}`);
+            await updateDoc(docRef, {
+                latitude: loc.lat,
+                longitude: loc.lng,
+                accuracy_m: loc.accuracy,
+                // Update full location object for history/details
+                location: {
+                    lat: loc.lat,
+                    lng: loc.lng,
+                    accuracy: loc.accuracy,
+                    heading: loc.heading,
+                    speed: loc.speed,
+                    timestamp: loc.timestamp,
+                    source: loc.source
+                },
+                updatedAt: serverTimestamp() // Heartbeat
+            });
+        } catch (err) {
+            console.error("Failed to update SOS location:", err);
+        }
+    };
+
+    const handleSosClick = async () => {
+        if (isSending || status === 'tracking') return;
+        setIsSending(true);
+
+        // 1. Create Event Immediately (Optimistic)
+        let incidentId = await createSOSEvent(); // Created with null location initially
+        
+        if (!incidentId) {
+            setIsSending(false);
+            return;
+        }
+
+        toast({
+            title: "SOS ACTIVATED",
+            description: "Alert sent! acquiring precise location...",
+            className: "bg-red-600 text-white border-none"
+        });
+
+        // 2. Try Immediate Fix (High Accuracy)
+        try {
+            const fix = await getImmediateFix();
+            // Update the event with the first fix
+            await updateSOSLocation(incidentId, fix);
+        } catch (e) {
+            console.warn("Immediate fix failed, relying on watcher...");
+        }
+
+        // 3. Start Live Tracking
+        startTracking((newLoc) => {
+            if (incidentId) {
+                updateSOSLocation(incidentId, newLoc);
+            }
+        });
+
+        setIsSending(false);
+    };
+
+    const handleStopTracking = () => {
+        stopTracking();
+        setActiveIncidentId(null);
+        toast({
+            title: "Tracking Stopped",
+            description: "Location updates paused.",
+        });
     };
 
     if (permissionState === 'denied') {
@@ -169,38 +206,53 @@ export const SOSButton = () => {
 
     return (
         <div className="relative flex flex-col items-center gap-2">
-            {/* Confidence Dot (Only visible when locating or recently finished) */}
-            {(loading || location) && (
+            {/* Confidence Dot */}
+            {(status === 'tracking' || location) && (
                 <div className={`absolute -top-2 right-0 w-3 h-3 rounded-full border border-white ${getIndicatorColor()} shadow-sm z-10`} />
             )}
 
-            <Button 
-                variant="destructive" 
-                size="lg" 
-                className={`h-16 w-16 rounded-full shadow-xl ${loading ? '' : 'animate-pulse hover:animate-none'}`}
-                onClick={handleSosClick}
-                disabled={loading}
-            >
-                {loading ? (
+            {status === 'tracking' ? (
+                 <Button 
+                    variant="default" 
+                    size="lg" 
+                    className="h-16 w-16 rounded-full shadow-xl bg-green-600 hover:bg-green-700 animate-pulse"
+                    onClick={handleStopTracking}
+                >
                     <div className="flex flex-col items-center">
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                        <span className="text-[8px] font-medium mt-1">
-                            {status === 'improving' ? 'REFINING...' : 'LOCATING...'}
-                        </span>
+                        <Send className="h-6 w-6" />
+                        <span className="text-[8px] font-bold mt-1">SENDING</span>
                     </div>
-                ) : (
-                    <div className="flex flex-col items-center">
-                        <AlertCircle className="h-6 w-6" />
-                        <span className="text-[10px] font-bold">SOS</span>
-                    </div>
-                )}
-            </Button>
+                </Button>
+            ) : (
+                <Button 
+                    variant="destructive" 
+                    size="lg" 
+                    className={`h-16 w-16 rounded-full shadow-xl ${isSending ? '' : 'animate-pulse hover:animate-none'}`}
+                    onClick={handleSosClick}
+                    disabled={isSending}
+                >
+                    {isSending ? (
+                        <div className="flex flex-col items-center">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            <span className="text-[8px] font-medium mt-1">INIT...</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center">
+                            <AlertCircle className="h-6 w-6" />
+                            <span className="text-[10px] font-bold">SOS</span>
+                        </div>
+                    )}
+                </Button>
+            )}
             
-            {/* Live Accuracy Feedback */}
-            {loading && location && (
-                <span className="text-[10px] text-zinc-500 bg-white/80 px-2 py-0.5 rounded-full backdrop-blur-sm">
-                    ±{Math.round(location.accuracy)}m
-                </span>
+            {/* Live Status Feedback */}
+            {status === 'tracking' && location && (
+                 <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-zinc-500 bg-white/80 px-2 py-0.5 rounded-full backdrop-blur-sm mb-1">
+                        ±{Math.round(location.accuracy)}m
+                    </span>
+                    <span className="text-[9px] text-green-600 font-medium">Live Tracking Active</span>
+                 </div>
             )}
         </div>
     );
