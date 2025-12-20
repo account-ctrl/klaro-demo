@@ -18,15 +18,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Clock, CheckCircle } from "lucide-react";
-import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
-import { CertificateRequest, CertificateType } from '@/lib/types';
+import { useUser, useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, useDoc } from '@/firebase';
+import { collection, query, where, orderBy, serverTimestamp, doc } from 'firebase/firestore';
+import { CertificateRequest, CertificateType, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { AddRequest, RequestFormValues } from './request-actions';
 import { useToast } from '@/hooks/use-toast';
-
-const BARANGAY_ID = 'barangay_san_isidro';
 
 const getStatusBadgeVariant = (status: CertificateRequest['status']) => {
     switch (status) {
@@ -48,25 +46,37 @@ export default function MyRequestsPage() {
   const { user } = useUser();
   const { toast } = useToast();
 
-  const requestsQuery = useMemoFirebase(() => {
+  // 0. Get Tenant ID from User Profile first
+  const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    return doc(firestore, `users/${user.uid}`);
+  }, [firestore, user]);
+  const { data: userProfile } = useDoc<User>(userDocRef);
+  const tenantId = userProfile?.tenantId;
+
+  const requestsQuery = useMemoFirebase(() => {
+    if (!firestore || !user || !tenantId) return null;
     return query(
-        collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`),
+        // IMPORTANT: Assuming we use the same collection as the dashboard hook ('document_requests')
+        // OR the one previously hardcoded ('certificate_requests'). 
+        // Let's align with the hook used in dashboard: 'document_requests' 
+        // to ensure data consistency across the resident app.
+        collection(firestore, `/barangays/${tenantId}/document_requests`),
         where('residentId', '==', user.uid),
         orderBy('dateRequested', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, user, tenantId]);
 
   const certTypesQuery = useMemoFirebase(() => {
-    if(!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/certificate_types`);
-  }, [firestore]);
+    if(!firestore || !tenantId) return null;
+    return collection(firestore, `/barangays/${tenantId}/certificate_types`);
+  }, [firestore, tenantId]);
 
   const { data: requests, isLoading: isLoadingRequests } = useCollection<CertificateRequest>(requestsQuery);
   const { data: certificateTypes, isLoading: isLoadingCertTypes } = useCollection<CertificateType>(certTypesQuery);
 
   const handleAddRequest = (data: RequestFormValues) => {
-    if (!firestore || !user || !certificateTypes) {
+    if (!firestore || !user || !certificateTypes || !tenantId) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not submit request.' });
       return;
     }
@@ -76,7 +86,7 @@ export default function MyRequestsPage() {
       return;
     }
 
-    const documentsCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`);
+    const documentsCollectionRef = collection(firestore, `/barangays/${tenantId}/document_requests`);
     const docToAdd: Omit<CertificateRequest, 'requestId' | 'requestNumber'> = {
         residentId: user.uid,
         residentName: user.displayName || 'Anonymous Resident',

@@ -33,11 +33,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useResidentActions } from '@/hooks/use-resident-actions';
 import { useToast } from "@/hooks/use-toast";
-import { CertificateRequest, Resident } from '@/lib/types';
+import { CertificateRequest, Resident, User } from '@/lib/types';
 import { format } from 'date-fns';
 import { captureAccurateLocation } from '@/lib/services/location';
-
-const BARANGAY_ID = 'barangay_san_isidro';
 
 // 1. Action Card Component
 interface ActionCardProps {
@@ -81,11 +79,12 @@ export default function ResidentDashboardPage() {
       createAlert, 
       fileComplaint, 
       requestDocument, 
-      myRequestsQuery, // Updated name
-      ordinancesQuery, // Updated name
-      healthSchedulesQuery, // Updated name
-      announcementsQuery, // Updated name
-      loading 
+      myRequestsQuery,
+      ordinancesQuery,
+      healthSchedulesQuery,
+      announcementsQuery,
+      loading,
+      tenantId // Now exposed from hook
   } = useResidentActions();
   const { toast } = useToast();
 
@@ -105,19 +104,19 @@ export default function ResidentDashboardPage() {
 
   // --- DATA FETCHING ---
 
-  // 0. User & Resident Profile
+  // 0. User Profile to check status
   const userDocRef = useMemoFirebase(() => {
       if (!firestore || !user) return null;
       return doc(firestore, `users/${user.uid}`);
   }, [firestore, user]);
-  const { data: userProfile } = useDoc(userDocRef);
+  const { data: userProfile } = useDoc<User>(userDocRef);
   const isVerified = userProfile?.kycStatus === 'verified';
 
-  // 0b. Resident Record
+  // 0b. Resident Record (using dynamic tenantId from hook/profile)
   const residentDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
-  }, [firestore, user]);
+        if (!firestore || !user || !tenantId) return null;
+        return doc(firestore, `/barangays/${tenantId}/residents/${user.uid}`);
+  }, [firestore, user, tenantId]);
   const { data: residentProfile } = useDoc<Resident>(residentDocRef);
 
   // 1. My Requests

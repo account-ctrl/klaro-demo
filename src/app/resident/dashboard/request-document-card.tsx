@@ -21,13 +21,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { addDocumentNonBlocking, updateDocumentNonBlocking, useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { addDocumentNonBlocking, updateDocumentNonBlocking, useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, serverTimestamp, doc } from 'firebase/firestore';
 import { Loader2, Info } from 'lucide-react';
-import type { CertificateRequest, CertificateType } from '@/lib/types';
+import type { CertificateRequest, CertificateType, User } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-const BARANGAY_ID = 'barangay_san_isidro';
 
 const purposeCategories = [
     "Employment",
@@ -48,10 +46,18 @@ export function RequestDocumentCard() {
   const [purpose, setPurpose] = useState('');
   const [selectedCert, setSelectedCert] = useState<CertificateType | null>(null);
 
+  // Get Tenant ID
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, `users/${user.uid}`);
+  }, [firestore, user]);
+  const { data: userProfile } = useDoc<User>(userDocRef);
+  const tenantId = userProfile?.tenantId;
+
   const certTypesCollectionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/certificate_types`);
-  }, [firestore]);
+    if (!firestore || !tenantId) return null;
+    return collection(firestore, `/barangays/${tenantId}/certificate_types`);
+  }, [firestore, tenantId]);
 
   const { data: certificateTypes, isLoading: isLoadingCertTypes } = useCollection<CertificateType>(certTypesCollectionRef);
 
@@ -71,8 +77,8 @@ export function RequestDocumentCard() {
       toast({ variant: 'destructive', title: 'Error', description: 'Please enter a purpose for your request.' });
       return;
     }
-    if (!firestore || !user) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not submit request. User not logged in.' });
+    if (!firestore || !user || !tenantId) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not submit request. User not logged in or tenant unavailable.' });
         return;
     }
     if (!selectedCert) {
@@ -81,7 +87,7 @@ export function RequestDocumentCard() {
     }
 
     startTransition(() => {
-        const documentsCollectionRef = collection(firestore, `/barangays/${BARANGAY_ID}/certificate_requests`);
+        const documentsCollectionRef = collection(firestore, `/barangays/${tenantId}/document_requests`);
         const docToAdd: Omit<CertificateRequest, 'requestId' | 'requestNumber'> = {
             residentId: user.uid,
             residentName: user.displayName || 'Resident',

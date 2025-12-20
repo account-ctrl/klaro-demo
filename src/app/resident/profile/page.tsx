@@ -5,7 +5,7 @@ import React, { useState, useEffect, useTransition } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useUser, useDoc, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Resident, Household, ResidentAddress } from '@/lib/types';
+import { Resident, Household, ResidentAddress, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { User as UserIcon, Home, Phone, Mail, BadgeInfo, Calendar, Briefcase, Users, ShieldCheck, FilePen, X, MapPin } from 'lucide-react';
@@ -21,8 +21,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useSmartGeolocation } from '@/features/emergency/hooks/useSmartGeolocation';
-
-const BARANGAY_ID = 'barangay_san_isidro';
 
 // Updated Schema with Structured Address
 const profileSchema = z.object({
@@ -78,20 +76,29 @@ export default function ResidentProfilePage() {
     const { toast } = useToast();
     const [pinnedLocation, setPinnedLocation] = useState<{lat: number, lng: number, acc: number} | null>(null);
 
+    // Get Tenant ID from User Profile first
+    const userDocRef = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return doc(firestore, `users/${user.uid}`);
+    }, [firestore, user]);
+    const { data: userProfile } = useDoc<User>(userDocRef);
+    const tenantId = userProfile?.tenantId;
+
     // Use Smart Geolocation Hook
     const { startLocating, location: smartLocation, loading: locating, error: geoError, status: geoStatus, stopWatching } = useSmartGeolocation();
 
     const residentDocRef = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
-    }, [firestore, user]);
+        if (!firestore || !user || !tenantId) return null;
+        // Construct path based on tenant logic: barangays/{tenantId}/residents/{uid}
+        return doc(firestore, `/barangays/${tenantId}/residents/${user.uid}`);
+    }, [firestore, user, tenantId]);
 
     const { data: resident, isLoading: isLoadingResident } = useDoc<Resident>(residentDocRef);
     
     const householdDocRef = useMemoFirebase(() => {
-        if (!firestore || !resident?.householdId) return null;
-        return doc(firestore, `/barangays/${BARANGAY_ID}/households/${resident.householdId}`);
-    }, [firestore, resident?.householdId]);
+        if (!firestore || !resident?.householdId || !tenantId) return null;
+        return doc(firestore, `/barangays/${tenantId}/households/${resident.householdId}`);
+    }, [firestore, resident?.householdId, tenantId]);
 
     const { data: household, isLoading: isLoadingHousehold } = useDoc<Household>(householdDocRef);
 
