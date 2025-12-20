@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useFirebaseApp } from '@/firebase'; 
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'; // Added doc, getDoc, setDoc
 // import { getFunctions, httpsCallable } from 'firebase/functions'; // REMOVED
 import Webcam from 'react-webcam';
 import {
@@ -36,6 +36,7 @@ export default function VerificationWizard() {
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [isResuming, setIsResuming] = useState(false); // State to show resume loading
   
   // Location Data State
   const [tenants, setTenants] = useState<{id: string, name: string, province: string, city: string, center: {lat: number, lng: number}}[]>([]);
@@ -84,6 +85,99 @@ export default function VerificationWizard() {
     fetchTenants();
   }, [firestore]);
 
+  // Load Saved Progress on Mount
+  useEffect(() => {
+    if (!user || !firestore) return;
+
+    const loadProgress = async () => {
+        setIsResuming(true);
+        try {
+            const userRef = doc(firestore, 'users', user.uid);
+            const userSnap = await getDoc(userRef);
+            
+            if (userSnap.exists()) {
+                const data = userSnap.data();
+                if (data.verificationDraft) {
+                    const draft = data.verificationDraft;
+                    
+                    // Restore Step
+                    if (draft.step) setStep(draft.step);
+                    
+                    // Restore Form Data
+                    setFormData(prev => ({ ...prev, ...draft.formData }));
+
+                    // Restore Location Dropdowns if tenantId is saved (Logic to reconstruct selection)
+                    // Note: This logic is complex because we rely on derived state (filtered lists).
+                    // Ideally we should save province/city codes in draft too.
+                    if (draft.selectedProvinceCode) {
+                        setSelectedProvinceCode(draft.selectedProvinceCode);
+                        const cities = citiesData.filter(c => c.provinceCode === draft.selectedProvinceCode);
+                        setFilteredCities(cities.sort((a, b) => a.name.localeCompare(b.name)));
+                    }
+                    if (draft.selectedCityCode) {
+                        setSelectedCityCode(draft.selectedCityCode);
+                        // Trigger filtering barangays (need to wait for tenants to load, so might need effect dependency)
+                    }
+                    
+                    toast({ title: "Progress Restored", description: "Continuing from where you left off." });
+                }
+            }
+        } catch (error) {
+            console.error("Error loading progress:", error);
+        } finally {
+            setIsResuming(false);
+        }
+    };
+
+    loadProgress();
+  }, [user, firestore]);
+
+  // Effect to re-filter barangays when tenants or selected codes change (important for restoration)
+  useEffect(() => {
+      if (selectedCityCode && selectedProvinceCode && tenants.length > 0) {
+          const cityObj = citiesData.find(c => c.code === selectedCityCode);
+          const provObj = provincesData.find(p => p.code === selectedProvinceCode);
+  
+          if (cityObj && provObj) {
+              const sCity = cityObj.name.trim().toLowerCase();
+              const sProv = provObj.name.trim().toLowerCase();
+  
+              const matches = tenants.filter(t => {
+                  const tCity = (t.city || "").trim().toLowerCase();
+                  const tProv = (t.province || "").trim().toLowerCase();
+  
+                  const provMatch = tProv === sProv || tProv.includes(sProv) || sProv.includes(tProv);
+                  if (!provMatch) return false;
+  
+                  const cityMatch = tCity === sCity || tCity.includes(sCity) || sCity.includes(tCity);
+                  return cityMatch;
+              });
+              
+              setFilteredBarangays(matches.sort((a, b) => a.name.localeCompare(b.name)));
+          }
+      }
+  }, [selectedCityCode, selectedProvinceCode, tenants]);
+
+
+  // Helper to save progress
+  const saveProgress = async (newStep: number, currentData: any) => {
+      if (!user || !firestore) return;
+      try {
+          const userRef = doc(firestore, 'users', user.uid);
+          await setDoc(userRef, {
+              verificationDraft: {
+                  step: newStep,
+                  formData: currentData,
+                  selectedProvinceCode,
+                  selectedCityCode,
+                  lastUpdated: new Date()
+              }
+          }, { merge: true });
+      } catch (error) {
+          console.error("Failed to save progress", error);
+      }
+  };
+
   // Handle Province Change
   const handleProvinceChange = (code: string) => {
     setSelectedProvinceCode(code);
@@ -100,37 +194,24 @@ export default function VerificationWizard() {
   const handleCityChange = (code: string) => {
     setSelectedCityCode(code);
     setFormData(prev => ({ ...prev, tenantId: '' })); // Reset barangay
-
-    const cityObj = citiesData.find(c => c.code === code);
-    const provObj = provincesData.find(p => p.code === selectedProvinceCode);
-
-    if (cityObj && provObj) {
-        const sCity = cityObj.name.trim().toLowerCase();
-        const sProv = provObj.name.trim().toLowerCase();
-
-        const matches = tenants.filter(t => {
-            const tCity = (t.city || "").trim().toLowerCase();
-            const tProv = (t.province || "").trim().toLowerCase();
-
-            const provMatch = tProv === sProv || tProv.includes(sProv) || sProv.includes(tProv);
-            if (!provMatch) return false;
-
-            const cityMatch = tCity === sCity || tCity.includes(sCity) || sCity.includes(tCity);
-            return cityMatch;
-        });
-        
-        setFilteredBarangays(matches.sort((a, b) => a.name.localeCompare(b.name)));
-    } else {
-        setFilteredBarangays([]);
-    }
+    // Filtering handled by Effect now
   };
 
   const handleTenantSelect = (val: string) => {
     setFormData(prev => ({ ...prev, tenantId: val }));
   };
 
-  const nextStep = () => setStep(s => s + 1);
-  const prevStep = () => setStep(s => s - 1);
+  const nextStep = () => {
+      const next = step + 1;
+      setStep(next);
+      saveProgress(next, formData); // Auto-save
+  };
+
+  const prevStep = () => {
+      const prev = step - 1;
+      setStep(prev);
+      saveProgress(prev, formData); // Auto-save
+  };
 
   // --- STEP 3: Geolocation ---
   const handleGeolocation = () => {
@@ -152,12 +233,16 @@ export default function VerificationWizard() {
                 dist = calculateDistance(lat, lng, selectedTenant.center.lat, selectedTenant.center.lng);
             }
 
-            setFormData(prev => ({
-                ...prev,
-                latitude: lat,
-                longitude: lng,
-                distanceKm: dist
-            }));
+            setFormData(prev => {
+                const newData = {
+                    ...prev,
+                    latitude: lat,
+                    longitude: lng,
+                    distanceKm: dist
+                };
+                saveProgress(step, newData); // Save immediately after location
+                return newData;
+            });
             setLoading(false);
             toast({ title: "Location Captured", description: `You are ${dist.toFixed(2)}km from the Barangay Hall.` });
         },
@@ -174,7 +259,14 @@ export default function VerificationWizard() {
     if (file) {
         const reader = new FileReader();
         reader.onloadend = () => {
-            setFormData(prev => ({ ...prev, idImage: reader.result as string }));
+            const base64 = reader.result as string;
+            setFormData(prev => {
+                const newData = { ...prev, idImage: base64 };
+                // We typically don't autosave large base64 strings to Firestore frequently due to size limits/cost, 
+                // but for draft purposes it's okay for now. Optimally upload to Storage.
+                saveProgress(step, newData); 
+                return newData;
+            });
         };
         reader.readAsDataURL(file);
     }
@@ -185,6 +277,7 @@ export default function VerificationWizard() {
     const imageSrc = webcamRef.current?.getScreenshot();
     if (imageSrc) {
         setFormData(prev => ({ ...prev, selfieImage: imageSrc }));
+        // Don't auto-save selfie immediately to allow retake, or save it if you want.
     }
   };
 
@@ -223,6 +316,12 @@ export default function VerificationWizard() {
 
         const data = await res.json();
 
+        // Clear Draft on Success
+        if (firestore && user) {
+            const userRef = doc(firestore, 'users', user.uid);
+            await setDoc(userRef, { verificationDraft: null }, { merge: true });
+        }
+
         if (data.status === 'verified') {
             toast({ title: "Success!", description: "Identity Verified. Redirecting..." });
             router.push('/resident/dashboard');
@@ -248,6 +347,17 @@ export default function VerificationWizard() {
               Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+  }
+
+  if (isResuming) {
+      return (
+          <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+                  <p className="text-slate-500">Restoring your progress...</p>
+              </div>
+          </div>
+      );
   }
 
   // --- RENDER ---
@@ -373,7 +483,7 @@ export default function VerificationWizard() {
                 </div>
             )}
 
-            {/* STEP 4: ID UPLOAD */}
+            {/* STEP 4: ID Upload --- */}
             {step === 4 && (
                 <div className="space-y-6">
                     <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 flex flex-col items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer relative">
