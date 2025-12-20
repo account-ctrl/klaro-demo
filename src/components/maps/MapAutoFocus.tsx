@@ -40,12 +40,7 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 return;
             }
 
-            // STRATEGY 2: Use Barangay Hall Address (if saved directly as coordinates)
-            // Note: Currently TenantSettings doesn't store lat/lng directly for address, 
-            // but if we add it or infer it, this would go here.
-
             // STRATEGY 3: Nominatim API Lookup (Text-to-Map)
-            // Use the structured location or fallback flat fields
             const barangayName = settings.barangayName || settings.name || settings.location?.barangay || '';
             const city = settings.city || settings.location?.city || '';
             const province = settings.province || settings.location?.province || '';
@@ -62,8 +57,6 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 const query = `Barangay ${barangayName}, ${city}, ${province}, Philippines`;
                 console.log(`[MapAutoFocus] Searching for: ${query}`);
                 
-                // Add Referer/User-Agent if possible or use a no-cors mode (though opaque response won't help)
-                // We wrap in try/catch to handle network blocks (CORS/Firewall) gracefully.
                 let response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`);
                 
                 if (!response.ok) throw new Error(`Nominatim error: ${response.status}`);
@@ -76,9 +69,12 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     const southWest = [parseFloat(bbox[0]), parseFloat(bbox[2])] as [number, number];
                     const northEast = [parseFloat(bbox[1]), parseFloat(bbox[3])] as [number, number];
                     
-                    setBounds([southWest, northEast]);
-                    hasFetched.current = true;
-                    return;
+                    // VALIDATION: Ensure coordinates are valid numbers
+                    if (!isNaN(southWest[0]) && !isNaN(southWest[1]) && !isNaN(northEast[0]) && !isNaN(northEast[1])) {
+                        setBounds([southWest, northEast]);
+                        hasFetched.current = true;
+                        return;
+                    }
                 }
 
                 // Attempt 2: Fallback to City/Municipality
@@ -96,8 +92,11 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     const southWest = [parseFloat(bbox[0]), parseFloat(bbox[2])] as [number, number];
                     const northEast = [parseFloat(bbox[1]), parseFloat(bbox[3])] as [number, number];
                     
-                    setBounds([southWest, northEast]);
-                    hasFetched.current = true;
+                    // VALIDATION
+                    if (!isNaN(southWest[0]) && !isNaN(southWest[1]) && !isNaN(northEast[0]) && !isNaN(northEast[1])) {
+                        setBounds([southWest, northEast]);
+                        hasFetched.current = true;
+                    }
                 }
 
             } catch (error) {
@@ -126,17 +125,19 @@ export function MapAutoFocus({ settings }: AutoFocusProps) {
         if (bounds && !hasZoomed.current) {
             // Delay slightly to allow map container to settle
             const timer = setTimeout(() => {
-                try {
-                    map.fitBounds(bounds as L.LatLngBoundsExpression, { 
-                        padding: [50, 50],
-                        animate: true,
-                        duration: 1.5 
-                    });
-                    hasZoomed.current = true;
-                } catch (e) {
-                    console.error("[MapAutoFocus] Invalid bounds:", bounds);
-                }
-            }, 500); // 500ms delay
+                requestAnimationFrame(() => {
+                    try {
+                        map.fitBounds(bounds as L.LatLngBoundsExpression, { 
+                            padding: [50, 50],
+                            animate: true,
+                            duration: 1.5 
+                        });
+                        hasZoomed.current = true;
+                    } catch (e) {
+                        console.error("[MapAutoFocus] Invalid bounds:", bounds);
+                    }
+                });
+            }, 500); 
 
             return () => clearTimeout(timer);
         }
