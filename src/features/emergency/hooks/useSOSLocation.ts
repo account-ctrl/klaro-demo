@@ -1,13 +1,13 @@
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 // Configuration
 const CONFIG = {
-  HIGH_ACCURACY_TIMEOUT_MS: 10000, // Increased timeout to 10s
-  DESIRED_ACCURACY_M: 20,         // Desired accuracy in meters
-  UPDATE_THROTTLE_MS: 3000,       // Minimum time between updates to DB
-  MIN_DISTANCE_CHANGE_M: 5,       // Minimum distance change to trigger update
-  STALE_THRESHOLD_MS: 30000,      // If location is older than 30s, it's stale
+  HIGH_ACCURACY_TIMEOUT_MS: 10000, 
+  DESIRED_ACCURACY_M: 20,         
+  UPDATE_THROTTLE_MS: 3000,       
+  MIN_DISTANCE_CHANGE_M: 5,       
+  STALE_THRESHOLD_MS: 30000,      
 };
 
 export interface SOSLocationData {
@@ -18,7 +18,7 @@ export interface SOSLocationData {
   speed: number | null;
   timestamp: number;
   source: 'gps' | 'network' | 'unknown';
-  isFinal?: boolean; // Legacy compat if needed, mainly implies "good enough to start"
+  isFinal?: boolean; 
 }
 
 export type SOSLocationStatus = 'idle' | 'requesting' | 'tracking' | 'error';
@@ -84,7 +84,8 @@ export const useSOSLocation = () => {
 
   const getImmediateFix = (): Promise<SOSLocationData> => {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
+      // SSR Check
+      if (typeof window === 'undefined' || !navigator.geolocation) {
         reject(new Error('Geolocation not supported'));
         return;
       }
@@ -146,7 +147,8 @@ export const useSOSLocation = () => {
   };
 
   const startTracking = (onLocationUpdate?: (loc: SOSLocationData) => void) => {
-    if (!navigator.geolocation) {
+    // SSR Check
+    if (typeof window === 'undefined' || !navigator.geolocation) {
         setError("Geolocation not supported");
         setStatus('error');
         return;
@@ -208,6 +210,9 @@ export const useSOSLocation = () => {
   };
 
   const stopTracking = () => {
+     // SSR Check
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+
     if (watchId.current !== null) {
         navigator.geolocation.clearWatch(watchId.current);
         watchId.current = null;
@@ -217,6 +222,9 @@ export const useSOSLocation = () => {
 
   // Check permissions on mount/demand
   const checkPermission = async () => {
+       // SSR Check
+      if (typeof window === 'undefined' || !navigator.permissions) return 'unknown';
+
       if (navigator.permissions && navigator.permissions.query) {
           try {
             const result = await navigator.permissions.query({ name: 'geolocation' });
