@@ -1,9 +1,13 @@
 
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as vision from "@google-cloud/vision";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-admin.initializeApp();
+// Initialize Admin SDK only once
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
 const db = admin.firestore();
 const client = new vision.ImageAnnotatorClient();
 
@@ -21,13 +25,13 @@ interface VerifyData {
   selfieImage: string; // base64
 }
 
-export const verifyResidentIdentity = functions.https.onCall(async (data: VerifyData, context) => {
+export const verifyResidentIdentity = onCall({ cors: true, region: "us-central1" }, async (request) => {
   // 1. Security Check
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be logged in.');
   }
 
-  const { uid, tenantId, birthDate, mothersMaidenName, location, idImage, selfieImage } = data;
+  const { uid, tenantId, birthDate, mothersMaidenName, location, idImage, selfieImage } = request.data as VerifyData;
 
   try {
     // 2. OCR Extraction (Google Vision API)
@@ -130,7 +134,7 @@ export const verifyResidentIdentity = functions.https.onCall(async (data: Verify
 
   } catch (error) {
     console.error("Verification Error:", error);
-    throw new functions.https.HttpsError('internal', 'Verification process failed.');
+    throw new HttpsError('internal', 'Verification process failed.');
   }
 });
 
