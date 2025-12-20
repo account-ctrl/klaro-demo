@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { useSmartGeolocation } from '@/features/emergency/hooks/useSmartGeolocation';
+import { useSmartGeolocation } from '@/lib/services/smart-geolocation';
 
 // Updated Schema with Structured Address
 const profileSchema = z.object({
