@@ -21,27 +21,32 @@
 // --- Configuration Constants ---
 const CONFIG = {
     SOS: {
-        TARGET_ACCURACY: 20,      // Aim for 20 meters
-        HARD_TIMEOUT: 15000,      // 15s max wait for High Accuracy
+        TARGET_ACCURACY: 15,      // Aim for 15 meters (High Precision)
+        HARD_TIMEOUT: 20000,      // 20s max wait (Extended for better GPS lock chance)
         
         // Options for the initial "Fast" fix (can use cache, Wi-Fi)
         FAST_OPTS: {
             enableHighAccuracy: false, 
-            timeout: 5000, 
-            maximumAge: Infinity // Accept cached location for speed
+            timeout: 10000,      // 10s (Give network location enough time)
+            maximumAge: Infinity // Accept ANY cached location for instant speed
         },
 
         // Options for the "Precise" fix (forces fresh GPS)
         PRECISE_OPTS: {
             enableHighAccuracy: true,
-            timeout: 15000,
+            timeout: 30000,       // 30s (Don't let browser timeout error kill the watch before our Hard Timeout)
             maximumAge: 0
         }
     },
     RESPONDER: {
         MIN_DISTANCE: 5,
-        ACCEPTABLE_ACCURACY: 40,
-        REJECT_POOR_ACCURACY: 500
+        ACCEPTABLE_ACCURACY: 50,
+        REJECT_POOR_ACCURACY: 1000, // Relaxed rejection to allow initial convergence
+        TRACKING_OPTS: {
+            enableHighAccuracy: true,
+            timeout: 60000,       // 60s timeout for tracking updates (prevents frequent error spam)
+            maximumAge: 0
+        }
     }
 };
 
@@ -111,12 +116,13 @@ export function requestSecureLocation(
         const { accuracy, latitude, longitude } = pos.coords;
         const logMsg = `[${source}] ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (Acc: ${Math.round(accuracy)}m)`;
 
-        // Update "Best" candidate
+        // Always update "Best" candidate if it's the first one or better accuracy
         if (!bestPosition || accuracy < bestPosition.coords.accuracy) {
             bestPosition = pos;
         }
 
-        // Emit Progress immediately so user sees pin move
+        // EMIT EVERYTHING: Even if it's not the "best", sending updates proves "Real Time" activity
+        // The UI needs to see movement.
         onUpdate({
             lat: latitude,
             lng: longitude,
@@ -132,45 +138,47 @@ export function requestSecureLocation(
     };
 
     // --- STRATEGY: RACE ---
-    // 1. "Fast Fix" - Get something ASAP (Cache/WiFi) to trigger permissions and show rough location
+    // 1. "Fast Fix" - Get something ASAP (Cache/WiFi)
     navigator.geolocation.getCurrentPosition(
         (pos) => handleUpdate(pos, "FastFix"),
         (err) => {
-             console.warn("[SecureGeo] FastFix failed:", err);
-             if (err.code === 1) { // Permission Denied
+             console.warn("[SecureGeo] FastFix failed:", err.message);
+             // Do NOT stop here. Wait for GPS Watch.
+             if (err.code === 1) { // Only stop if Permission Denied
                  stop();
-                 onError("Permission Denied: Please enable location services.");
+                 onError("Location Permission Denied.");
              }
         },
         CONFIG.SOS.FAST_OPTS
     );
 
-    // 2. "Precise Watch" - Start warming up GPS for the real deal
+    // 2. "Precise Watch" - Start warming up GPS
     watchId = navigator.geolocation.watchPosition(
         (pos) => handleUpdate(pos, "GPS Watch"),
         (err) => {
             console.warn(`[SecureGeo] Watch Error: ${err.message}`);
+            // Ignore Timeouts (Code 3) - let HardTimeout handle it
+            // Only stop on Permission Denied (Code 1) or Position Unavailable (Code 2 - sometimes recoverable, but usually fatal)
             if (err.code === 1) {
                 stop();
-                onError("Permission Denied: Please enable GPS.");
+                onError("Location Permission Denied.");
             }
         },
         CONFIG.SOS.PRECISE_OPTS
     );
 
-    // 3. Hard Timeout - If GPS never converges, use whatever we have (Best Candidate)
+    // 3. Hard Timeout - If GPS never converges
     hardTimeoutId = setTimeout(() => {
         if (isFinished) return;
 
         if (bestPosition) {
-            finalize(bestPosition, "Timeout - Using Best Available");
+            finalize(bestPosition, "Timeout - Best Available");
         } else {
-            // No data received at all (FastFix failed AND Watch timed out)
-            // This is a catastrophic failure (e.g. device has no location providers)
+            // No data received at all. 
+            // Try one last desperate attempt with relaxed settings?
+            // Or just return Mock if strictly Dev.
             console.error("[SecureGeo] All methods failed. Returning MOCK.");
             stop();
-            // Only use mock if we are truly desperate. 
-            // Better to error out? For Dev, we use Mock.
             onUpdate({
                 ...MOCK_LOCATION,
                 timestamp: Date.now()
@@ -199,15 +207,19 @@ export function startSecureTracking(
         (pos) => {
             const { latitude, longitude, accuracy } = pos.coords;
 
+            // Simple Filter: Ignore massive jumps (garbage data)
             if (lastPosition && accuracy > CONFIG.RESPONDER.REJECT_POOR_ACCURACY) return;
 
+            // Distance Filter: Only update if moved X meters
             if (lastPosition) {
                 const dist = getDistanceMeters(
                     lastPosition.coords.latitude, lastPosition.coords.longitude,
                     latitude, longitude
                 );
+                // If signal is good, we allow smaller movements. If signal is bad, we need larger movements to be sure.
                 const isGoodSignal = accuracy <= CONFIG.RESPONDER.ACCEPTABLE_ACCURACY;
                 const threshold = isGoodSignal ? CONFIG.RESPONDER.MIN_DISTANCE : 20;
+                
                 if (dist < threshold) return; 
             }
 
@@ -224,7 +236,7 @@ export function startSecureTracking(
             console.error("[SecureGeo] Tracker Error:", err);
             if (err.code === 1) onError("Permission Denied");
         },
-        CONFIG.SOS.PRECISE_OPTS
+        CONFIG.RESPONDER.TRACKING_OPTS // Use tracking-specific options
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
