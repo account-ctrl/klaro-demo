@@ -56,7 +56,7 @@ function OfficialForm({ record, onSave, onClose, positions, committees, systemRo
     password_hash: '', // Always clear password on open
     position: record?.position ?? '',
     committee: record?.committee ?? '',
-    systemRole: record?.systemRole ?? 'staff', // Default to staff if undefined
+    systemRole: record?.systemRole ?? 'Admin', // Corrected default to a valid SystemRole from types
     termStart: record?.termStart ?? '',
     termEnd: record?.termEnd ?? '',
     digitalSignatureUrl: record?.digitalSignatureUrl ?? '',
