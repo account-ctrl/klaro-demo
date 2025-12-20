@@ -7,7 +7,7 @@
  * CORE ALGORITHM:
  * 1. Watch Loop: Uses `watchPosition` instead of `getCurrentPosition` to allow GPS hardware to warm up.
  * 2. Convergence: continuously filters updates to find the "Best" accuracy within a time window.
- * 3. Hard Timeout: Forces a result (best available) after 20-30 seconds if target accuracy isn't met.
+ * 3. Hard Timeout: Forces a result (best available) after 10-12 seconds if target accuracy isn't met.
  * 4. Fallback: Automatically degrades to Low Accuracy (Network/Wi-Fi) if High Accuracy (GPS) fails.
  * 5. Dev Fallback: If ALL fails (e.g. Cloud VM), returns a mock location to prevent app crash.
  * 
@@ -22,24 +22,24 @@
 // --- Configuration Constants ---
 const CONFIG = {
     SOS: {
-        TARGET_ACCURACY: 5,       // Aim for 5 meters
-        HARD_TIMEOUT: 25000,      // 25s max wait
+        TARGET_ACCURACY: 20,      // Aim for 20 meters (Reasonable for mobile GPS)
+        HARD_TIMEOUT: 12000,      // 12s max wait (Balance between speed and accuracy)
         HIGH_ACCURACY_OPTS: {
             enableHighAccuracy: true,
-            timeout: 30000,       // Browser timeout
+            timeout: 15000,       // Browser timeout for underlying call
             maximumAge: 0
         }
     },
     RESPONDER: {
-        MIN_DISTANCE: 3,          // 3 meters movement required to update
-        ACCEPTABLE_ACCURACY: 20,  // < 20m is "Good"
-        REJECT_POOR_ACCURACY: 100 // > 100m is "Garbage" (unless it's the only point)
+        MIN_DISTANCE: 5,          // 5 meters movement required to update
+        ACCEPTABLE_ACCURACY: 40,  // < 40m is "Good"
+        REJECT_POOR_ACCURACY: 500 // > 500m is "Garbage"
     }
 };
 
 const MOCK_LOCATION = {
     lat: 14.5995, 
-    lng: 120.9842, // Manila
+    lng: 120.9842, // Manila (Default Mock)
     accuracy: 50,
     provider: 'manual_correction' as GeoProvider
 };
@@ -90,7 +90,7 @@ export function requestSecureLocation(
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
-            provider: pos.coords.accuracy <= 20 ? 'high_accuracy_gps' : 'low_accuracy_fallback',
+            provider: pos.coords.accuracy <= 50 ? 'high_accuracy_gps' : 'low_accuracy_fallback',
             timestamp: pos.timestamp
         }, 'final', `Finalized (${method}): Acc ${Math.round(pos.coords.accuracy)}m`);
     };
@@ -141,9 +141,11 @@ export function requestSecureLocation(
         if (isFinished) return;
 
         if (bestPosition) {
+            // We have SOME position from the watch, even if not perfect. Use it.
             finalize(bestPosition, "Timeout - Best Available");
         } else {
-            // Absolute Failure of High Accuracy -> Try Low Accuracy Fallback
+            // Absolute Failure of High Accuracy (No data received at all in 12s)
+            // Try Low Accuracy Fallback (Wi-Fi/Cell Towers)
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
             
             console.log("[SecureGeo] Hard Timeout. Attempting Fallback (Low Acc)...");
@@ -161,8 +163,11 @@ export function requestSecureLocation(
                         timestamp: Date.now()
                     }, 'final', "DEV FALLBACK: Mock Location Used");
                 },
-                // Increased fallback timeout to 15s to give low-accuracy providers (WiFi/Cell) enough time
-                { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 } 
+                // OPTIONS TWEAK: 
+                // 1. enableHighAccuracy: false (Use Wi-Fi/Cell)
+                // 2. timeout: 20000 (Give it 20s, network location can be slow)
+                // 3. maximumAge: Infinity (Accept ANY cached location if available)
+                { enableHighAccuracy: false, timeout: 20000, maximumAge: Infinity } 
             );
         }
     }, CONFIG.SOS.HARD_TIMEOUT);
