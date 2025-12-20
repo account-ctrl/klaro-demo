@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -24,65 +25,62 @@ function useAutoFocus(settings?: TenantSettings | null) {
     const hasFetched = useRef(false);
 
     useEffect(() => {
-        if (!settings) {
-            console.log("[MapAutoFocus] Waiting for settings...");
-            return;
-        }
+        if (!settings) return;
         
         if (hasFetched.current) return;
 
         const resolveLocation = async () => {
-            console.log("[MapAutoFocus] Resolving location for:", settings);
-            setIsFetching(true);
-            
             // STRATEGY 1: Use Saved Territory (Most Accurate)
             if (settings.territory?.boundary && settings.territory.boundary.length > 0) {
                 console.log("[MapAutoFocus] Using saved territory boundary.");
                 const polygon = settings.territory.boundary.map(p => [p.lat, p.lng] as [number, number]);
-                setBounds(polygon); // Leaflet can fitBounds to a polygon array
+                setBounds(polygon); 
                 setIsFetching(false);
                 hasFetched.current = true;
                 return;
             }
 
             // STRATEGY 2: Nominatim API Lookup (Text-to-Map)
-            // Robustly resolve location fields, checking all possible paths
             const barangayName = settings.barangayName || settings.name || settings.location?.barangay || '';
             const city = settings.city || settings.location?.city || '';
             const province = settings.province || settings.location?.province || '';
 
             if (!barangayName || !city || !province) {
-                console.warn("[MapAutoFocus] Missing location data:", { barangayName, city, province });
                 setIsFetching(false);
                 return;
             }
 
+            setIsFetching(true);
+
             try {
                 // Attempt 1: Specific Barangay Search
                 const query = `${barangayName}, ${city}, ${province}, Philippines`;
-                console.log(`[MapAutoFocus] Searching Nominatim: ${query}`);
                 
+                // Add Referer/User-Agent if possible or use a no-cors mode (though opaque response won't help)
+                // We wrap in try/catch to handle network blocks (CORS/Firewall) gracefully.
                 let response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`);
+                
+                if (!response.ok) throw new Error(`Nominatim error: ${response.status}`);
+                
                 let data = await response.json();
 
                 if (data && data.length > 0) {
                     const result = data[0];
-                    // Nominatim returns boundingbox as [minLat, maxLat, minLon, maxLon] strings
-                    // Leaflet expects [ [lat1, lon1], [lat2, lon2] ]
                     const bbox = result.boundingbox;
                     const southWest = [parseFloat(bbox[0]), parseFloat(bbox[2])] as [number, number];
                     const northEast = [parseFloat(bbox[1]), parseFloat(bbox[3])] as [number, number];
                     
-                    console.log(`[MapAutoFocus] Found Barangay: ${result.display_name}`);
                     setBounds([southWest, northEast]);
                     hasFetched.current = true;
                     return;
                 }
 
                 // Attempt 2: Fallback to City/Municipality
-                console.log(`[MapAutoFocus] Barangay not found. Falling back to City: ${city}, ${province}`);
                 const fallbackQuery = `${city}, ${province}, Philippines`;
                 response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery)}&format=json&limit=1`);
+                
+                if (!response.ok) throw new Error(`Nominatim fallback error: ${response.status}`);
+                
                 data = await response.json();
 
                 if (data && data.length > 0) {
@@ -91,13 +89,12 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     const southWest = [parseFloat(bbox[0]), parseFloat(bbox[2])] as [number, number];
                     const northEast = [parseFloat(bbox[1]), parseFloat(bbox[3])] as [number, number];
                     
-                    console.log(`[MapAutoFocus] Found City: ${result.display_name}`);
                     setBounds([southWest, northEast]);
                     hasFetched.current = true;
                 }
 
             } catch (error) {
-                console.error("[MapAutoFocus] Geocoding error:", error);
+                console.warn("[MapAutoFocus] Geocoding failed (Network/CORS). Please set Territory Boundary in Settings manually.", error);
             } finally {
                 setIsFetching(false);
             }
@@ -121,12 +118,10 @@ export function MapAutoFocus({ settings }: AutoFocusProps) {
     useEffect(() => {
         if (bounds && !hasZoomed.current) {
             try {
-                // Add padding to ensure the area isn't touching the screen edges
-                console.log("[MapAutoFocus] Fitting bounds:", bounds);
                 map.fitBounds(bounds as L.LatLngBoundsExpression, { 
                     padding: [50, 50],
                     animate: true,
-                    duration: 1.5 // Smooth fly-to effect
+                    duration: 1.5 
                 });
                 hasZoomed.current = true;
             } catch (e) {

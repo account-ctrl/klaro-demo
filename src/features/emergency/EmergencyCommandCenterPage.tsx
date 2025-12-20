@@ -13,7 +13,6 @@ import { useUser, useFirestore, useMemoFirebase, useCollection } from '@/firebas
 import { collection, query, where } from "firebase/firestore";
 import { User } from "@/lib/types";
 import { Loader2 } from "lucide-react";
-import { GeolocationDebugger } from "./components/GeolocationDebugger";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { withRoleGuard } from '@/components/auth/role-guard';
 import { PERMISSIONS } from '@/lib/config/roles';
@@ -46,21 +45,7 @@ function EmergencyCommandCenterPage() {
     
     const { data: users } = useCollection<User>(usersQuery);
 
-    // DEBUGGING LOGS
-    useEffect(() => {
-        if (users && responders) {
-            console.group("Emergency Center Debug");
-            console.log("Tenant ID:", tenantId);
-            console.log("Tenant Path:", tenantPath);
-            console.log("Users Fetched (Tenant-Scoped):", users.length);
-            console.log("Users List:", users.map(u => u.fullName));
-            console.log("Responders (Location Docs):", responders.length);
-            console.log("Responder IDs:", responders.map(r => r.userId));
-            console.groupEnd();
-        }
-    }, [users, responders, tenantId, tenantPath]);
-
-    // Geolocation for Debugger
+    // Geolocation for Map Centering (Independent)
     const { location: debugLocation, getCurrentCoordinates } = useGeolocation();
 
     // Default center
@@ -125,11 +110,6 @@ function EmergencyCommandCenterPage() {
             {/* Header */}
             <div className="absolute top-6 left-6 z-10 pointer-events-none">
                 <WeatherHeader />
-            </div>
-
-            {/* Left Panel: Geolocation Debugger */}
-            <div className="absolute top-24 left-6 z-10 pointer-events-auto">
-                <GeolocationDebugger currentUser={currentUser} />
             </div>
 
             {/* Right Panel */}

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -24,6 +25,7 @@ interface PetIDCardProps {
       cityLogoUrl?: string;
       city?: string;
       province?: string;
+      contactNumber?: string; // Added contact number
   };
 }
 
@@ -146,7 +148,9 @@ export const PetIDCard: React.FC<PetIDCardProps> = ({ pet, owner, barangay }) =>
                 
                 <div className="alt-contact">
                     <p>Or surrender to the Barangay Hall</p>
-                    <p className="brgy-hotline">Hotline: (02) 8123-4567</p>
+                    <p className="brgy-hotline">
+                        Hotline: {barangay?.contactNumber || '(02) 8123-4567'}
+                    </p>
                 </div>
             </div>
 
