@@ -46,7 +46,7 @@ interface ActionCardProps {
   colorClass: string;
   bgClass: string;
   onClick: () => void;
-  disabled?: boolean; // Added disabled prop
+  disabled?: boolean;
 }
 
 const ActionCard = ({ icon: Icon, label, colorClass, bgClass, onClick, disabled }: ActionCardProps) => {
@@ -81,17 +81,17 @@ export default function ResidentDashboardPage() {
       createAlert, 
       fileComplaint, 
       requestDocument, 
-      getMyRequestsQuery, 
-      getOrdinancesQuery, 
-      getHealthSchedulesQuery,
-      getAnnouncementsQuery, // Added query
+      myRequestsQuery, // Updated name
+      ordinancesQuery, // Updated name
+      healthSchedulesQuery, // Updated name
+      announcementsQuery, // Updated name
       loading 
   } = useResidentActions();
   const { toast } = useToast();
 
   // Dialog States
   const [activeModal, setActiveModal] = useState<'sos' | 'blotter' | 'request' | 'news' | null>(null);
-  const [sosLoading, setSosLoading] = useState(false); // Specific loader for SOS location fetching
+  const [sosLoading, setSosLoading] = useState(false);
 
   // Form States
   const [sosCategory, setSosCategory] = useState('Medical');
@@ -113,57 +113,25 @@ export default function ResidentDashboardPage() {
   const { data: userProfile } = useDoc(userDocRef);
   const isVerified = userProfile?.kycStatus === 'verified';
 
-  // 0b. Resident Record (For Address in SOS) - Only if verified/linked
+  // 0b. Resident Record
   const residentDocRef = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        // Ideally fetch tenantId from user profile first
         return doc(firestore, `/barangays/${BARANGAY_ID}/residents/${user.uid}`);
   }, [firestore, user]);
   const { data: residentProfile } = useDoc<Resident>(residentDocRef);
 
-  // 1. My Requests (Client-Side Filtering)
-  const requestsQuery = useMemo(() => {
-    const q = getMyRequestsQuery();
-    if (q) {
-        // @ts-ignore
-        q.__memo = true;
-    }
-    return q;
-  }, [getMyRequestsQuery]);
-  const { data: allRequests } = useCollection<CertificateRequest>(requestsQuery);
+  // 1. My Requests
+  // Directly use the query from hook (it's already memoized)
+  const { data: allRequests } = useCollection<CertificateRequest>(myRequestsQuery);
   const myRequests = allRequests?.filter(req => req.residentId === user?.uid);
 
-  // 2. Ordinances (Legislative)
-  const ordinancesQuery = useMemo(() => {
-      const q = getOrdinancesQuery();
-      if(q) { 
-          // @ts-ignore
-          q.__memo = true; 
-      }
-      return q;
-  }, [getOrdinancesQuery]);
+  // 2. Ordinances
   const { data: ordinances } = useCollection(ordinancesQuery);
 
   // 3. Health Schedules
-  const healthQuery = useMemo(() => {
-      const q = getHealthSchedulesQuery();
-      if(q) {
-          // @ts-ignore
-          q.__memo = true;
-      }
-      return q;
-  }, [getHealthSchedulesQuery]);
-  const { data: healthSchedules } = useCollection(healthQuery);
+  const { data: healthSchedules } = useCollection(healthSchedulesQuery);
 
   // 4. Announcements
-  const announcementsQuery = useMemo(() => {
-    const q = getAnnouncementsQuery();
-    if (q) {
-        // @ts-ignore
-        q.__memo = true;
-    }
-    return q;
-  }, [getAnnouncementsQuery]);
   const { data: announcements } = useCollection(announcementsQuery);
 
 
@@ -212,7 +180,7 @@ export default function ResidentDashboardPage() {
         setSosLoading(false);
         if (result) {
             setActiveModal(null);
-            setSosMessage(''); // Reset
+            setSosMessage('');
         }
     } catch (err) {
         console.error("SOS Error", err);
@@ -304,7 +272,7 @@ export default function ResidentDashboardPage() {
             icon={Megaphone} 
             colorClass="text-amber-500" 
             bgClass="bg-amber-50 group-hover:bg-amber-100" 
-            onClick={() => setActiveModal('news')} // Always allowed
+            onClick={() => setActiveModal('news')}
         />
       </div>
 
@@ -323,7 +291,7 @@ export default function ResidentDashboardPage() {
       {/* --- INFO SECTIONS --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-2 md:px-0">
           
-          {/* Recent Activity (Only visible if verified or has data) */}
+          {/* Recent Activity (Only visible if verified) */}
           {isVerified && (
             <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                     <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
