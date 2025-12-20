@@ -1,756 +1,396 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useFirebaseApp } from '@/firebase'; 
-import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'; 
-// import { getFunctions, httpsCallable } from 'firebase/functions'; // REMOVED
-import Webcam from 'react-webcam';
-import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck, ArrowRight, Phone, LayoutDashboard } from "lucide-react";
-import { RecaptchaVerifier, signInWithPhoneNumber, getAuth } from "firebase/auth";
+import { useAuth, useFirestore, useStorage } from '@/firebase';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Camera, Upload, CheckCircle2, MapPin, User, FileText, ArrowRight, ShieldCheck } from "lucide-react";
+import Image from 'next/image';
+import { cn } from '@/lib/utils';
+import { getProvinces, getCities, getBarangays } from '@/lib/data/psgc'; // Assuming these exist or similar
 
-// Import Geo Data
-import provincesData from '@/lib/data/provinces.json';
-import citiesData from '@/lib/data/cities-municipalities.json';
+// Steps
+const STEPS = [
+    { id: 1, title: "Location", icon: MapPin },
+    { id: 2, title: "Profile", icon: User },
+    { id: 3, title: "Identity", icon: ShieldCheck },
+    { id: 4, title: "Review", icon: FileText },
+];
 
-// --- STEPS ---
-// 1. Tenant Selection (Province -> City -> Barangay)
-// 2. Personal Info (Name, DOB, MMN, Gender)
-// 3. Geolocation
-// 4. ID Upload
-// 5. Selfie (Liveness)
-// 6. Phone Verification (OTP)
+export default function VerifyIdentityPage() {
+    const router = useRouter();
+    const auth = useAuth();
+    const firestore = useFirestore();
+    const storage = useStorage();
+    const { toast } = useToast();
 
-export default function VerificationWizard() {
-  const { user } = useUser();
-  const router = useRouter();
-  const { toast } = useToast();
-  const firestore = useFirestore(); 
-  const firebaseApp = useFirebaseApp(); 
-  const auth = getAuth(firebaseApp);
-  
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [isResuming, setIsResuming] = useState(false); 
-  
-  // Location Data State
-  const [tenants, setTenants] = useState<{id: string, name: string, province: string, city: string, center: {lat: number, lng: number}}[]>([]);
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState('');
-  const [selectedCityCode, setSelectedCityCode] = useState('');
-  
-  const [filteredCities, setFilteredCities] = useState<any[]>([]);
-  const [filteredBarangays, setFilteredBarangays] = useState<any[]>([]);
+    const [currentStep, setCurrentStep] = useState(1);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // OTP State
-  const [verificationId, setVerificationId] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
+    // Form State
+    const [selectedProvince, setSelectedProvince] = useState('');
+    const [selectedCity, setSelectedCity] = useState('');
+    const [selectedBarangay, setSelectedBarangay] = useState('');
+    
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [dob, setDob] = useState('');
+    const [mothersMaidenName, setMothersMaidenName] = useState('');
 
-  // Form State
-  const [formData, setFormData] = useState({
-    tenantId: '',
-    firstName: '',
-    lastName: '',
-    middleName: '',
-    gender: 'Male',
-    birthDate: '',
-    mothersMaidenName: '',
-    latitude: null as number | null,
-    longitude: null as number | null,
-    distanceKm: 0,
-    idImage: null as string | null, // base64
-    selfieImage: null as string | null, // base64
-    phoneVerified: false
-  });
+    const [idFile, setIdFile] = useState<File | null>(null);
+    const [selfieFile, setSelfieFile] = useState<File | null>(null);
+    const [idPreview, setIdPreview] = useState<string | null>(null);
+    const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
 
-  const webcamRef = useRef<Webcam>(null);
+    // Camera Refs
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
 
-  // Load Tenants on Mount
-  useEffect(() => {
-    if (!firestore) return;
+    // Data Loaders (Mocked for PSGC if needed, or use real hooks)
+    // For simplicity, using simple lists or assumed logic. 
+    // In production, these should come from your PSGC helper.
+    const provinces = getProvinces(); 
+    const cities = selectedProvince ? getCities(selectedProvince) : [];
+    const barangays = selectedCity ? getBarangays(selectedCity) : []; // You might need to adjust logic based on your PSGC lib
 
-    const fetchTenants = async () => {
-      try {
-        const snap = await getDocs(collection(firestore, 'tenant_directory'));
-        const list = snap.docs.map(d => {
-            const data = d.data();
-            return {
-                id: d.id,
-                name: data.barangay || data.name || "Unknown Barangay", 
-                province: data.province || "", 
-                city: data.city || "",
-                center: data.centerCoordinates || { lat: 14.5995, lng: 120.9842 }
-            };
-        });
-        setTenants(list);
-      } catch (err) {
-        console.error("Error fetching tenants:", err);
-      }
+    // --- HANDLERS ---
+
+    const handleNext = () => {
+        if (currentStep === 1) {
+            if (!selectedProvince || !selectedCity || !selectedBarangay) {
+                toast({ variant: "destructive", title: "Incomplete Address", description: "Please select your full address." });
+                return;
+            }
+        }
+        if (currentStep === 2) {
+            if (!firstName || !lastName || !dob || !mothersMaidenName) {
+                toast({ variant: "destructive", title: "Incomplete Profile", description: "All fields are required for verification." });
+                return;
+            }
+        }
+        if (currentStep === 3) {
+            if (!idFile || !selfieFile) {
+                toast({ variant: "destructive", title: "Missing Documents", description: "Please provide both ID and Selfie." });
+                return;
+            }
+        }
+        setCurrentStep(prev => prev + 1);
     };
-    fetchTenants();
-  }, [firestore]);
 
-  // Load Saved Progress on Mount
-  useEffect(() => {
-    if (!user || !firestore) return;
+    const handleBack = () => setCurrentStep(prev => prev - 1);
 
-    const loadProgress = async () => {
-        setIsResuming(true);
-        try {
-            const userRef = doc(firestore, 'users', user.uid);
-            const userSnap = await getDoc(userRef);
-            
-            if (userSnap.exists()) {
-                const data = userSnap.data();
-                if (data.verificationDraft) {
-                    const draft = data.verificationDraft;
-                    
-                    if (draft.step) setStep(draft.step);
-                    setFormData(prev => ({ ...prev, ...draft.formData }));
-
-                    if (draft.selectedProvinceCode) {
-                        setSelectedProvinceCode(draft.selectedProvinceCode);
-                        const cities = citiesData.filter(c => c.provinceCode === draft.selectedProvinceCode);
-                        setFilteredCities(cities.sort((a, b) => a.name.localeCompare(b.name)));
-                    }
-                    if (draft.selectedCityCode) {
-                        setSelectedCityCode(draft.selectedCityCode);
-                    }
-                    if (draft.formData?.phoneNumber) {
-                        setPhoneNumber(draft.formData.phoneNumber);
-                    }
-                    
-                    toast({ title: "Progress Restored", description: "Continuing from where you left off." });
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'id' | 'selfie') => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (type === 'id') {
+                    setIdFile(file);
+                    setIdPreview(reader.result as string);
                 }
-            }
-        } catch (error) {
-            console.error("Error loading progress:", error);
-        } finally {
-            setIsResuming(false);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
-    loadProgress();
-  }, [user, firestore]);
-
-  // Effect to re-filter barangays when tenants or selected codes change (important for restoration)
-  useEffect(() => {
-      if (selectedCityCode && selectedProvinceCode && tenants.length > 0) {
-          const cityObj = citiesData.find(c => c.code === selectedCityCode);
-          const provObj = provincesData.find(p => p.code === selectedProvinceCode);
-  
-          if (cityObj && provObj) {
-              const sCity = cityObj.name.trim().toLowerCase();
-              const sProv = provObj.name.trim().toLowerCase();
-  
-              const matches = tenants.filter(t => {
-                  const tCity = (t.city || "").trim().toLowerCase();
-                  const tProv = (t.province || "").trim().toLowerCase();
-  
-                  const provMatch = tProv === sProv || tProv.includes(sProv) || sProv.includes(tProv);
-                  if (!provMatch) return false;
-  
-                  const cityMatch = tCity === sCity || tCity.includes(sCity) || sCity.includes(tCity);
-                  return cityMatch;
-              });
-              
-              setFilteredBarangays(matches.sort((a, b) => a.name.localeCompare(b.name)));
-          }
-      }
-  }, [selectedCityCode, selectedProvinceCode, tenants]);
-
-
-  // Helper to save progress
-  const saveProgress = async (newStep: number, currentData: any) => {
-      if (!user || !firestore) return;
-      try {
-          const userRef = doc(firestore, 'users', user.uid);
-          await setDoc(userRef, {
-              verificationDraft: {
-                  step: newStep,
-                  formData: currentData,
-                  selectedProvinceCode,
-                  selectedCityCode,
-                  lastUpdated: new Date()
-              }
-          }, { merge: true });
-      } catch (error) {
-          console.error("Failed to save progress", error);
-      }
-  };
-
-  // Handle Province Change
-  const handleProvinceChange = (code: string) => {
-    setSelectedProvinceCode(code);
-    setSelectedCityCode(''); // Reset city
-    setFormData(prev => ({ ...prev, tenantId: '' })); // Reset barangay
-    
-    // Filter Cities
-    const cities = citiesData.filter(c => c.provinceCode === code);
-    setFilteredCities(cities.sort((a, b) => a.name.localeCompare(b.name)));
-    setFilteredBarangays([]);
-  };
-
-  // Handle City Change
-  const handleCityChange = (code: string) => {
-    setSelectedCityCode(code);
-    setFormData(prev => ({ ...prev, tenantId: '' })); // Reset barangay
-    // Filtering handled by Effect now
-  };
-
-  const handleTenantSelect = (val: string) => {
-    setFormData(prev => ({ ...prev, tenantId: val }));
-  };
-
-  const nextStep = () => {
-      const next = step + 1;
-      setStep(next);
-      saveProgress(next, formData); 
-  };
-
-  const prevStep = () => {
-      const prev = step - 1;
-      setStep(prev);
-      saveProgress(prev, formData); 
-  };
-
-  // --- STEP 3: Geolocation ---
-  const handleGeolocation = () => {
-    setLoading(true);
-    if (!navigator.geolocation) {
-        toast({ variant: "destructive", title: "Error", description: "Geolocation not supported." });
-        setLoading(false);
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            
-            const selectedTenant = tenants.find(t => t.id === formData.tenantId);
-            let dist = 0;
-            if (selectedTenant) {
-                dist = calculateDistance(lat, lng, selectedTenant.center.lat, selectedTenant.center.lng);
+    const startCamera = async () => {
+        setIsCameraOpen(true);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
             }
+        } catch (err) {
+            console.error("Camera Error", err);
+            toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
+            setIsCameraOpen(false);
+        }
+    };
 
-            setFormData(prev => {
-                const newData = {
-                    ...prev,
-                    latitude: lat,
-                    longitude: lng,
-                    distanceKm: dist
-                };
-                saveProgress(step, newData); 
-                return newData;
+    const captureSelfie = () => {
+        if (videoRef.current && canvasRef.current) {
+            const context = canvasRef.current.getContext('2d');
+            if (context) {
+                context.drawImage(videoRef.current, 0, 0, 640, 480);
+                canvasRef.current.toBlob((blob) => {
+                    if (blob) {
+                        const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
+                        setSelfieFile(file);
+                        setSelfiePreview(URL.createObjectURL(blob));
+                        
+                        // Stop Stream
+                        const stream = videoRef.current?.srcObject as MediaStream;
+                        stream?.getTracks().forEach(track => track.stop());
+                        setIsCameraOpen(false);
+                    }
+                }, 'image/jpeg');
+            }
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (!auth?.currentUser || !firestore || !storage) return;
+        setIsSubmitting(true);
+
+        try {
+            const userId = auth.currentUser.uid;
+            
+            // 1. Upload Images
+            const idRef = ref(storage, `verification/${userId}/id_card_${Date.now()}.jpg`);
+            const selfieRef = ref(storage, `verification/${userId}/selfie_${Date.now()}.jpg`);
+            
+            await uploadBytes(idRef, idFile!);
+            await uploadBytes(selfieRef, selfieFile!);
+            
+            const idUrl = await getDownloadURL(idRef);
+            const selfieUrl = await getDownloadURL(selfieRef);
+
+            // 2. Create User Profile & Verification Request
+            // We construct the Tenant ID usually as `province-city-barangay` (slugified)
+            // Adjust this slug logic to match your system's tenant ID generation
+            const tenantId = `${selectedProvince}-${selectedCity}-${selectedBarangay}`.toLowerCase().replace(/ /g, '-'); 
+
+            await updateDoc(doc(firestore, 'users', userId), {
+                firstName,
+                lastName,
+                dob,
+                mothersMaidenName,
+                tenantId, // IMPORTANT: Links user to tenant
+                kycStatus: 'pending', // Triggers "Verification in Progress" UI
+                verificationData: {
+                    idUrl,
+                    selfieUrl,
+                    province: selectedProvince,
+                    city: selectedCity,
+                    barangay: selectedBarangay,
+                    submittedAt: new Date()
+                }
             });
-            setLoading(false);
-            toast({ title: "Location Captured", description: `You are ${dist.toFixed(2)}km from the Barangay Hall.` });
-        },
-        (err) => {
-            setLoading(false);
-            toast({ variant: "destructive", title: "Location Error", description: err.message });
-        }
-    );
-  };
 
-  // --- STEP 4: ID Upload ---
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setFormData(prev => {
-                const newData = { ...prev, idImage: base64 };
-                saveProgress(step, newData); 
-                return newData;
+            // 3. (Optional) Create a specific request in the Tenant's subcollection for easier admin querying?
+            // Actually, the Global User trigger we planned earlier (Cloud Function) will handle the logic 
+            // of notifying the tenant admin or auto-verifying against the Master List.
+            // So just updating the 'users' doc is enough to trigger that flow.
+
+            toast({
+                title: "Submission Received",
+                description: "Your verification is being processed.",
             });
-        };
-        reader.readAsDataURL(file);
-    }
-  };
-
-  // --- STEP 5: Selfie ---
-  const captureSelfie = () => {
-    const imageSrc = webcamRef.current?.getScreenshot();
-    if (imageSrc) {
-        setFormData(prev => ({ ...prev, selfieImage: imageSrc }));
-    }
-  };
-
-  // --- STEP 6: OTP (NEW) ---
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible', // Invisible for better UX if possible
-        'callback': (response: any) => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
-        }
-      });
-    }
-  };
-
-  const sendOtp = async () => {
-    if (!phoneNumber) {
-        toast({ variant: "destructive", title: "Error", description: "Please enter a valid phone number." });
-        return;
-    }
-    
-    setLoading(true);
-    setupRecaptcha();
-    
-    const appVerifier = window.recaptchaVerifier;
-    try {
-        // Ensure phone format is E.164 (e.g. +639...)
-        const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+63${phoneNumber.startsWith('0') ? phoneNumber.slice(1) : phoneNumber}`;
-        
-        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-        window.confirmationResult = confirmationResult;
-        setVerificationId(confirmationResult.verificationId);
-        setIsOtpSent(true);
-        toast({ title: "OTP Sent", description: "Please check your phone for the code." });
-    } catch (error: any) {
-        console.error("SMS Error", error);
-        toast({ variant: "destructive", title: "Failed to send OTP", description: error.message });
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  const verifyOtp = async () => {
-    if (!otpCode) return;
-    setLoading(true);
-    try {
-        const confirmationResult = window.confirmationResult;
-        const result = await confirmationResult.confirm(otpCode);
-        const user = result.user;
-        
-        if (user) {
-            setFormData(prev => ({ ...prev, phoneVerified: true }));
-            toast({ title: "Success", description: "Phone number verified!" });
-            // Ideally we might want to link this phone to the main auth user if they are different, 
-            // but for now we just verify possession.
-        }
-    } catch (error: any) {
-        console.error("OTP Error", error);
-        toast({ variant: "destructive", title: "Invalid Code", description: "Please try again." });
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  // --- SUBMIT ---
-  const handleSubmit = async () => {
-    if (!user) return;
-    setLoading(true);
-
-    try {
-        const token = await user.getIdToken();
-        const res = await fetch('/api/resident/verify-identity', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                tenantId: formData.tenantId,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                middleName: formData.middleName,
-                gender: formData.gender,
-                birthDate: formData.birthDate,
-                mothersMaidenName: formData.mothersMaidenName,
-                location: {
-                    lat: formData.latitude,
-                    lng: formData.longitude,
-                    distance: formData.distanceKm
-                },
-                idImage: formData.idImage,
-                selfieImage: formData.selfieImage,
-                phoneNumber: phoneNumber // Add phone to payload
-            })
-        });
-
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error || errorData.reason || 'Submission failed');
-        }
-
-        const data = await res.json();
-
-        // Clear Draft on Success
-        if (firestore && user) {
-            const userRef = doc(firestore, 'users', user.uid);
-            await setDoc(userRef, { verificationDraft: null }, { merge: true });
-        }
-
-        if (data.status === 'verified') {
-            toast({ title: "Success!", description: "Identity Verified & Registered. Redirecting..." });
+            
             router.push('/resident/dashboard');
-        } else {
-            toast({ variant: "destructive", title: "Verification Pending", description: "Manual review required." });
+
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                variant: "destructive",
+                title: "Submission Failed",
+                description: error.message
+            });
+            setIsSubmitting(false);
         }
+    };
 
-    } catch (error: any) {
-        console.error(error);
-        toast({ variant: "destructive", title: "Submission Failed", description: error.message });
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  const handleSkip = async () => {
-      // Ensure current state is saved before leaving
-      await saveProgress(step, formData);
-      router.push('/resident/dashboard');
-  };
-
-  // --- HELPER: Haversine ---
-  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371; // km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  }
-
-  if (isResuming) {
-      return (
-          <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4">
-                  <Loader2 className="h-8 w-8 animate-spin text-green-600" />
-                  <p className="text-slate-500">Restoring your progress...</p>
-              </div>
-          </div>
-      );
-  }
-
-  // --- RENDER ---
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl shadow-lg">
-        <CardHeader className="bg-slate-900 text-white rounded-t-xl relative">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-green-400" />
-            <CardTitle>Identity Verification</CardTitle>
-          </div>
-          <CardDescription className="text-slate-400">
-            Step {step} of 6: { // Increased total steps
-                step === 1 ? "Select Barangay" :
-                step === 2 ? "Personal Information" :
-                step === 3 ? "Location Check" :
-                step === 4 ? "Upload ID" :
-                step === 5 ? "Live Selfie" : "Phone Verification"
-            }
-          </CardDescription>
-          
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="absolute top-4 right-4 text-slate-300 hover:text-white hover:bg-slate-800"
-            onClick={handleSkip}
-          >
-              <LayoutDashboard className="mr-2 h-4 w-4" /> Skip to Dashboard
-          </Button>
-        </CardHeader>
-        <CardContent className="pt-6 min-h-[400px]">
+    return (
+        <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-4 font-sans">
             
-            {/* STEP 1: TENANT */}
-            {step === 1 && (
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Province</Label>
-                        <Select onValueChange={handleProvinceChange} value={selectedProvinceCode}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Province" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {provincesData.sort((a,b) => a.name.localeCompare(b.name)).map(p => (
-                                    <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+            {/* Step Indicator */}
+            <div className="w-full max-w-3xl mb-8">
+                 <div className="flex justify-between items-center relative">
+                    <div className="absolute top-1/2 left-0 w-full h-[2px] bg-white/10 -z-10" />
+                    {STEPS.map((step) => {
+                        const Icon = step.icon;
+                        const isActive = step.id === currentStep;
+                        const isCompleted = step.id < currentStep;
 
-                    <div className="space-y-2">
-                        <Label>City / Municipality</Label>
-                        <Select onValueChange={handleCityChange} value={selectedCityCode} disabled={!selectedProvinceCode}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select City/Municipality" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {filteredCities.map(c => (
-                                    <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                        return (
+                            <div key={step.id} className="flex flex-col items-center gap-2 bg-[#0a0a0a] px-2">
+                                <div className={cn(
+                                    "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all",
+                                    isActive ? "border-orange-500 bg-orange-500/10 text-orange-500" : 
+                                    isCompleted ? "border-green-500 bg-green-500 text-black" : "border-white/20 text-white/30"
+                                )}>
+                                    {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
+                                </div>
+                                <span className={cn("text-xs font-medium uppercase tracking-wider", isActive ? "text-orange-500" : "text-white/30")}>
+                                    {step.title}
+                                </span>
+                            </div>
+                        )
+                    })}
+                 </div>
+            </div>
 
-                    <div className="space-y-2">
-                        <Label>Barangay</Label>
-                        <Select onValueChange={handleTenantSelect} value={formData.tenantId} disabled={!selectedCityCode}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Barangay" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {filteredBarangays.length > 0 ? (
-                                    filteredBarangays.map(t => (
-                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                    ))
-                                ) : (
-                                    <div className="p-2 text-sm text-slate-500 text-center">
-                                        No registered barangays found in this area.
-                                    </div>
-                                )}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
-                        We will register you to this Barangay.
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 2: BIO DATA */}
-            {step === 2 && (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>First Name</Label>
-                            <Input placeholder="Juan" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Last Name</Label>
-                            <Input placeholder="Dela Cruz" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Middle Name</Label>
-                            <Input placeholder="Reyes" value={formData.middleName} onChange={e => setFormData({...formData, middleName: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Gender</Label>
-                            <Select onValueChange={v => setFormData({...formData, gender: v})} value={formData.gender}>
-                                <SelectTrigger><SelectValue/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Male">Male</SelectItem>
-                                    <SelectItem value="Female">Female</SelectItem>
-                                    <SelectItem value="Other">Other</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Date of Birth</Label>
-                        <Input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Mother's Maiden Name</Label>
-                        <Input 
-                            placeholder="Full Maiden Name" 
-                            value={formData.mothersMaidenName} 
-                            onChange={e => setFormData({...formData, mothersMaidenName: e.target.value})} 
-                        />
-                        <p className="text-xs text-slate-500">Used for identity verification.</p>
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 3: GEOLOCATION */}
-            {step === 3 && (
-                <div className="flex flex-col items-center justify-center h-full space-y-6 pt-10">
-                    <div className="p-4 bg-blue-50 rounded-full">
-                        <MapPin className="h-12 w-12 text-blue-500" />
-                    </div>
-                    <div className="text-center">
-                        <h3 className="font-semibold text-lg">Verify Location</h3>
-                        <p className="text-slate-500 max-w-sm mx-auto">
-                            We need to check if you are physically present within or near the Barangay vicinity.
-                        </p>
-                    </div>
+            <Card className="w-full max-w-xl bg-black/40 border-white/10 backdrop-blur-md">
+                <CardHeader>
+                    <CardTitle className="text-2xl">Identity Verification</CardTitle>
+                    <CardDescription className="text-white/40">
+                        To access Barangay services, we need to verify you are a resident.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                     
-                    {formData.latitude ? (
-                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-2 rounded-lg">
-                            <CheckCircle size={20} />
-                            <span>Location Captured ({formData.distanceKm.toFixed(2)}km away)</span>
+                    {/* STEP 1: LOCATION */}
+                    {currentStep === 1 && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                            <div className="space-y-2">
+                                <Label>Province</Label>
+                                <Select onValueChange={setSelectedProvince} value={selectedProvince}>
+                                    <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                                        <SelectValue placeholder="Select Province" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {provinces.map(p => <SelectItem key={p.code} value={p.name}>{p.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>City / Municipality</Label>
+                                <Select onValueChange={setSelectedCity} value={selectedCity} disabled={!selectedProvince}>
+                                    <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                                        <SelectValue placeholder="Select City" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {cities.map(c => <SelectItem key={c.code} value={c.name}>{c.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Barangay</Label>
+                                <Select onValueChange={setSelectedBarangay} value={selectedBarangay} disabled={!selectedCity}>
+                                    <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                                        <SelectValue placeholder="Select Barangay" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {barangays.map(b => <SelectItem key={b.code} value={b.name}>{b.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
+                    )}
+
+                    {/* STEP 2: PROFILE */}
+                    {currentStep === 2 && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>First Name</Label>
+                                    <Input value={firstName} onChange={e => setFirstName(e.target.value)} className="bg-white/5 border-white/10" placeholder="Juan" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Last Name</Label>
+                                    <Input value={lastName} onChange={e => setLastName(e.target.value)} className="bg-white/5 border-white/10" placeholder="Dela Cruz" />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Date of Birth</Label>
+                                <Input type="date" value={dob} onChange={e => setDob(e.target.value)} className="bg-white/5 border-white/10 block w-full" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Mother's Maiden Name</Label>
+                                <Input value={mothersMaidenName} onChange={e => setMothersMaidenName(e.target.value)} className="bg-white/5 border-white/10" placeholder="For security matching" />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 3: IDENTITY */}
+                    {currentStep === 3 && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                            
+                            {/* ID Upload */}
+                            <div className="space-y-2">
+                                <Label>Government ID</Label>
+                                <div className="border-2 border-dashed border-white/10 rounded-lg p-6 flex flex-col items-center justify-center hover:bg-white/5 transition-colors cursor-pointer relative overflow-hidden">
+                                    {idPreview ? (
+                                        <Image src={idPreview} alt="ID Preview" fill className="object-cover" />
+                                    ) : (
+                                        <>
+                                            <Upload className="w-8 h-8 text-white/30 mb-2" />
+                                            <span className="text-xs text-white/40">Click to upload valid ID</span>
+                                        </>
+                                    )}
+                                    <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'id')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                </div>
+                            </div>
+
+                            {/* Liveness / Selfie */}
+                            <div className="space-y-2">
+                                <Label>Live Selfie</Label>
+                                <div className="border border-white/10 rounded-lg h-64 bg-black overflow-hidden relative flex items-center justify-center">
+                                    {selfiePreview ? (
+                                        <Image src={selfiePreview} alt="Selfie" fill className="object-cover" />
+                                    ) : isCameraOpen ? (
+                                        <>
+                                            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                                            <canvas ref={canvasRef} width="640" height="480" className="hidden" />
+                                            <Button onClick={captureSelfie} size="icon" className="absolute bottom-4 rounded-full w-12 h-12 bg-white text-black hover:bg-white/90">
+                                                <Camera className="w-5 h-5" />
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <div className="text-center">
+                                            <Button onClick={startCamera} variant="outline" className="border-white/20 hover:bg-white/10">
+                                                <Camera className="mr-2 w-4 h-4" /> Take Selfie
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-[10px] text-white/30">Ensure your face is well-lit and clearly visible.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 4: REVIEW */}
+                    {currentStep === 4 && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 text-sm">
+                            <div className="bg-white/5 p-4 rounded-lg space-y-3 border border-white/10">
+                                <div className="flex justify-between">
+                                    <span className="text-white/40">Location:</span>
+                                    <span className="text-right">{selectedBarangay}, {selectedCity}, {selectedProvince}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-white/40">Name:</span>
+                                    <span>{firstName} {lastName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-white/40">DOB:</span>
+                                    <span>{dob}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-white/40">Documents:</span>
+                                    <span className="text-green-500 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Attached</span>
+                                </div>
+                            </div>
+                            <p className="text-xs text-white/30 text-center">
+                                By clicking submit, you consent to the processing of your personal data for Barangay verification purposes in accordance with the Data Privacy Act.
+                            </p>
+                        </div>
+                    )}
+
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                    {currentStep > 1 ? (
+                        <Button onClick={handleBack} variant="ghost" className="hover:bg-white/10 hover:text-white text-white/50">Back</Button>
+                    ) : <div></div>}
+                    
+                    {currentStep < 4 ? (
+                        <Button onClick={handleNext} className="bg-orange-600 hover:bg-orange-500 text-white">
+                            Next Step <ArrowRight className="ml-2 w-4 h-4" />
+                        </Button>
                     ) : (
-                        <Button onClick={handleGeolocation} disabled={loading} variant="outline" className="gap-2">
-                            {loading && <Loader2 className="animate-spin" />}
-                            Allow Location Access
+                        <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-green-600 hover:bg-green-500 text-white w-full ml-4">
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Submit Verification"}
                         </Button>
                     )}
-                </div>
-            )}
-
-            {/* STEP 4: ID UPLOAD */}
-            {step === 4 && (
-                <div className="space-y-6">
-                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 flex flex-col items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer relative">
-                         <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={handleFileUpload} 
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                        />
-                         {formData.idImage ? (
-                             <img src={formData.idImage} alt="ID Preview" className="h-48 object-contain" />
-                         ) : (
-                             <>
-                                <Upload className="h-10 w-10 text-slate-400 mb-2" />
-                                <span className="text-slate-500 font-medium">Click to Upload Government ID</span>
-                                <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</span>
-                             </>
-                         )}
-                    </div>
-                    <div className="bg-yellow-50 p-4 rounded-lg flex items-start gap-3">
-                        <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0" />
-                        <p className="text-sm text-yellow-800">
-                            Ensure the text on the ID is clear and readable. Blurry images will be rejected by the AI.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 5: SELFIE */}
-            {step === 5 && (
-                <div className="flex flex-col items-center space-y-4">
-                     {formData.selfieImage ? (
-                         <div className="relative">
-                            <img src={formData.selfieImage} alt="Selfie" className="rounded-xl border-4 border-green-500" />
-                            <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                className="absolute bottom-4 right-4"
-                                onClick={() => setFormData(prev => ({ ...prev, selfieImage: null }))}
-                            >
-                                Retake
-                            </Button>
-                         </div>
-                     ) : (
-                         <div className="overflow-hidden rounded-xl border-4 border-slate-200">
-                            <Webcam
-                                audio={false}
-                                ref={webcamRef}
-                                screenshotFormat="image/jpeg"
-                                width={400}
-                                videoConstraints={{ facingMode: "user" }}
-                            />
-                         </div>
-                     )}
-                     
-                     {!formData.selfieImage && (
-                         <Button onClick={captureSelfie} className="gap-2" size="lg">
-                             <Camera /> Capture Photo
-                         </Button>
-                     )}
-                </div>
-            )}
-
-            {/* STEP 6: OTP (NEW) */}
-            {step === 6 && (
-                <div className="space-y-6">
-                    {!isOtpSent ? (
-                        <div className="space-y-4">
-                            <Label>Phone Number</Label>
-                            <div className="flex gap-2">
-                                <span className="flex items-center justify-center bg-slate-100 px-3 rounded-md border border-slate-200 text-slate-600 font-medium">
-                                    +63
-                                </span>
-                                <Input 
-                                    placeholder="9123456789" 
-                                    value={phoneNumber.replace(/^\+63/, '')} 
-                                    onChange={e => {
-                                        // Simple formatter to strip 0 or +63 if pasted
-                                        const clean = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                        setPhoneNumber(clean);
-                                    }} 
-                                />
-                            </div>
-                            <div id="recaptcha-container"></div>
-                            <Button onClick={sendOtp} disabled={loading || phoneNumber.length < 10} className="w-full">
-                                {loading ? <Loader2 className="animate-spin" /> : "Send Code via SMS"}
-                            </Button>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="text-center space-y-2">
-                                <div className="p-3 bg-green-50 rounded-full w-fit mx-auto">
-                                    <Phone className="h-6 w-6 text-green-600" />
-                                </div>
-                                <h3 className="font-medium">Enter Verification Code</h3>
-                                <p className="text-sm text-slate-500">Sent to +63{phoneNumber}</p>
-                            </div>
-                            
-                            <div className="flex justify-center">
-                                <Input 
-                                    className="text-center text-2xl tracking-widest w-48 font-mono" 
-                                    maxLength={6} 
-                                    value={otpCode}
-                                    onChange={e => setOtpCode(e.target.value)}
-                                    placeholder="000000"
-                                />
-                            </div>
-
-                            <Button onClick={verifyOtp} disabled={loading || otpCode.length < 6} className="w-full bg-green-600 hover:bg-green-700">
-                                {loading ? <Loader2 className="animate-spin" /> : "Verify Code"}
-                            </Button>
-                            
-                            <Button variant="ghost" size="sm" className="w-full text-slate-400" onClick={() => setIsOtpSent(false)}>
-                                Change Number
-                            </Button>
-                        </div>
-                    )}
-                    
-                    {formData.phoneVerified && (
-                        <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-lg flex items-center gap-2">
-                            <CheckCircle className="h-5 w-5" />
-                            <span>Phone Verified Successfully!</span>
-                        </div>
-                    )}
-                </div>
-            )}
-
-        </CardContent>
-        <CardFooter className="flex justify-between border-t p-6">
-            <Button variant="ghost" onClick={prevStep} disabled={step === 1 || loading}>
-                Back
-            </Button>
-            
-            {step < 6 ? (
-                <Button onClick={nextStep} disabled={
-                    (step === 1 && !formData.tenantId) ||
-                    (step === 2 && (!formData.firstName || !formData.lastName || !formData.birthDate || !formData.mothersMaidenName)) ||
-                    (step === 3 && !formData.latitude) ||
-                    (step === 4 && !formData.idImage) ||
-                    (step === 5 && !formData.selfieImage)
-                }>
-                    Next Step <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-            ) : (
-                <Button onClick={handleSubmit} disabled={loading || !formData.phoneVerified} className="bg-green-600 hover:bg-green-500">
-                    {loading ? <Loader2 className="animate-spin mr-2" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                    Submit Verification
-                </Button>
-            )}
-        </CardFooter>
-      </Card>
-    </div>
-  );
+                </CardFooter>
+            </Card>
+        </div>
+    );
 }
