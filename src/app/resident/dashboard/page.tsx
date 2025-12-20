@@ -260,12 +260,12 @@ export default function ResidentDashboardPage() {
             onClick={() => handleRestrictedAction(() => setActiveModal('blotter'))}
         />
         <ActionCard 
-            label="My Digital ID" 
-            icon={QrCode} 
+            label="My Documents" 
+            icon={FileText} 
             colorClass="text-slate-700" 
             bgClass="bg-slate-100 group-hover:bg-slate-200" 
             disabled={!isVerified}
-            onClick={() => handleRestrictedAction(() => window.location.href = '/resident/profile')} 
+            onClick={() => handleRestrictedAction(() => window.location.href = '/resident/documents')} 
         />
         <ActionCard 
             label="Community News" 

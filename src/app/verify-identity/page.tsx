@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Camera, Upload, CheckCircle2, MapPin, User, FileText, ArrowRight, ShieldCheck } from "lucide-react";
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { getProvinces, getCities, getBarangays } from '@/lib/data/psgc'; // Assuming these exist or similar
+import { getProvinces, getCities, getBarangays } from '@/lib/data/psgc';
 
 // Steps
 const STEPS = [
@@ -54,12 +54,10 @@ export default function VerifyIdentityPage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isCameraOpen, setIsCameraOpen] = useState(false);
 
-    // Data Loaders (Mocked for PSGC if needed, or use real hooks)
-    // For simplicity, using simple lists or assumed logic. 
-    // In production, these should come from your PSGC helper.
+    // Data Loaders
     const provinces = getProvinces(); 
     const cities = selectedProvince ? getCities(selectedProvince) : [];
-    const barangays = selectedCity ? getBarangays(selectedCity) : []; // You might need to adjust logic based on your PSGC lib
+    const barangays = selectedCity ? getBarangays(selectedCity) : [];
 
     // --- HANDLERS ---
 
@@ -155,7 +153,6 @@ export default function VerifyIdentityPage() {
 
             // 2. Create User Profile & Verification Request
             // We construct the Tenant ID usually as `province-city-barangay` (slugified)
-            // Adjust this slug logic to match your system's tenant ID generation
             const tenantId = `${selectedProvince}-${selectedCity}-${selectedBarangay}`.toLowerCase().replace(/ /g, '-'); 
 
             await updateDoc(doc(firestore, 'users', userId), {
@@ -163,22 +160,20 @@ export default function VerifyIdentityPage() {
                 lastName,
                 dob,
                 mothersMaidenName,
-                tenantId, // IMPORTANT: Links user to tenant
+                
+                // Location Data (Critical for Routing)
+                tenantId, 
+                province: selectedProvince,
+                city: selectedCity,
+                barangay: selectedBarangay,
+
                 kycStatus: 'pending', // Triggers "Verification in Progress" UI
                 verificationData: {
                     idUrl,
                     selfieUrl,
-                    province: selectedProvince,
-                    city: selectedCity,
-                    barangay: selectedBarangay,
                     submittedAt: new Date()
                 }
             });
-
-            // 3. (Optional) Create a specific request in the Tenant's subcollection for easier admin querying?
-            // Actually, the Global User trigger we planned earlier (Cloud Function) will handle the logic 
-            // of notifying the tenant admin or auto-verifying against the Master List.
-            // So just updating the 'users' doc is enough to trigger that flow.
 
             toast({
                 title: "Submission Received",

@@ -2,6 +2,16 @@
 import provinces from './provinces.json';
 import cities from './cities-municipalities.json';
 
+// Minimal list for fallback
+const FALLBACK_BARANGAYS = [
+  { code: '045805001', name: 'San Isidro', cityCode: '045805000' },
+  { code: '045805002', name: 'Santo Domingo', cityCode: '045805000' },
+  { code: '045805003', name: 'San Andres', cityCode: '045805000' },
+  { code: '045805004', name: 'San Juan', cityCode: '045805000' },
+  { code: '045805005', name: 'Santo Niño', cityCode: '045805000' },
+  { code: '045805006', name: 'Santa Rosa', cityCode: '045805000' },
+];
+
 export type Province = {
   code: string;
   name: string;
@@ -66,13 +76,38 @@ export const getProvinces = (): Province[] => {
   return provinces as Province[];
 };
 
-export const getCitiesMunicipalities = (provinceCode?: string): CityMunicipality[] => {
+export const getCities = (provinceCode?: string): CityMunicipality[] => {
   const allCities = cities as CityMunicipality[];
   if (provinceCode) {
-    return allCities.filter(c => c.provinceCode === provinceCode);
+      // Some libs use name as code if not strict. 
+      // But let's support finding by Name if code fails, or just filtering by code.
+      // Assuming 'provinceCode' passed here is actually the NAME based on previous usage in verify-identity page
+      // Let's support both.
+      
+      const byCode = allCities.filter(c => c.provinceCode === provinceCode);
+      if (byCode.length > 0) return byCode;
+
+      // Fallback: Filter by Province Name (Helper for UI that uses names)
+      const prov = (provinces as Province[]).find(p => p.name === provinceCode);
+      if (prov) {
+          return allCities.filter(c => c.provinceCode === prov.code);
+      }
   }
   return allCities;
 };
+
+// Alias for compatibility
+export const getCitiesMunicipalities = getCities;
+
+export const getBarangays = (cityCodeOrName?: string): Barangay[] => {
+    // This is a placeholder since we don't have the full JSON for all barangays in repo (too large usually).
+    // In a real app, this fetches from API or uses a larger static file.
+    // We will return a static list for now or fetch if needed.
+    
+    // For now, return a generic list to allow UI to function
+    return FALLBACK_BARANGAYS.map(b => ({...b, cityCode: 'mock'}));
+};
+
 
 export const getCityMunicipalityName = (code: string) => {
     const city = (cities as CityMunicipality[]).find(c => c.code === code);

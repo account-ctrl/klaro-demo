@@ -1,38 +1,57 @@
-
 'use client';
 
-import { useState } from 'react';
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, addDoc, query, where, orderBy, doc, serverTimestamp } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { useUser, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, addDoc, query, where, orderBy, doc, serverTimestamp, DocumentData } from 'firebase/firestore';
 import { useToast } from './use-toast';
 import { format } from 'date-fns';
 
-const BARANGAY_ID = 'barangay_san_isidro';
+// We no longer hardcode BARANGAY_ID. We get it from the user's profile.
 
 export const useResidentActions = () => {
     const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
+    
+    // 0. Fetch User Profile to get Tenant ID
+    // In a real app, this should probably come from a global Context to avoid refetching.
+    const userDocRef = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return doc(firestore, `users/${user.uid}`);
+    }, [firestore, user]);
+    
+    const { data: userProfile } = useDoc(userDocRef);
+    
+    // Fallback for legacy/dev mode if tenantId isn't set yet
+    const tenantId = userProfile?.tenantId || 'barangay_san_isidro';
+
+    // Helper to get collection ref dynamically
+    const getTenantCollection = (collectionName: string) => {
+        // If we have a robust tenant structure: `tenants/${tenantId}/${collectionName}`
+        // BUT for the current legacy path structure support: `barangays/${tenantId}/${collectionName}`
+        // We will assume the `tenantId` stored in user profile matches the root collection doc ID.
+        return collection(firestore!, `barangays/${tenantId}/${collectionName}`);
+    };
 
     // 1. SOS (Emergency Alert)
     const createAlert = async (lat: number, lng: number, category: string, message: string, address?: any, accuracy?: number) => {
-        if (!firestore || !user) return false;
+        if (!firestore || !user || !tenantId) return false;
         setLoading(true);
         try {
-            await addDoc(collection(firestore, `/barangays/${BARANGAY_ID}/sos_alerts`), {
+            await addDoc(getTenantCollection('sos_alerts'), {
                 residentId: user.uid,
                 residentName: user.displayName || 'Anonymous Resident',
-                timestamp: serverTimestamp(), // Admin will see server time
+                timestamp: serverTimestamp(),
                 latitude: lat,
                 longitude: lng,
-                accuracy_m: accuracy || 0, // Added accuracy
+                accuracy_m: accuracy || 0,
                 status: 'New',
                 category: category,
                 message: message || 'Emergency Assistance Needed',
-                address: address || null, // Added structured address
+                address: address || null,
                 location_source: 'GPS',
-                contactNumber: '' // Ideally fetched from profile
+                contactNumber: '' 
             });
             toast({
                 title: "SOS SENT!",
@@ -51,17 +70,17 @@ export const useResidentActions = () => {
 
     // 2. File Blotter
     const fileComplaint = async (type: string, narrative: string) => {
-         if (!firestore || !user) return false;
+         if (!firestore || !user || !tenantId) return false;
          setLoading(true);
          try {
-             await addDoc(collection(firestore, `/barangays/${BARANGAY_ID}/blotter_cases`), {
+             await addDoc(getTenantCollection('blotter_cases'), {
                  caseType: type,
                  narrative: narrative,
                  dateReported: serverTimestamp(),
                  status: 'Open',
                  complainantIds: [user.uid],
-                 respondentIds: [], // To be filled by Admin later if known
-                 filedByUserId: user.uid // Self-filed
+                 respondentIds: [], 
+                 filedByUserId: user.uid 
              });
              toast({
                  title: "Report Submitted",
@@ -79,14 +98,14 @@ export const useResidentActions = () => {
 
     // 3. Request Document
     const requestDocument = async (docType: string, purpose: string) => {
-         if (!firestore || !user) return false;
+         if (!firestore || !user || !tenantId) return false;
          setLoading(true);
          try {
-             await addDoc(collection(firestore, `/barangays/${BARANGAY_ID}/document_requests`), {
+             await addDoc(getTenantCollection('document_requests'), {
                  residentId: user.uid,
                  residentName: user.displayName || 'Resident',
                  certificateName: docType,
-                 certTypeId: 'manual_entry', // In a real app, fetch ID from config
+                 certTypeId: 'manual_entry', 
                  purpose: purpose,
                  status: 'Pending',
                  dateRequested: serverTimestamp(),
@@ -106,53 +125,52 @@ export const useResidentActions = () => {
          }
     };
 
-    // 4. Queries (Memoized at Top Level)
+    // 4. Queries (Memoized)
     
     const myRequestsQuery = useMemoFirebase(() => {
-         if (!firestore || !user) return null;
-         // Removed 'where' clause for demo safety
+         if (!firestore || !user || !tenantId) return null;
          return query(
-             collection(firestore, `/barangays/${BARANGAY_ID}/document_requests`),
+             getTenantCollection('document_requests'),
              orderBy('dateRequested', 'desc')
          );
-    }, [firestore, user]);
+    }, [firestore, user, tenantId]);
 
     const ordinancesQuery = useMemoFirebase(() => {
-         if(!firestore) return null;
+         if(!firestore || !tenantId) return null;
          return query(
-             collection(firestore, `/barangays/${BARANGAY_ID}/ordinances`),
+             getTenantCollection('ordinances'),
              where('status', '==', 'Active'),
              orderBy('dateEnacted', 'desc')
          );
-    }, [firestore]);
+    }, [firestore, tenantId]);
 
     const healthSchedulesQuery = useMemoFirebase(() => {
-         if(!firestore) return null;
-         // Ideally filter by date >= today
+         if(!firestore || !tenantId) return null;
          return query(
-             collection(firestore, `/barangays/${BARANGAY_ID}/schedules`),
+             getTenantCollection('schedules'),
              where('category', '==', 'Health'),
              orderBy('start', 'asc')
          );
-    }, [firestore]);
+    }, [firestore, tenantId]);
 
     const announcementsQuery = useMemoFirebase(() => {
-        if(!firestore) return null;
+        if(!firestore || !tenantId) return null;
         return query(
-            collection(firestore, `/barangays/${BARANGAY_ID}/announcements`),
+            getTenantCollection('announcements'),
             orderBy('datePosted', 'desc')
         );
-    }, [firestore]);
+    }, [firestore, tenantId]);
 
 
     return {
         createAlert,
         fileComplaint,
         requestDocument,
-        myRequestsQuery, // Returned directly
-        ordinancesQuery, // Returned directly
-        healthSchedulesQuery, // Returned directly
-        announcementsQuery, // Returned directly
-        loading
+        myRequestsQuery,
+        ordinancesQuery,
+        healthSchedulesQuery,
+        announcementsQuery,
+        loading,
+        tenantId // Expose if needed
     };
 };
