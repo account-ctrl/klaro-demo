@@ -54,7 +54,10 @@ export const SOSButton = () => {
 
     const createSOSEvent = async (initialLoc?: SOSLocationData) => {
         if (!firestore || !tenantPath || !user) {
-            toast({ title: "System Error", description: "Service not available.", variant: "destructive" });
+            // Ensure we don't spam toast on initial load, only on action
+            if (isSending) {
+                toast({ title: "System Error", description: "Service not available.", variant: "destructive" });
+            }
             return null;
         }
 

@@ -90,10 +90,12 @@ const createCurrentUserIcon = (user: User | null | undefined) => {
 const RecenterMap = ({ lat, lng }: { lat: number, lng: number }) => {
     const map = useMap();
     useEffect(() => {
-        if (lat && lng) {
-             // High zoom for SOS tracking
-            map.flyTo([lat, lng], 18, { animate: true, duration: 2 }); 
-        }
+        // Strict Check: Ensure lat and lng are numbers and non-null
+        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        
+        requestAnimationFrame(() => {
+             map.flyTo([lat, lng], 18, { animate: true, duration: 2 }); 
+        });
     }, [lat, lng, map]);
     return null;
 }
@@ -236,10 +238,12 @@ export function FeatureMap({
 
     return (
         <>
-            {center && <RecenterMap lat={center.lat} lng={center.lng} />}
+            {center && typeof center.lat === 'number' && typeof center.lng === 'number' && (
+                <RecenterMap lat={center.lat} lng={center.lng} />
+            )}
             
             {/* Debugger / Current User Marker */}
-            {currentUserLocation && (
+            {currentUserLocation && typeof currentUserLocation.lat === 'number' && typeof currentUserLocation.lng === 'number' && (
                 <Marker
                     position={[currentUserLocation.lat, currentUserLocation.lng]}
                     icon={createCurrentUserIcon(currentUser)}
@@ -264,7 +268,7 @@ export function FeatureMap({
                     const lng = incident.location?.lng || incident.longitude;
                     const accuracy = incident.location?.accuracy || incident.accuracy_m || 0;
 
-                    if (!lat || !lng) return null;
+                    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
 
                     return (
                         <div key={incident.alertId}>
