@@ -51,28 +51,54 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const tokenResult = await auth.currentUser.getIdTokenResult(true);
+        // OPTIMIZATION: Try getting cached token first. If network fails, don't crash, just log.
+        let tokenResult = null;
+        try {
+            tokenResult = await auth.currentUser.getIdTokenResult(false);
+        } catch (e) {
+            console.warn("Cached token fetch failed, attempting force refresh...");
+            try {
+                tokenResult = await auth.currentUser.getIdTokenResult(true);
+            } catch (networkError) {
+                console.error("Auth Token Network Error:", networkError);
+                // Proceed without tokenResult (will fallback to Firestore DB check)
+            }
+        }
+        
         // Normalize role: 'super_admin' -> 'superadmin' to match our config
-        let rawRole = (tokenResult.claims.role as string) || '';
+        let rawRole = '';
+        let claimPath = '';
+        let claimId = '';
+
+        if (tokenResult) {
+            rawRole = (tokenResult.claims.role as string) || '';
+            claimPath = tokenResult.claims.tenantPath as string;
+            claimId = tokenResult.claims.tenantId as string;
+        }
         
         // --- PRIORITY 3: Fallback to User Profile (Firestore) ---
-        // If claims are missing, fetch from DB
+        // If claims are missing OR network failed for token, fetch from DB
         let dbRole = '';
         const userRef = doc(firestore, 'users', auth.currentUser.uid);
-        const userSnap = await getDoc(userRef);
         
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
-            dbRole = userData.role || '';
+        try {
+            const userSnap = await getDoc(userRef);
             
-            // Resolve Tenant Path from DB if not in claim
-            if (!tokenResult.claims.tenantPath && userData.tenantId) {
-                 const path = await getTenantPath(firestore, userData.tenantId);
-                 if (path && isMounted) {
-                     setTenantPath(path);
-                     setTenantId(userData.tenantId);
-                 }
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                dbRole = userData.role || '';
+                
+                // Resolve Tenant Path from DB if not in claim
+                if (!claimPath && userData.tenantId) {
+                    const path = await getTenantPath(firestore, userData.tenantId);
+                    if (path && isMounted) {
+                        setTenantPath(path);
+                        setTenantId(userData.tenantId);
+                    }
+                }
             }
+        } catch (dbError) {
+            console.error("Firestore Profile Fetch Error:", dbError);
         }
 
         // Determine Final Role & Normalize
@@ -104,10 +130,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
         // --- PRIORITY 2: User's Assigned Tenant (Custom Claims) ---
         // If we haven't already set tenant from override or DB fallback...
-        const claimPath = tokenResult.claims.tenantPath as string;
-        const claimId = tokenResult.claims.tenantId as string;
-
-        if (claimPath && !tenantPath) { // Only set if not already set by override
+        if (claimPath && !tenantPath) { 
           if (isMounted) {
               setTenantPath(claimPath);
               setTenantId(claimId); 
@@ -131,6 +154,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
       } catch (err: any) {
         console.error("Failed to resolve tenant:", err);
+        // Don't block the UI for network errors, try to let it slide if we have partial data
         if (isMounted) setError(err.message);
       } finally {
         if (isMounted) setIsLoading(false);
