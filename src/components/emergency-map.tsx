@@ -1,3 +1,4 @@
+
 'use client';
 
 import { MapContainer, TileLayer, Marker, Popup, useMap, Rectangle, CircleMarker, LayersControl, LayerGroup, Polygon, Circle } from 'react-leaflet';
@@ -42,18 +43,28 @@ function MapUpdater({ center, zoom = 16, userLocation }: { center: [number, numb
     const [hasInitialCentered, setHasInitialCentered] = useState(false);
 
     useEffect(() => {
-        // Priority 1: Explicit center prop (from search or alert selection)
-        if (center) {
-            map.flyTo(center, zoom, { duration: 1.5 });
-            setHasInitialCentered(true);
-            return;
-        }
+        // Strict Guard: If coordinates are invalid, DO NOT PROCEED
+        if (center && (typeof center[0] !== 'number' || typeof center[1] !== 'number')) return;
+        if (userLocation && (typeof userLocation.lat !== 'number' || typeof userLocation.lng !== 'number')) return;
 
-        // Priority 2: Initial user location (only once on load if no specific center)
-        if (userLocation && !hasInitialCentered && !center) {
-            map.setView([userLocation.lat, userLocation.lng], zoom);
-            setHasInitialCentered(true);
-        }
+        // Use requestAnimationFrame to ensure map is ready and avoid render conflicts
+        const updateMap = () => {
+            // Priority 1: Explicit center prop (from search or alert selection)
+            if (center) {
+                map.flyTo(center, zoom, { duration: 1.5 });
+                setHasInitialCentered(true);
+                return;
+            }
+
+            // Priority 2: Initial user location (only once on load if no specific center)
+            if (userLocation && !hasInitialCentered && !center) {
+                map.setView([userLocation.lat, userLocation.lng], zoom);
+                setHasInitialCentered(true);
+            }
+        };
+
+        requestAnimationFrame(updateMap);
+
     }, [center, map, zoom, userLocation, hasInitialCentered]);
 
     return null;
@@ -242,14 +253,10 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
     }, []);
 
     const centerToUse = useMemo<[number, number] | null>(() => {
-        if (searchedLocation) {
+        if (searchedLocation && typeof searchedLocation.lat === 'number' && typeof searchedLocation.lng === 'number') {
             return [searchedLocation.lat, searchedLocation.lng];
-        } else if (selectedAlert) {
+        } else if (selectedAlert && typeof selectedAlert.latitude === 'number' && typeof selectedAlert.longitude === 'number') {
             return [selectedAlert.latitude, selectedAlert.longitude];
-        } else if (alerts.length > 0) {
-            // Only center on first alert if it's very recent (e.g. < 5 mins) to avoid jumping to old alerts
-            // For now, let's stick to explicit selection or user location
-            return [alerts[0].latitude, alerts[0].longitude];
         } 
         return null; // Let MapUpdater handle fallback to userLocation or default
     }, [searchedLocation, selectedAlert, alerts]);

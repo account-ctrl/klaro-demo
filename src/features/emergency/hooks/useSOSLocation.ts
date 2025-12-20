@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 
 // Configuration
 const CONFIG = {
-  HIGH_ACCURACY_TIMEOUT_MS: 6000, // 6 seconds to try for high accuracy before fallback or result
+  HIGH_ACCURACY_TIMEOUT_MS: 10000, // Increased timeout to 10s
   DESIRED_ACCURACY_M: 20,         // Desired accuracy in meters
   UPDATE_THROTTLE_MS: 3000,       // Minimum time between updates to DB
   MIN_DISTANCE_CHANGE_M: 5,       // Minimum distance change to trigger update
@@ -89,6 +89,7 @@ export const useSOSLocation = () => {
         return;
       }
 
+      // Force request even if permission is unknown, browser will prompt
       const options = {
         enableHighAccuracy: true,
         timeout: CONFIG.HIGH_ACCURACY_TIMEOUT_MS,
@@ -109,12 +110,14 @@ export const useSOSLocation = () => {
             resolve(data);
         },
         (err) => {
-            // Fallback: try low accuracy if high failed quickly? 
-            // Actually, usually better to just reject and let the watcher take over or handle UI
-            // But for "Immediate Fix", we want *something*.
             console.warn("High accuracy immediate fix failed:", err);
             
-            // Try again with low accuracy immediately?
+            if (err.code === 1) { // PERMISSION_DENIED
+                 reject(new Error("Permission Denied: Please enable location services in your browser settings."));
+                 return;
+            }
+
+            // Fallback: try low accuracy immediately
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                      resolve({
@@ -127,8 +130,14 @@ export const useSOSLocation = () => {
                         source: 'network'
                     });
                 }, 
-                (err2) => reject(err2), 
-                { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+                (err2) => {
+                    if (err2.code === 1) {
+                        reject(new Error("Permission Denied"));
+                    } else {
+                        reject(err2);
+                    }
+                }, 
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
             );
         },
         options
@@ -152,7 +161,7 @@ export const useSOSLocation = () => {
 
     const options = {
         enableHighAccuracy: true,
-        timeout: 15000, 
+        timeout: 20000, 
         maximumAge: 0 
     };
 
@@ -176,6 +185,7 @@ export const useSOSLocation = () => {
 
             // Update local state for UI
             setCurrentLocation(data);
+            setError(null); // Clear error on success
             
             // Logic to decide if we should push this update to DB (passed via callback)
             if (shouldUpdate(data)) {
@@ -187,7 +197,7 @@ export const useSOSLocation = () => {
         (err) => {
             console.error("Watch position error:", err);
             if (err.code === 1) { // PERMISSION_DENIED
-                setError("Location permission denied");
+                setError("Location permission denied. Please enable GPS.");
                 setStatus('error');
             }
             // If timeout or unavailable, we just keep waiting for the next one in watchPosition usually, 
