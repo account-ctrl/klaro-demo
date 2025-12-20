@@ -40,7 +40,12 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 return;
             }
 
-            // STRATEGY 2: Nominatim API Lookup (Text-to-Map)
+            // STRATEGY 2: Use Barangay Hall Address (if saved directly as coordinates)
+            // Note: Currently TenantSettings doesn't store lat/lng directly for address, 
+            // but if we add it or infer it, this would go here.
+
+            // STRATEGY 3: Nominatim API Lookup (Text-to-Map)
+            // Use the structured location or fallback flat fields
             const barangayName = settings.barangayName || settings.name || settings.location?.barangay || '';
             const city = settings.city || settings.location?.city || '';
             const province = settings.province || settings.location?.province || '';
@@ -54,7 +59,8 @@ function useAutoFocus(settings?: TenantSettings | null) {
 
             try {
                 // Attempt 1: Specific Barangay Search
-                const query = `${barangayName}, ${city}, ${province}, Philippines`;
+                const query = `Barangay ${barangayName}, ${city}, ${province}, Philippines`;
+                console.log(`[MapAutoFocus] Searching for: ${query}`);
                 
                 // Add Referer/User-Agent if possible or use a no-cors mode (though opaque response won't help)
                 // We wrap in try/catch to handle network blocks (CORS/Firewall) gracefully.
@@ -76,6 +82,7 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 }
 
                 // Attempt 2: Fallback to City/Municipality
+                console.warn("[MapAutoFocus] Barangay not found. Falling back to City/Municipality.");
                 const fallbackQuery = `${city}, ${province}, Philippines`;
                 response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery)}&format=json&limit=1`);
                 
@@ -117,16 +124,21 @@ export function MapAutoFocus({ settings }: AutoFocusProps) {
 
     useEffect(() => {
         if (bounds && !hasZoomed.current) {
-            try {
-                map.fitBounds(bounds as L.LatLngBoundsExpression, { 
-                    padding: [50, 50],
-                    animate: true,
-                    duration: 1.5 
-                });
-                hasZoomed.current = true;
-            } catch (e) {
-                console.error("[MapAutoFocus] Invalid bounds:", bounds);
-            }
+            // Delay slightly to allow map container to settle
+            const timer = setTimeout(() => {
+                try {
+                    map.fitBounds(bounds as L.LatLngBoundsExpression, { 
+                        padding: [50, 50],
+                        animate: true,
+                        duration: 1.5 
+                    });
+                    hasZoomed.current = true;
+                } catch (e) {
+                    console.error("[MapAutoFocus] Invalid bounds:", bounds);
+                }
+            }, 500); // 500ms delay
+
+            return () => clearTimeout(timer);
         }
     }, [bounds, map]);
 
