@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper Functions
+    function isSuperAdmin() {
+      return request.auth.token.role == 'super_admin';
+    }
+    
+    // Check if user is the owner of the file
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Check if user is an admin of the tenant
+    // Note: Storage rules don't have direct access to Firestore data, 
+    // so we rely heavily on Custom Claims (request.auth.token) or path structure matching.
+    function isTenantAdmin(province, city, barangay) {
+      // Reconstruct the expected tenant path from the file path components
+      let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
+      return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
+    }
+
+    // --- GLOBAL RULES ---
+    match /{allPaths=**} {
+       allow read, write: if isSuperAdmin();
+    }
+
+    // --- TENANT ISOLATED STORAGE ---
+    // Path: tenants/{province}/{city}/{barangay}/users/{userId}/documents/{fileName}
+    match /tenants/{province}/{city}/{barangay}/users/{userId}/documents/{fileName} {
+      
+      // 1. The Resident (Owner)
+      allow read, write: if isOwner(userId);
+      
+      // 2. The Tenant Admin
+      allow read, write: if isTenantAdmin(province, city, barangay);
+    }
+    
+    // --- ID VERIFICATION UPLOADS ---
+    // Path: verification/{userId}/{fileName}
+    // Temporary holding area for ID uploads before they are processed/moved or just for initial KYC
+    match /verification/{userId}/{fileName} {
+        allow read, write: if isOwner(userId);
+        // Admins might need access if they manually review, but usually this is for cloud functions
+    }
+  }
+}
