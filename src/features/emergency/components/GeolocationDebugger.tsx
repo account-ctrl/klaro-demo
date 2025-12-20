@@ -107,7 +107,7 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
                     </span>
                     {currentUser && (
                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-zinc-400 max-w-[80px] truncate">{currentUser.displayName || 'Admin'}</span>
+                            <span className="text-xs text-zinc-400 max-w-[140px] truncate">{currentUser.displayName || 'Admin'}</span>
                             <Avatar className="h-6 w-6 border border-zinc-700">
                                 <AvatarImage src={currentUser.photoURL || undefined} />
                                 <AvatarFallback className="text-[10px] bg-zinc-800">{currentUser.displayName?.substring(0,2).toUpperCase() || 'AD'}</AvatarFallback>

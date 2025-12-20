@@ -13,7 +13,7 @@ import { addDocumentNonBlocking } from '@/firebase';
 import { useFirestore } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
 import { MapAutoFocus } from './maps/MapAutoFocus'; 
-import { useGeolocation } from '@/features/emergency/hooks/useGeolocation'; // Import hook
+import { useSOSLocation } from '@/features/emergency/hooks/useSOSLocation'; // Import hook
 
 export interface MapLayerFilters {
     showBoundaries: boolean;
@@ -231,12 +231,12 @@ export default function EmergencyMap({ alerts, responders = [], households = [],
     };
 
     // Fetch current user location for initial centering
-    const { getCurrentCoordinates } = useGeolocation();
+    const { getImmediateFix } = useSOSLocation();
     const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
     useEffect(() => {
         // Attempt to get user location once on mount to center the map
-        getCurrentCoordinates()
+        getImmediateFix()
             .then(coords => setUserLocation(coords))
             .catch(err => console.log("Map auto-center: GPS not available yet.", err));
     }, []);

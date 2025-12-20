@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useGeolocation } from '../hooks/useGeolocation';
+import { useSOSLocation } from '../hooks/useSOSLocation';
 import { useFirestore } from '@/firebase/client-provider'; 
 import { useTenant } from '@/providers/tenant-provider';
 import { useUser } from '@/firebase';
@@ -10,7 +10,7 @@ import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 export function OnDutyToggle() {
     const [isOnDuty, setIsOnDuty] = useState(false);
-    const { location, startWatching, stopWatching, error } = useGeolocation();
+    const { location, startTracking, stopTracking, error } = useSOSLocation();
     const firestore = useFirestore(); // Corrected usage: useFirestore returns the instance now, or we check imports
     const { tenantPath } = useTenant();
     const { user } = useUser();
@@ -19,9 +19,9 @@ export function OnDutyToggle() {
     const handleToggle = (checked: boolean) => {
         setIsOnDuty(checked);
         if (checked) {
-            startWatching();
+            startTracking();
         } else {
-            stopWatching();
+            stopTracking();
             // Mark as offline
             if (firestore && tenantPath && user) {
                 const ref = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
@@ -32,7 +32,7 @@ export function OnDutyToggle() {
 
     // Effect to write location to Firestore when it changes
     useEffect(() => {
-        if (isOnDuty && location.lat && location.lng && firestore && tenantPath && user) {
+        if (isOnDuty && location?.lat && location?.lng && firestore && tenantPath && user) {
             const writeLocation = async () => {
                 const ref = doc(firestore, `${tenantPath}/responder_locations/${user.uid}`);
                 await setDoc(ref, {

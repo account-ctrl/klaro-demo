@@ -13,7 +13,7 @@ import { useUser, useFirestore, useMemoFirebase, useCollection } from '@/firebas
 import { collection, query, where } from "firebase/firestore";
 import { User } from "@/lib/types";
 import { Loader2 } from "lucide-react";
-import { useGeolocation } from "./hooks/useGeolocation";
+import { useSOSLocation } from "./hooks/useSOSLocation";
 import { withRoleGuard } from '@/components/auth/role-guard';
 import { PERMISSIONS } from '@/lib/config/roles';
 import { useTenant } from "@/providers/tenant-provider";
@@ -46,7 +46,7 @@ function EmergencyCommandCenterPage() {
     const { data: users } = useCollection<User>(usersQuery);
 
     // Geolocation for Map Centering (Independent)
-    const { location: debugLocation, getCurrentCoordinates } = useGeolocation();
+    const { location: debugLocation, getImmediateFix } = useSOSLocation();
 
     // Default center
     const defaultCenter = { lat: 14.5995, lng: 120.9842 };
@@ -68,13 +68,13 @@ function EmergencyCommandCenterPage() {
 
     // Auto-center on user location
     useEffect(() => {
-        if (debugLocation.lat && debugLocation.lng && !center) {
+        if (debugLocation?.lat && debugLocation?.lng && !center) {
             setCenter({ lat: debugLocation.lat, lng: debugLocation.lng });
         }
-    }, [debugLocation.lat, debugLocation.lng]);
+    }, [debugLocation?.lat, debugLocation?.lng]);
 
     useEffect(() => {
-        getCurrentCoordinates().catch(() => {});
+        getImmediateFix().catch(() => {});
     }, []);
 
     if (loadingIncidents) {
@@ -97,7 +97,7 @@ function EmergencyCommandCenterPage() {
                             responders={responders}
                             center={center}
                             onIncidentClick={handleIncidentClick}
-                            currentUserLocation={debugLocation.lat && debugLocation.lng ? { lat: debugLocation.lat, lng: debugLocation.lng } : null}
+                            currentUserLocation={debugLocation?.lat && debugLocation?.lng ? { lat: debugLocation.lat, lng: debugLocation.lng } : null}
                             currentUser={currentUser}
                          />
                      </MapContainerWrapper>
