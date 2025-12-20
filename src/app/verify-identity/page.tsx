@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useFirebaseApp } from '@/firebase'; 
 import { collection, getDocs } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions'; 
+// import { getFunctions, httpsCallable } from 'firebase/functions'; // REMOVED
 import Webcam from 'react-webcam';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter
@@ -31,8 +31,8 @@ export default function VerificationWizard() {
   const { user } = useUser();
   const router = useRouter();
   const { toast } = useToast();
-  const firestore = useFirestore(); // Use hook
-  const firebaseApp = useFirebaseApp(); // Use hook
+  const firestore = useFirestore(); 
+  const firebaseApp = useFirebaseApp(); 
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -65,13 +65,12 @@ export default function VerificationWizard() {
 
     const fetchTenants = async () => {
       try {
-        // Changed from 'tenants' to 'tenant_directory' to match provisioning script
         const snap = await getDocs(collection(firestore, 'tenant_directory'));
         const list = snap.docs.map(d => {
             const data = d.data();
             return {
                 id: d.id,
-                name: data.barangay || data.name || "Unknown Barangay", // data.barangay is what provisioning sets
+                name: data.barangay || data.name || "Unknown Barangay", 
                 province: data.province || "", 
                 city: data.city || "",
                 center: data.centerCoordinates || { lat: 14.5995, lng: 120.9842 }
@@ -102,7 +101,6 @@ export default function VerificationWizard() {
     setSelectedCityCode(code);
     setFormData(prev => ({ ...prev, tenantId: '' })); // Reset barangay
 
-    // Find City Name & Province Name to match with Tenant Data
     const cityObj = citiesData.find(c => c.code === code);
     const provObj = provincesData.find(p => p.code === selectedProvinceCode);
 
@@ -110,17 +108,13 @@ export default function VerificationWizard() {
         const sCity = cityObj.name.trim().toLowerCase();
         const sProv = provObj.name.trim().toLowerCase();
 
-        // Filter Tenants (Barangays) using robust case-insensitive matching
         const matches = tenants.filter(t => {
             const tCity = (t.city || "").trim().toLowerCase();
             const tProv = (t.province || "").trim().toLowerCase();
 
-            // Check Province (Exact or Partial)
             const provMatch = tProv === sProv || tProv.includes(sProv) || sProv.includes(tProv);
             if (!provMatch) return false;
 
-            // Check City (Exact or Partial)
-            // Handle cases like "City of X" matching "X"
             const cityMatch = tCity === sCity || tCity.includes(sCity) || sCity.includes(tCity);
             return cityMatch;
         });
@@ -152,7 +146,6 @@ export default function VerificationWizard() {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
             
-            // Calculate Distance (Haversine)
             const selectedTenant = tenants.find(t => t.id === formData.tenantId);
             let dist = 0;
             if (selectedTenant) {
@@ -197,28 +190,38 @@ export default function VerificationWizard() {
 
   // --- SUBMIT ---
   const handleSubmit = async () => {
-    if (!user || !firebaseApp) return;
+    if (!user) return;
     setLoading(true);
 
     try {
-        const functions = getFunctions(firebaseApp);
-        const verifyFn = httpsCallable(functions, 'verifyResidentIdentity');
-        
-        const result = await verifyFn({
-            uid: user.uid,
-            tenantId: formData.tenantId,
-            birthDate: formData.birthDate,
-            mothersMaidenName: formData.mothersMaidenName,
-            location: {
-                lat: formData.latitude,
-                lng: formData.longitude,
-                distance: formData.distanceKm
+        // --- CHANGED: Use Next.js API Route instead of Cloud Function ---
+        const token = await user.getIdToken();
+        const res = await fetch('/api/resident/verify-identity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
-            idImage: formData.idImage, // Base64
-            selfieImage: formData.selfieImage // Base64
+            body: JSON.stringify({
+                tenantId: formData.tenantId,
+                birthDate: formData.birthDate,
+                mothersMaidenName: formData.mothersMaidenName,
+                location: {
+                    lat: formData.latitude,
+                    lng: formData.longitude,
+                    distance: formData.distanceKm
+                },
+                idImage: formData.idImage,
+                selfieImage: formData.selfieImage
+            })
         });
 
-        const data = result.data as any;
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || errorData.reason || 'Submission failed');
+        }
+
+        const data = await res.json();
 
         if (data.status === 'verified') {
             toast({ title: "Success!", description: "Identity Verified. Redirecting..." });
