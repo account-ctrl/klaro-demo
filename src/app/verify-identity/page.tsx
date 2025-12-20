@@ -2,9 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth, useUser, useFirestore, useFirebaseApp } from '@/firebase'; // Added useFirebaseApp
-import { doc, updateDoc, collection, getDocs, setDoc, getDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions'; // Import getFunctions
+import { useUser, useFirestore, useFirebaseApp } from '@/firebase'; 
+import { collection, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions'; 
 import Webcam from 'react-webcam';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter
@@ -14,10 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Loader2, Camera, CheckCircle, MapPin, Upload, AlertTriangle, ShieldCheck, ArrowRight } from "lucide-react";
+
+// Import Geo Data
+import provincesData from '@/lib/data/provinces.json';
+import citiesData from '@/lib/data/cities-municipalities.json';
 
 // --- STEPS ---
-// 1. Tenant Selection
+// 1. Tenant Selection (Province -> City -> Barangay)
 // 2. Personal Info (DOB, MMN)
 // 3. Geolocation
 // 4. ID Upload
@@ -32,7 +36,14 @@ export default function VerificationWizard() {
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [tenants, setTenants] = useState<{id: string, name: string, center: {lat: number, lng: number}}[]>([]);
+  
+  // Location Data State
+  const [tenants, setTenants] = useState<{id: string, name: string, province: string, city: string, center: {lat: number, lng: number}}[]>([]);
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState('');
+  const [selectedCityCode, setSelectedCityCode] = useState('');
+  
+  const [filteredCities, setFilteredCities] = useState<any[]>([]);
+  const [filteredBarangays, setFilteredBarangays] = useState<any[]>([]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -53,18 +64,61 @@ export default function VerificationWizard() {
     if (!firestore) return;
 
     const fetchTenants = async () => {
-      const snap = await getDocs(collection(firestore, 'tenants'));
-      const list = snap.docs.map(d => ({
-        id: d.id,
-        name: d.data().name || "Unknown Barangay",
-        center: d.data().centerCoordinates || { lat: 14.5995, lng: 120.9842 } // Default Manila
-      }));
-      setTenants(list);
+      try {
+        const snap = await getDocs(collection(firestore, 'tenants'));
+        const list = snap.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id,
+                name: data.name || "Unknown Barangay",
+                province: data.province || "", 
+                city: data.city || "",
+                center: data.centerCoordinates || { lat: 14.5995, lng: 120.9842 }
+            };
+        });
+        setTenants(list);
+      } catch (err) {
+        console.error("Error fetching tenants:", err);
+      }
     };
     fetchTenants();
   }, [firestore]);
 
-  // --- STEP 1: Tenant Selection ---
+  // Handle Province Change
+  const handleProvinceChange = (code: string) => {
+    setSelectedProvinceCode(code);
+    setSelectedCityCode(''); // Reset city
+    setFormData(prev => ({ ...prev, tenantId: '' })); // Reset barangay
+    
+    // Filter Cities
+    const cities = citiesData.filter(c => c.provinceCode === code);
+    setFilteredCities(cities.sort((a, b) => a.name.localeCompare(b.name)));
+    setFilteredBarangays([]);
+  };
+
+  // Handle City Change
+  const handleCityChange = (code: string) => {
+    setSelectedCityCode(code);
+    setFormData(prev => ({ ...prev, tenantId: '' })); // Reset barangay
+
+    // Find City Name & Province Name to match with Tenant Data
+    const cityObj = citiesData.find(c => c.code === code);
+    const provObj = provincesData.find(p => p.code === selectedProvinceCode);
+
+    if (cityObj && provObj) {
+        // Filter Tenants (Barangays)
+        // We match loosely on name because tenant data might be slightly different string format
+        // Ideally tenant data should store codes, but for now we fallback to name matching or list all if fuzzy
+        const matches = tenants.filter(t => 
+            (t.city.toLowerCase() === cityObj.name.toLowerCase() || t.city.includes(cityObj.name) || cityObj.name.includes(t.city)) &&
+            (t.province.toLowerCase() === provObj.name.toLowerCase() || t.province.includes(provObj.name))
+        );
+        setFilteredBarangays(matches);
+    } else {
+        setFilteredBarangays([]);
+    }
+  };
+
   const handleTenantSelect = (val: string) => {
     setFormData(prev => ({ ...prev, tenantId: val }));
   };
@@ -135,16 +189,8 @@ export default function VerificationWizard() {
     setLoading(true);
 
     try {
-        // 1. Save submission to Firestore (temp collection or direct on user)
-        // Ideally, we call a Cloud Function directly, but let's save state first for safety.
-        
-        // Call Cloud Function for Verification
         const functions = getFunctions(firebaseApp);
         const verifyFn = httpsCallable(functions, 'verifyResidentIdentity');
-        
-        // NOTE: In a real app, we upload images to Storage first and pass URLs.
-        // For this demo/MVP, sending base64 is okay if images are small, but risky for large payloads.
-        // Let's assume we pass base64 for now for simplicity of this artifact.
         
         const result = await verifyFn({
             uid: user.uid,
@@ -167,7 +213,6 @@ export default function VerificationWizard() {
             router.push('/resident/dashboard');
         } else {
             toast({ variant: "destructive", title: "Verification Pending", description: "Manual review required." });
-            // Route to a "Pending" page or stay here
         }
 
     } catch (error: any) {
@@ -213,20 +258,57 @@ export default function VerificationWizard() {
             {/* STEP 1: TENANT */}
             {step === 1 && (
                 <div className="space-y-4">
-                    <Label>Select your Barangay</Label>
-                    <Select onValueChange={handleTenantSelect} value={formData.tenantId}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Search Barangay..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {tenants.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <p className="text-sm text-slate-500">
+                    <div className="space-y-2">
+                        <Label>Province</Label>
+                        <Select onValueChange={handleProvinceChange} value={selectedProvinceCode}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Province" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {provincesData.sort((a,b) => a.name.localeCompare(b.name)).map(p => (
+                                    <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>City / Municipality</Label>
+                        <Select onValueChange={handleCityChange} value={selectedCityCode} disabled={!selectedProvinceCode}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select City/Municipality" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {filteredCities.map(c => (
+                                    <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Barangay</Label>
+                        <Select onValueChange={handleTenantSelect} value={formData.tenantId} disabled={!selectedCityCode}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Barangay" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {filteredBarangays.length > 0 ? (
+                                    filteredBarangays.map(t => (
+                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                    ))
+                                ) : (
+                                    <div className="p-2 text-sm text-slate-500 text-center">
+                                        No registered barangays found in this area.
+                                    </div>
+                                )}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
                         We will cross-reference your data with this Barangay's Master List.
-                    </p>
+                    </div>
                 </div>
             )}
 
