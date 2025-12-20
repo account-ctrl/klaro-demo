@@ -106,62 +106,53 @@ export const useResidentActions = () => {
          }
     };
 
-    // 4. Queries (Memoized)
+    // 4. Queries (Memoized at Top Level)
     
-    // DEMO CONSTRAINT: Fetch ALL, Filter Client-Side
-    const getMyRequestsQuery = () => {
-         return useMemoFirebase(() => {
-             if (!firestore || !user) return null;
-             // Removed 'where' clause for demo safety
-             return query(
-                 collection(firestore, `/barangays/${BARANGAY_ID}/document_requests`),
-                 orderBy('dateRequested', 'desc')
-             );
-         }, [firestore, user]);
-    };
+    const myRequestsQuery = useMemoFirebase(() => {
+         if (!firestore || !user) return null;
+         // Removed 'where' clause for demo safety
+         return query(
+             collection(firestore, `/barangays/${BARANGAY_ID}/document_requests`),
+             orderBy('dateRequested', 'desc')
+         );
+    }, [firestore, user]);
 
-    const getOrdinancesQuery = () => {
-        return useMemoFirebase(() => {
-             if(!firestore) return null;
-             return query(
-                 collection(firestore, `/barangays/${BARANGAY_ID}/ordinances`),
-                 where('status', '==', 'Active'),
-                 orderBy('dateEnacted', 'desc')
-             );
-        }, [firestore]);
-    };
+    const ordinancesQuery = useMemoFirebase(() => {
+         if(!firestore) return null;
+         return query(
+             collection(firestore, `/barangays/${BARANGAY_ID}/ordinances`),
+             where('status', '==', 'Active'),
+             orderBy('dateEnacted', 'desc')
+         );
+    }, [firestore]);
 
-     const getHealthSchedulesQuery = () => {
-        return useMemoFirebase(() => {
-             if(!firestore) return null;
-             // Ideally filter by date >= today
-             return query(
-                 collection(firestore, `/barangays/${BARANGAY_ID}/schedules`),
-                 where('category', '==', 'Health'),
-                 orderBy('start', 'asc')
-             );
-        }, [firestore]);
-    };
+    const healthSchedulesQuery = useMemoFirebase(() => {
+         if(!firestore) return null;
+         // Ideally filter by date >= today
+         return query(
+             collection(firestore, `/barangays/${BARANGAY_ID}/schedules`),
+             where('category', '==', 'Health'),
+             orderBy('start', 'asc')
+         );
+    }, [firestore]);
 
-    const getAnnouncementsQuery = () => {
-        return useMemoFirebase(() => {
-            if(!firestore) return null;
-            return query(
-                collection(firestore, `/barangays/${BARANGAY_ID}/announcements`),
-                orderBy('datePosted', 'desc')
-            );
-        }, [firestore]);
-    }
+    const announcementsQuery = useMemoFirebase(() => {
+        if(!firestore) return null;
+        return query(
+            collection(firestore, `/barangays/${BARANGAY_ID}/announcements`),
+            orderBy('datePosted', 'desc')
+        );
+    }, [firestore]);
 
 
     return {
         createAlert,
         fileComplaint,
         requestDocument,
-        getMyRequestsQuery,
-        getOrdinancesQuery,
-        getHealthSchedulesQuery,
-        getAnnouncementsQuery,
+        myRequestsQuery, // Returned directly
+        ordinancesQuery, // Returned directly
+        healthSchedulesQuery, // Returned directly
+        announcementsQuery, // Returned directly
         loading
     };
 };
