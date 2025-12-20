@@ -97,6 +97,12 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
         return "text-red-500";
     };
 
+    // Determine display name and avatar fallback
+    // The User type from @/lib/types has fullName, but if we pass firebase user directly it might have displayName
+    // We cast or check
+    const displayName = (currentUser as any)?.fullName || currentUser?.displayName || 'Admin';
+    const avatarFallback = displayName ? displayName.substring(0, 2).toUpperCase() : 'AD';
+
     return (
         <Card className="w-96 bg-zinc-900 border-zinc-800 text-zinc-100 shadow-xl max-h-[80vh] flex flex-col">
             <CardHeader className="pb-2 border-b border-zinc-800 shrink-0">
@@ -107,10 +113,10 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
                     </span>
                     {currentUser && (
                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-zinc-400 max-w-[140px] truncate">{currentUser.displayName || 'Admin'}</span>
+                            <span className="text-xs text-zinc-400 max-w-[140px] truncate">{displayName}</span>
                             <Avatar className="h-6 w-6 border border-zinc-700">
                                 <AvatarImage src={currentUser.photoURL || undefined} />
-                                <AvatarFallback className="text-[10px] bg-zinc-800">{currentUser.displayName?.substring(0,2).toUpperCase() || 'AD'}</AvatarFallback>
+                                <AvatarFallback className="text-[10px] bg-zinc-800">{avatarFallback}</AvatarFallback>
                             </Avatar>
                          </div>
                     )}
