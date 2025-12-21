@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { EmergencyAlert, User, ResponderLocation, FixedAsset, Household } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,12 +26,13 @@ import {
     PlayCircle,
     UserCheck,
     Truck,
-    Map as MapIcon
+    Map as MapIcon,
+    LocateFixed
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from 'date-fns';
-import { useFirestore } from '@/firebase';
-import { doc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { doc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useTenant } from '@/providers/tenant-provider';
 import { IncidentTimeline } from './incident-timeline';
 import { getSmartRoute, RouteResult } from '@/lib/services/routing';
@@ -45,6 +46,7 @@ interface OperationsPanelProps {
   onAlertSelect: (alertId: string, location?: { lat: number; lng: number }) => void;
   selectedAlertId: string | null;
   onRouteCalculated?: (route: RouteResult | null) => void;
+  settings?: any;
 }
 
 // Distance Helper
@@ -76,9 +78,14 @@ export function OperationsPanel({
   onRouteCalculated
 }: OperationsPanelProps) {
     const { tenantPath } = useTenant();
+    const { user: authUser } = useUser();
     const firestore = useFirestore();
     const [dispatchLoading, setDispatchLoading] = useState(false);
     const [isSimulating, setIsSimulating] = useState(false);
+    
+    // GPS Tracking State
+    const [isTracking, setIsTracking] = useState(false);
+    const watchId = useRef<number | null>(null);
     
     // Asset Detail State
     const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -228,6 +235,36 @@ export function OperationsPanel({
         } catch (e) { console.error(e); } finally { setIsSimulating(false); }
     };
 
+    const toggleTracking = () => {
+        if (isTracking) {
+            if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+            setIsTracking(false);
+        } else {
+            if (!navigator.geolocation) { alert("GPS not supported"); return; }
+            setIsTracking(true);
+            watchId.current = navigator.geolocation.watchPosition(
+                async (pos) => {
+                    if (!authUser || !tenantPath) return;
+                    const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+                    const docRef = doc(firestore, `${safePath}/responder_locations/${authUser.uid}`);
+                    
+                    await setDoc(docRef, {
+                        userId: authUser.uid,
+                        name: authUser.displayName || 'Me',
+                        latitude: pos.coords.latitude,
+                        longitude: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy,
+                        status: 'On Duty',
+                        last_active: serverTimestamp(),
+                        role: 'Admin'
+                    }, { merge: true });
+                },
+                (err) => console.error(err),
+                { enableHighAccuracy: true }
+            );
+        }
+    };
+
     const handleAssetStatusChange = async (status: string) => {
         if (!selectedAsset || !tenantPath) return;
         const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
@@ -235,10 +272,9 @@ export function OperationsPanel({
     };
 
     const handleRoute = async (target: any) => {
-        // Accepts asset or user object as long as it has coordinates
         if (!selectedAlert?.latitude || !selectedAlert?.longitude || !target.coordinates) return;
         if (onRouteCalculated) {
-            setRoutingAssetId(target.assetId || target.userId); // Handle both types
+            setRoutingAssetId(target.assetId || target.userId); 
             const route = await getSmartRoute(
                 { lat: target.coordinates.lat, lng: target.coordinates.lng },
                 { lat: selectedAlert.latitude, lng: selectedAlert.longitude }
@@ -378,7 +414,6 @@ export function OperationsPanel({
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
-                                            {/* ROUTE BUTTON ASSETS */}
                                             {asset.coordinates && (
                                                 <Button 
                                                     size="icon" 
@@ -423,7 +458,6 @@ export function OperationsPanel({
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
-                                            {/* ROUTE BUTTON PERSONNEL */}
                                             {user.coordinates && (
                                                 <Button 
                                                     size="icon" 
@@ -465,7 +499,20 @@ export function OperationsPanel({
                     <span className="text-xs font-mono text-emerald-500">SYSTEM LIVE</span>
                     </div>
                 </div>
-                <Button variant="ghost" size="sm" className="h-7 text-[10px] bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-400" onClick={handleSimulateSOS} disabled={isSimulating}><PlayCircle className="w-3 h-3 mr-1" /> SIM</Button>
+                <div className="flex gap-1">
+                    {/* GPS Toggle */}
+                    <Button 
+                        variant={isTracking ? "default" : "ghost"} 
+                        size="sm" 
+                        className={cn("h-7 text-[10px] border border-zinc-700", isTracking ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800")} 
+                        onClick={toggleTracking}
+                        title="Broadcast My Location"
+                    >
+                        <LocateFixed className={cn("w-3 h-3 mr-1", isTracking && "animate-pulse")} />
+                        GPS
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-[10px] bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-400" onClick={handleSimulateSOS} disabled={isSimulating}><PlayCircle className="w-3 h-3 mr-1" /> SIM</Button>
+                </div>
             </div>
 
             <Tabs defaultValue="incidents" className="flex-1 flex flex-col min-h-0">
