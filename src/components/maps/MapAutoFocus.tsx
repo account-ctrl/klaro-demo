@@ -9,32 +9,17 @@ interface AutoFocusProps {
     settings?: TenantSettings | null;
 }
 
-// Helper to calculate polygon centroid
-const calculateCentroid = (points: {lat: number, lng: number}[]) => {
-    if (!points || points.length === 0) return null;
-    let latSum = 0;
-    let lngSum = 0;
-    points.forEach(p => {
-        latSum += p.lat;
-        lngSum += p.lng;
-    });
-    return [latSum / points.length, lngSum / points.length] as [number, number];
-};
-
 function useAutoFocus(settings?: TenantSettings | null) {
     const [center, setCenter] = useState<[number, number] | null>(null);
     const [zoom, setZoom] = useState<number>(15);
     const hasFetched = useRef(false);
     
-    // We use a ref to track the last settings key to avoid refetching on same settings object reference change
     const lastSettingsKey = useRef<string>("");
 
     useEffect(() => {
         if (!settings) return;
 
-        // Generate a key to detect actual content changes
-        const boundaryLen = settings.territory?.boundary?.length || 0;
-        const currentSettingsKey = `${settings.barangayName}-${settings.city}-${settings.barangayHallAddress}-${boundaryLen}`;
+        const currentSettingsKey = `${settings.barangayName}-${settings.city}-${settings.barangayHallAddress}`;
         
         if (currentSettingsKey !== lastSettingsKey.current) {
             hasFetched.current = false;
@@ -44,15 +29,13 @@ function useAutoFocus(settings?: TenantSettings | null) {
         const resolveLocation = async () => {
             if (hasFetched.current) return;
 
-            // Extract location details with strictly correct fallback logic
+            // Extract location details
             const barangayRaw = settings.barangayName || settings.name || '';
+            // Ensure we don't double-prefix "Barangay"
             const barangayName = barangayRaw.toLowerCase().startsWith('barangay') ? barangayRaw : `Barangay ${barangayRaw}`;
             
-            const cityRaw = settings.city || settings.location?.city || '';
-            const provinceRaw = settings.province || settings.location?.province || '';
-            
-            const city = cityRaw.trim();
-            const province = provinceRaw.trim();
+            const city = (settings.city || settings.location?.city || '').trim();
+            const province = (settings.province || settings.location?.province || '').trim();
 
             if (!barangayName || !city) {
                 console.warn("[MapAutoFocus] Missing crucial location data:", { barangayName, city, province });
@@ -65,41 +48,27 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 let response;
                 let data;
 
-                // Priority 1: Territory Boundary Centroid (Promoted)
-                // Use the drawn map boundary if available as the most authoritative source.
-                if (settings.territory?.boundary && settings.territory.boundary.length > 0) {
-                     const centroid = calculateCentroid(settings.territory.boundary);
-                     if (centroid) {
-                         console.log("[MapAutoFocus] Using Territory Boundary Centroid");
-                         setCenter(centroid);
-                         setZoom(16);
-                         hasFetched.current = true;
-                         return;
-                     }
-                }
+                // Priority 1: Strict Hierarchical Search (Barangay + City + Province)
+                // This is the most reliable way to find the jurisdiction center.
+                const hierarchyQuery = `${barangayName}, ${city}, ${province}, Philippines`;
+                console.log("[MapAutoFocus] Searching Hierarchy:", hierarchyQuery);
+                
+                response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(hierarchyQuery)}&format=json&limit=1`);
+                data = await response.json();
 
-                // Priority 2: Explicit Barangay Hall Address from Settings
-                if (settings.barangayHallAddress) {
-                    console.log("[MapAutoFocus] Trying explicit address:", settings.barangayHallAddress);
-                    // Try with just the address first, or append city/province if not present
-                    const addressQuery = `${settings.barangayHallAddress}, ${city}, ${province}, Philippines`;
-                    response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addressQuery)}&format=json&limit=1`);
-                    data = await response.json();
-
-                    if (data && data.length > 0) {
-                        console.log("[MapAutoFocus] Found via Address:", data[0].display_name);
-                        const lat = parseFloat(data[0].lat);
-                        const lon = parseFloat(data[0].lon);
-                        if (!isNaN(lat) && !isNaN(lon)) {
-                            setCenter([lat, lon]);
-                            setZoom(19); // High zoom for specific building
-                            hasFetched.current = true;
-                            return;
-                        }
+                if (data && data.length > 0) {
+                    console.log("[MapAutoFocus] Found Barangay Hierarchy:", data[0].display_name);
+                    const lat = parseFloat(data[0].lat);
+                    const lon = parseFloat(data[0].lon);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        setCenter([lat, lon]);
+                        setZoom(15); // Ideal zoom to show the whole barangay
+                        hasFetched.current = true;
+                        return;
                     }
                 }
 
-                // Priority 3: Specific "Barangay Hall" Search
+                // Priority 2: Fallback to "Barangay Hall" Search if generic area fails
                 const hallQuery = `${barangayName} Hall, ${city}, ${province}, Philippines`;
                 response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(hallQuery)}&format=json&limit=1`);
                 data = await response.json();
@@ -110,30 +79,13 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     const lon = parseFloat(data[0].lon);
                     if (!isNaN(lat) && !isNaN(lon)) {
                         setCenter([lat, lon]);
-                        setZoom(18); // High zoom for building view
+                        setZoom(18); 
                         hasFetched.current = true;
                         return;
                     }
                 }
 
-                // Priority 4: General Barangay Boundary Center
-                const barangayQuery = `${barangayName}, ${city}, ${province}, Philippines`;
-                response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(barangayQuery)}&format=json&limit=1`);
-                data = await response.json();
-
-                if (data && data.length > 0) {
-                    console.log("[MapAutoFocus] Found Barangay Center:", data[0].display_name);
-                    const lat = parseFloat(data[0].lat);
-                    const lon = parseFloat(data[0].lon);
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        setCenter([lat, lon]);
-                        setZoom(16); // Moderate zoom for area view
-                        hasFetched.current = true;
-                        return;
-                    }
-                }
-
-                // Priority 5: City Fallback (Last Resort)
+                // Priority 3: City Fallback
                 const cityQuery = `${city}, ${province}, Philippines`;
                 console.warn("[MapAutoFocus] Barangay not found. Falling back to City:", cityQuery);
                 response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityQuery)}&format=json&limit=1`);
@@ -144,7 +96,7 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     const lon = parseFloat(data[0].lon);
                     if (!isNaN(lat) && !isNaN(lon)) {
                         setCenter([lat, lon]);
-                        setZoom(13); // Wide zoom for city view
+                        setZoom(13);
                         hasFetched.current = true;
                     }
                 }
@@ -164,7 +116,6 @@ export function MapAutoFocus({ settings }: AutoFocusProps) {
     const map = useMap();
     const { center, zoom } = useAutoFocus(settings);
     
-    // We use a ref to track the last centered coordinate to prevent re-centering on same spot
     const lastCenter = useRef<string | null>(null);
 
     useEffect(() => {
