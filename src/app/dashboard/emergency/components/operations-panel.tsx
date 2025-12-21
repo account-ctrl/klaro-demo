@@ -18,12 +18,13 @@ import {
     ArrowLeft, 
     Siren,
     Navigation,
-    ShieldAlert
+    ShieldAlert,
+    Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from 'date-fns';
 import { useFirestore } from '@/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useTenant } from '@/providers/tenant-provider';
 
 interface OperationsPanelProps {
@@ -79,8 +80,7 @@ export function OperationsPanel({
 
         // Calculate distances
         const withDistance = vehicles.map(asset => {
-             // TODO: Match asset to a live responder location if available
-             // For now, stable sort (no random)
+             // Mock distance for now as asset GPS isn't in FixedAsset type yet.
              return { ...asset, distance: 0 }; 
         });
         
@@ -128,6 +128,24 @@ export function OperationsPanel({
          const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
          const alertRef = doc(firestore, `${safePath}/emergency_alerts/${selectedAlert.id}`);
          await updateDoc(alertRef, { status: 'Resolved', resolvedAt: serverTimestamp() });
+         onAlertSelect(selectedAlert.id); // Deselect
+    };
+
+    const handleUpdateStatus = async (status: string) => {
+         if (!selectedAlert || !tenantPath) return;
+         const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+         const alertRef = doc(firestore, `${safePath}/emergency_alerts/${selectedAlert.id}`);
+         await updateDoc(alertRef, { status: status });
+         onAlertSelect(selectedAlert.id); // Deselect
+    };
+
+    const handleDelete = async () => {
+         if (!selectedAlert || !tenantPath) return;
+         if (!confirm("Are you sure you want to permanently delete this alert record?")) return;
+         
+         const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
+         const alertRef = doc(firestore, `${safePath}/emergency_alerts/${selectedAlert.id}`);
+         await deleteDoc(alertRef);
          onAlertSelect(selectedAlert.id); // Deselect
     };
 
@@ -234,12 +252,16 @@ export function OperationsPanel({
                 </ScrollArea>
 
                 {/* Footer Actions */}
-                <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex gap-2">
+                <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex gap-2 items-center">
                     <Button variant="destructive" className="flex-1" onClick={handleResolve}>
-                        Resolve Incident
+                        Resolve
                     </Button>
-                     <Button variant="outline" className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                     <Button variant="outline" className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => handleUpdateStatus('False Alarm')}>
                         False Alarm
+                    </Button>
+                    <div className="h-8 w-[1px] bg-zinc-800 mx-1"></div>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-600 hover:text-red-500 hover:bg-red-950/30" onClick={handleDelete} title="Delete Record Forever">
+                        <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
             </div>
