@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from "react";
@@ -11,25 +10,33 @@ import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
 import { useTenantProfile } from "@/hooks/use-tenant-profile";
 
-// Simplified Sidebar Components
-import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
+// Refactored Components
 import { WeatherHeader } from "./components/weather-header";
+import { OperationsPanel } from "./components/operations-panel"; // Import the new panel
 
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
-    loading: () => <div className="h-full w-full flex items-center justify-center bg-zinc-900 text-zinc-500">Loading Map Engine...</div>
+    loading: () => (
+        <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-950 text-zinc-500 gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+            <div className="text-xs font-mono tracking-widest uppercase">Initializing Geospatial Engine...</div>
+        </div>
+    )
 });
 
 export function EmergencyDashboard() {
   const { tenantId } = useTenant();
   const firestore = useFirestore();
   const { profile } = useTenantProfile();
+  
+  // -- STATE --
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
 
+  // -- DATA HOOKS (Existing Logic Preserved) --
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: responders } = useResponderLocations();
 
-  // Fetch all users for the responder list
+  // Fetch all users for the responder list logic
   const usersQuery = useMemoFirebase(() => {
     if (!tenantId || !firestore) return null;
     return query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
@@ -37,56 +44,83 @@ export function EmergencyDashboard() {
   
   const { data: users } = useCollection<User>(usersQuery);
 
-  const alerts = useMemo(() => {
+  // Filter for active alerts only
+  const activeAlerts = useMemo(() => {
       return allAlerts?.filter(a => ['New', 'Acknowledged', 'Dispatched', 'On Scene'].includes(a.status)) ?? [];
   }, [allAlerts]);
 
-  const handleAlertSelect = (id: string) => {
+  // -- HANDLERS --
+  const handleAlertSelect = (id: string, location?: {lat: number, lng: number}) => {
       setSelectedAlertId(id);
+      // Map component will react to the prop change
   };
 
-  if (isLoadingAlerts) {
-      return (
-          <div className="h-screen w-screen flex items-center justify-center bg-zinc-950 text-white">
-              <div className="flex flex-col items-center gap-4">
-                  <Loader2 className="animate-spin h-10 w-10 text-red-500" />
-                  <p className="text-zinc-400 font-medium">Initializing Command Center...</p>
-              </div>
-          </div>
-      );
-  }
-
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-zinc-950 text-white">
-        {/* Map Layer */}
-        <div className="absolute inset-0 z-0">
-            <EmergencyMap 
-                alerts={alerts}
-                responders={responders}
-                selectedAlertId={selectedAlertId}
-                onSelectAlert={handleAlertSelect}
-                settings={profile}
-            />
-            <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/40 via-transparent to-black/40"></div>
-        </div>
+    <div className="flex flex-col h-screen w-full bg-zinc-950 overflow-hidden text-zinc-200">
         
-        {/* UI Overlays */}
-        <div className="absolute top-6 left-6 z-10 pointer-events-none">
-             <div className="pointer-events-auto">
-                 <WeatherHeader />
-             </div>
-        </div>
-
-        <div className="absolute right-6 top-6 bottom-6 z-10 flex flex-col gap-4 w-96 pointer-events-none">
-            <div className="pointer-events-auto flex-1 overflow-hidden flex flex-col gap-4">
-                <ActiveAlertFeed 
-                    alerts={alerts} 
-                    onSelectAlert={handleAlertSelect}
-                    selectedAlertId={selectedAlertId}
-                />
-                <ResponderStatusList responders={users || []} />
-                <AssetList />
+        {/* 1. TOP COMMAND BAR (HUD Header) */}
+        <header className="h-14 shrink-0 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between px-6 z-30">
+            <div className="flex items-center gap-4">
+                {/* Logo / Branding */}
+                <div className="flex items-center gap-3">
+                     {/* Use existing profile logo or fallback */}
+                    <div className="h-8 w-8 rounded bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                        SOS
+                    </div>
+                    <div>
+                        <h1 className="text-sm font-bold tracking-wider text-zinc-100 uppercase">
+                            {profile?.name || "Command Center"}
+                        </h1>
+                        <div className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">
+                            Live Situational Awareness
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* Weather & System Status */}
+            <div className="flex items-center gap-6">
+                 <WeatherHeader />
+                 <div className="h-4 w-[1px] bg-zinc-800" />
+                 <div className="text-[10px] font-mono text-zinc-500">
+                    V.2.4.0 <span className="text-emerald-500">STABLE</span>
+                 </div>
+            </div>
+        </header>
+
+        {/* 2. MAIN LAYOUT (Split View) */}
+        <div className="flex-1 flex overflow-hidden relative">
+            
+            {/* LEFT: MAP CANVAS */}
+            <div className="flex-1 relative z-0 bg-zinc-900">
+                <EmergencyMap 
+                    alerts={activeAlerts}
+                    responders={responders}
+                    selectedAlertId={selectedAlertId}
+                    onSelectAlert={setSelectedAlertId} 
+                    settings={profile}
+                />
+                
+                {/* Overlay: Current Selection Info (Floating HUD Element) */}
+                {selectedAlertId && (
+                    <div className="absolute top-4 left-4 z-[400] bg-zinc-950/90 backdrop-blur border border-zinc-800 p-4 rounded-lg shadow-xl w-64 animate-in fade-in slide-in-from-top-2">
+                         <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Target Locked</div>
+                         <div className="font-mono text-emerald-400 text-sm">
+                            {activeAlerts.find(a => a.id === selectedAlertId)?.residentName || "Unknown Target"}
+                         </div>
+                    </div>
+                )}
+            </div>
+
+            {/* RIGHT: OPERATIONS PANEL */}
+            <OperationsPanel 
+                alerts={activeAlerts} 
+                users={users || []}
+                responders={responders || []}
+                onAlertSelect={handleAlertSelect}
+                selectedAlertId={selectedAlertId}
+            />
+
         </div>
     </div>
   );

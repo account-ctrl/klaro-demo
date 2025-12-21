@@ -135,3 +135,8 @@
 .rbc-today {
   @apply bg-accent/20;
 }
+
+/* Dark Mode Map Filter */
+.dark-map-tiles {
+    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) grayscale(20%);
+}

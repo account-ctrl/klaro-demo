@@ -1,14 +1,15 @@
-
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { EmergencyAlert, ResponderWithRole, TenantSettings } from '@/lib/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { MapAutoFocus } from './maps/MapAutoFocus';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { AlertCircle, Car, MapPin } from 'lucide-react';
 
-// Essential fix for Leaflet icons in Next.js
+// Fix generic Leaflet icons just in case
 const fixLeafletIcons = () => {
   if (typeof window === 'undefined') return;
   // @ts-ignore
@@ -29,9 +30,6 @@ type EmergencyMapProps = {
     settings?: TenantSettings | null;
 };
 
-/**
- * Manual Map Updater for searches and alert selections
- */
 function MapUpdater({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
@@ -57,9 +55,38 @@ export default function EmergencyMap({
         setIsMounted(true);
     }, []);
 
+    // Custom Icons Generation
+    const sosIcon = useMemo(() => L.divIcon({
+        className: 'bg-transparent',
+        html: renderToStaticMarkup(
+            <div className="relative flex items-center justify-center w-12 h-12 -ml-3 -mt-3">
+                <div className="absolute w-full h-full bg-red-500/50 rounded-full animate-ping"></div>
+                <div className="absolute w-8 h-8 bg-red-500/30 rounded-full animate-pulse"></div>
+                <div className="relative z-10 w-6 h-6 bg-red-600 border-2 border-white rounded-full shadow-xl flex items-center justify-center">
+                    <AlertCircle className="w-3 h-3 text-white" />
+                </div>
+            </div>
+        ),
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    }), []);
+
+    const responderIcon = useMemo(() => L.divIcon({
+        className: 'bg-transparent',
+        html: renderToStaticMarkup(
+            <div className="relative flex items-center justify-center w-10 h-10 -ml-2 -mt-2">
+                 <div className="absolute w-full h-full bg-blue-500/20 rounded-full animate-pulse"></div>
+                 <div className="relative z-10 w-6 h-6 bg-blue-600 border-2 border-white rounded-full shadow-lg flex items-center justify-center">
+                    <Car className="w-3 h-3 text-white" />
+                 </div>
+            </div>
+        ),
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    }), []);
+
     const defaultCenter: [number, number] = [14.5995, 120.9842];
     
-    // Determine the center for manual updates (search/select)
     let center: [number, number] | null = null;
     if (searchedLocation && !isNaN(searchedLocation.lat) && !isNaN(searchedLocation.lng)) {
         center = [searchedLocation.lat, searchedLocation.lng];
@@ -70,8 +97,16 @@ export default function EmergencyMap({
         }
     }
 
+    // Prepare Boundary Polygon
+    const boundaryPositions = useMemo(() => {
+        if (settings?.territory?.boundary && settings.territory.boundary.length > 0) {
+            return settings.territory.boundary.map(p => [p.lat, p.lng] as [number, number]);
+        }
+        return null;
+    }, [settings]);
+
     if (!isMounted) {
-        return <div className="h-full w-full bg-zinc-900 flex items-center justify-center text-zinc-500">Initializing Map...</div>;
+        return <div className="h-full w-full bg-zinc-950 flex items-center justify-center text-zinc-500">Initializing Tactical Map...</div>;
     }
 
     return (
@@ -80,53 +115,75 @@ export default function EmergencyMap({
                 center={defaultCenter} 
                 zoom={12} 
                 style={{ height: '100%', width: '100%' }}
-                zoomControl={true}
+                zoomControl={false} // Disable default top-left
             >
-                {/* AUTO FOCUS: This will override initial center/zoom once settings are loaded */}
                 <MapAutoFocus settings={settings} />
-
-                {/* MANUAL UPDATER: Handles fly-to when searching or selecting an alert */}
                 <MapUpdater center={center} />
+                
+                {/* Manual Zoom Control at Bottom Right */}
+                <ZoomControl position="bottomright" />
 
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; OpenStreetMap contributors'
+                    className="dark-map-tiles"
                 />
 
-                {/* Render Alerts */}
+                {/* Jurisdiction Boundary */}
+                {boundaryPositions && (
+                    <Polygon 
+                        positions={boundaryPositions}
+                        pathOptions={{ 
+                            color: '#0ea5e9', // Cyan-500
+                            weight: 2,
+                            dashArray: '5, 10',
+                            fillColor: '#0ea5e9',
+                            fillOpacity: 0.05 
+                        }} 
+                    />
+                )}
+
+                {/* Alerts */}
                 {Array.isArray(alerts) && alerts.map((alert) => {
                     if (!alert.latitude || !alert.longitude || isNaN(alert.latitude) || isNaN(alert.longitude)) return null;
                     return (
                         <Marker 
                             key={alert.alertId} 
                             position={[alert.latitude, alert.longitude]}
+                            icon={sosIcon}
                             eventHandlers={{
                                 click: () => onSelectAlert(alert.alertId)
                             }}
                         >
-                            <Popup>
-                                <div className="text-zinc-900 p-1">
-                                    <p className="font-bold text-sm">{alert.residentName || 'Emergency'}</p>
-                                    <p className="text-xs text-red-600 font-semibold">{alert.category}</p>
-                                    <p className="text-[10px] text-zinc-500 mt-1">{alert.status}</p>
+                            <Popup className="custom-popup">
+                                <div className="text-zinc-900 p-1 min-w-[150px]">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+                                        <span className="font-bold text-sm uppercase text-red-700">SOS Signal</span>
+                                    </div>
+                                    <p className="font-semibold text-sm">{alert.residentName || 'Unknown Resident'}</p>
+                                    <p className="text-xs text-zinc-500 mt-1 font-mono">
+                                        {alert.latitude.toFixed(5)}, {alert.longitude.toFixed(5)}
+                                    </p>
                                 </div>
                             </Popup>
                         </Marker>
                     );
                 })}
 
-                {/* Render Responders */}
+                {/* Responders */}
                 {Array.isArray(responders) && responders.map((responder) => {
                     if (!responder.latitude || !responder.longitude || isNaN(responder.latitude) || isNaN(responder.longitude)) return null;
                     return (
                         <Marker 
                             key={responder.userId} 
                             position={[responder.latitude, responder.longitude]}
+                            icon={responderIcon}
                         >
                             <Popup>
                                 <div className="text-zinc-900 p-1">
                                     <p className="font-bold text-sm">{responder.name || 'Responder'}</p>
-                                    <p className="text-xs text-blue-600">{responder.role}</p>
+                                    <p className="text-xs text-blue-600 font-medium">{responder.role || 'Patrol Unit'}</p>
                                 </div>
                             </Popup>
                         </Marker>

@@ -1,8 +1,7 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth, useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { getTenantPath } from '@/lib/firebase/db-client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
@@ -26,7 +25,7 @@ const TenantContext = createContext<TenantContextProps>({
 export const useTenant = () => useContext(TenantContext);
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -41,11 +40,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     async function resolveTenant() {
+      // 0. Wait for Auth Initialization
+      if (isUserLoading) {
+          // Do not set isLoading to false yet, wait for user state to resolve
+          return;
+      }
+
       // 1. Wait for Auth & Firestore
-      if (!auth?.currentUser || !firestore) {
-         if (auth && !auth.currentUser) {
-             // User is not logged in
-             if (isMounted) setIsLoading(false);
+      if (!user || !firestore) {
+         // User is confirmed logged out (or firestore missing)
+         if (isMounted) {
+            setRole(null);
+            setTenantPath(null);
+            setTenantId(null);
+            setIsLoading(false);
          }
          return;
       }
@@ -54,11 +62,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         // OPTIMIZATION: Try getting cached token first. If network fails, don't crash, just log.
         let tokenResult = null;
         try {
-            tokenResult = await auth.currentUser.getIdTokenResult(false);
+            tokenResult = await user.getIdTokenResult(false);
         } catch (e) {
             console.warn("Cached token fetch failed, attempting force refresh...");
             try {
-                tokenResult = await auth.currentUser.getIdTokenResult(true);
+                tokenResult = await user.getIdTokenResult(true);
             } catch (networkError) {
                 console.error("Auth Token Network Error:", networkError);
                 // Proceed without tokenResult (will fallback to Firestore DB check)
@@ -79,7 +87,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         // --- PRIORITY 3: Fallback to User Profile (Firestore) ---
         // If claims are missing OR network failed for token, fetch from DB
         let dbRole = '';
-        const userRef = doc(firestore, 'users', auth.currentUser.uid);
+        const userRef = doc(firestore, 'users', user.uid);
         
         try {
             const userSnap = await getDoc(userRef);
@@ -164,7 +172,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     resolveTenant();
 
     return () => { isMounted = false; };
-  }, [auth?.currentUser, firestore, searchParams]);
+  }, [user, firestore, searchParams, isUserLoading]);
 
   return (
     <TenantContext.Provider value={{ tenantPath, tenantId, role, isLoading, error }}>
