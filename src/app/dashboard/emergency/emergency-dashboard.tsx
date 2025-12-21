@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { Loader2 } from "lucide-react";
 import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
+import { useTenantProfile } from "@/hooks/use-tenant-profile";
 
 // Simplified Sidebar Components
 import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
@@ -22,6 +23,7 @@ const EmergencyMap = dynamic(() => import('@/components/emergency-map'), {
 export function EmergencyDashboard() {
   const { tenantId } = useTenant();
   const firestore = useFirestore();
+  const { profile } = useTenantProfile();
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
 
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
@@ -63,6 +65,7 @@ export function EmergencyDashboard() {
                 responders={responders}
                 selectedAlertId={selectedAlertId}
                 onSelectAlert={handleAlertSelect}
+                settings={profile}
             />
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/40 via-transparent to-black/40"></div>
         </div>
