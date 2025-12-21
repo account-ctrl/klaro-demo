@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useMap } from 'react-leaflet';
-import L from 'leaflet';
 import { TenantSettings } from '@/lib/types';
 
 interface AutoFocusProps {
@@ -19,7 +18,7 @@ function useAutoFocus(settings?: TenantSettings | null) {
     useEffect(() => {
         if (!settings) return;
 
-        const currentSettingsKey = `${settings.barangayName}-${settings.city}-${settings.barangayHallAddress}`;
+        const currentSettingsKey = `${settings.barangayName}-${settings.city}-${settings.province}-${settings.zipCode}`;
         
         if (currentSettingsKey !== lastSettingsKey.current) {
             hasFetched.current = false;
@@ -29,73 +28,56 @@ function useAutoFocus(settings?: TenantSettings | null) {
         const resolveLocation = async () => {
             if (hasFetched.current) return;
 
-            // Extract location details
-            const barangayRaw = settings.barangayName || settings.name || '';
-            // Ensure we don't double-prefix "Barangay"
-            const barangayName = barangayRaw.toLowerCase().startsWith('barangay') ? barangayRaw : `Barangay ${barangayRaw}`;
-            
+            // Extract strictly from settings without adding prefixes
+            const barangayName = (settings.barangayName || settings.name || '').trim();
             const city = (settings.city || settings.location?.city || '').trim();
             const province = (settings.province || settings.location?.province || '').trim();
+            const region = (settings.region || settings.location?.region || '').trim();
+            const zipCode = (settings.zipCode || settings.location?.zipCode || '').trim();
 
             if (!barangayName || !city) {
-                console.warn("[MapAutoFocus] Missing crucial location data:", { barangayName, city, province });
+                console.warn("[MapAutoFocus] Missing location data for search.");
                 return;
             }
 
-            console.log("[MapAutoFocus] Resolving location for:", { barangayName, city, province });
+            // Construct Exact Query: "Poblacion, Polomolok, South Cotabato, Region/Zip, Philippines"
+            // Filter out empty parts to ensure clean query
+            const queryParts = [barangayName, city, province, region, zipCode, "Philippines"];
+            const hierarchyQuery = queryParts.filter(part => part && part.length > 0).join(", ");
+            
+            console.log("[MapAutoFocus] Exact Query:", hierarchyQuery);
 
             try {
-                let response;
-                let data;
-
-                // Priority 1: Strict Hierarchical Search (Barangay + City + Province)
-                // This is the most reliable way to find the jurisdiction center.
-                const hierarchyQuery = `${barangayName}, ${city}, ${province}, Philippines`;
-                console.log("[MapAutoFocus] Searching Hierarchy:", hierarchyQuery);
-                
-                response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(hierarchyQuery)}&format=json&limit=1`);
-                data = await response.json();
+                // Fetch results
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(hierarchyQuery)}&format=json&limit=5&addressdetails=1`);
+                const data = await response.json();
 
                 if (data && data.length > 0) {
-                    console.log("[MapAutoFocus] Found Barangay Hierarchy:", data[0].display_name);
-                    const lat = parseFloat(data[0].lat);
-                    const lon = parseFloat(data[0].lon);
+                    // Try to pick the best match (Boundary/Place preferred)
+                    const bestResult = data.find((item: any) => 
+                        (item.class === 'boundary' || item.class === 'place') &&
+                        item.type !== 'amenity' && item.type !== 'building'
+                    ) || data[0]; 
+
+                    console.log("[MapAutoFocus] Selected Result:", bestResult.display_name);
+                    const lat = parseFloat(bestResult.lat);
+                    const lon = parseFloat(bestResult.lon);
+                    
                     if (!isNaN(lat) && !isNaN(lon)) {
                         setCenter([lat, lon]);
-                        setZoom(15); // Ideal zoom to show the whole barangay
+                        setZoom(15); 
                         hasFetched.current = true;
                         return;
                     }
-                }
-
-                // Priority 2: Fallback to "Barangay Hall" Search if generic area fails
-                const hallQuery = `${barangayName} Hall, ${city}, ${province}, Philippines`;
-                response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(hallQuery)}&format=json&limit=1`);
-                data = await response.json();
-
-                if (data && data.length > 0) {
-                    console.log("[MapAutoFocus] Found Barangay Hall:", data[0].display_name);
-                    const lat = parseFloat(data[0].lat);
-                    const lon = parseFloat(data[0].lon);
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        setCenter([lat, lon]);
-                        setZoom(18); 
-                        hasFetched.current = true;
-                        return;
-                    }
-                }
-
-                // Priority 3: City Fallback
-                const cityQuery = `${city}, ${province}, Philippines`;
-                console.warn("[MapAutoFocus] Barangay not found. Falling back to City:", cityQuery);
-                response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityQuery)}&format=json&limit=1`);
-                data = await response.json();
-
-                if (data && data.length > 0) {
-                    const lat = parseFloat(data[0].lat);
-                    const lon = parseFloat(data[0].lon);
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        setCenter([lat, lon]);
+                } else {
+                    console.warn("[MapAutoFocus] Exact query failed. Falling back to City center.");
+                    // Fallback to City + Province
+                    const cityQuery = [city, province, "Philippines"].filter(Boolean).join(", ");
+                    const cityRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityQuery)}&format=json&limit=1`);
+                    const cityData = await cityRes.json();
+                    
+                    if (cityData && cityData.length > 0) {
+                        setCenter([parseFloat(cityData[0].lat), parseFloat(cityData[0].lon)]);
                         setZoom(13);
                         hasFetched.current = true;
                     }
@@ -124,16 +106,8 @@ export function MapAutoFocus({ settings }: AutoFocusProps) {
             if (lastCenter.current === centerKey) return;
 
             map.whenReady(() => {
-                try {
-                    console.log("[MapAutoFocus] Moving map to:", center);
-                    map.setView(center, zoom, { 
-                        animate: true,
-                        duration: 1.5 
-                    });
-                    lastCenter.current = centerKey;
-                } catch (e) {
-                    console.error("[MapAutoFocus] Map move failed", e);
-                }
+                map.setView(center, zoom, { animate: true, duration: 1.5 });
+                lastCenter.current = centerKey;
             });
         }
     }, [center, zoom, map]);
