@@ -1,6 +1,6 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, ZoomControl, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, ZoomControl, CircleMarker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { EmergencyAlert, ResponderWithRole, TenantSettings } from '@/lib/types';
@@ -8,6 +8,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { MapAutoFocus } from './maps/MapAutoFocus';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AlertCircle, Car, MapPin, Video, Droplets, Tent, ShieldAlert } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 
 // Fix generic Leaflet icons
 const fixLeafletIcons = () => {
@@ -30,7 +31,7 @@ function CCTVPopup({ name, url }: { name: string, url?: string }) {
         let stream: MediaStream | null = null;
 
         const startCamera = async () => {
-            if (url) return; // Use IMG tag if URL exists
+            if (url) return; 
 
             if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 try {
@@ -98,6 +99,7 @@ type EmergencyMapProps = {
     infrastructure?: { cctv: any[], hydrants: any[], evac: any[] };
     layers?: any; 
     selectedAlertId?: string | null;
+    route?: any; // Route object
     onSelectAlert?: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
     settings?: TenantSettings | null;
@@ -120,6 +122,7 @@ export default function EmergencyMap({
     infrastructure = { cctv: [], hydrants: [], evac: [] },
     layers,
     selectedAlertId = null, 
+    route = null,
     onSelectAlert = () => {}, 
     searchedLocation = null,
     settings = null
@@ -238,7 +241,6 @@ export default function EmergencyMap({
 
                 {/* INFRASTRUCTURE LAYERS */}
                 {layers?.showCCTV && infrastructure?.cctv?.map((item, i) => {
-                    // Safety check for coords
                     if (item.latitude == null || item.longitude == null) return null;
                     return (
                         <Marker 
@@ -260,6 +262,29 @@ export default function EmergencyMap({
                     if (item.latitude == null || item.longitude == null) return null;
                     return <Marker key={item.assetId || i} position={[item.latitude, item.longitude]} icon={evacIcon}><Popup>{item.name}</Popup></Marker>
                 })}
+
+
+                {/* SMART ROUTE */}
+                {route && route.coordinates && (
+                    <Polyline 
+                        positions={route.coordinates}
+                        pathOptions={{
+                            color: '#3b82f6', // Blue-500
+                            weight: 4,
+                            dashArray: '10, 10',
+                            opacity: 0.8,
+                            lineCap: 'round'
+                        }}
+                    >
+                        <Popup>
+                            <div className="text-zinc-900 text-xs font-bold p-1">
+                                ETA: {Math.round(route.durationSeconds / 60)} mins
+                                <br/>
+                                <span className="font-normal text-[10px] text-zinc-500">{(route.distanceMeters / 1000).toFixed(1)} km</span>
+                            </div>
+                        </Popup>
+                    </Polyline>
+                )}
 
 
                 {/* DEMOGRAPHICS LAYER */}

@@ -33,6 +33,7 @@ export function EmergencyDashboard() {
   
   // -- STATE --
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [route, setRoute] = useState<any>(null); // Route state
   const [layerState, setLayerState] = useState<LayerState>({
       showCCTV: false,
       showHydrants: false,
@@ -109,6 +110,7 @@ export function EmergencyDashboard() {
   // -- HANDLERS --
   const handleAlertSelect = (id: string, location?: {lat: number, lng: number}) => {
       setSelectedAlertId(id === selectedAlertId ? null : id); 
+      if (id !== selectedAlertId) setRoute(null); // Clear route on new select
   };
 
   const handleToggleLayer = (key: keyof LayerState, value?: any) => {
@@ -165,6 +167,7 @@ export function EmergencyDashboard() {
                     infrastructure={infrastructure}
                     layers={layerState}
                     selectedAlertId={selectedAlertId}
+                    route={route} // Pass Route
                     onSelectAlert={setSelectedAlertId} 
                     settings={profile}
                 />
@@ -181,6 +184,7 @@ export function EmergencyDashboard() {
                     households={households || []} 
                     onAlertSelect={handleAlertSelect}
                     selectedAlertId={selectedAlertId}
+                    onRouteCalculated={setRoute} // Receive Route
                 />
             </div>
 
