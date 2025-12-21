@@ -6,10 +6,12 @@ import { EmergencyAlert, User } from "@/lib/types";
 import { useEmergencyAlerts, useResponderLocations, useHouseholds, useResidents } from '@/hooks/use-barangay-data';
 import { useFixedAssets } from '@/hooks/use-assets';
 import dynamic from 'next/dynamic';
-import { Loader2 } from "lucide-react";
+import { Loader2, LayoutGrid } from "lucide-react";
 import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
 import { useTenantProfile } from "@/hooks/use-tenant-profile";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 // Refactored Components
 import { WeatherHeader } from "./components/weather-header";
@@ -126,11 +128,27 @@ export function EmergencyDashboard() {
         {/* 1. TOP COMMAND BAR (HUD Header) */}
         <header className="h-14 shrink-0 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-md flex items-center justify-between px-6 z-30 shadow-sm">
             <div className="flex items-center gap-6">
+                
+                {/* Back to Dashboard */}
+                <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800">
+                    <Link href="/dashboard" title="Back to Dashboard">
+                        <LayoutGrid className="h-4 w-4" />
+                    </Link>
+                </Button>
+
                 {/* Logo / Branding */}
                 <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded bg-red-600 flex items-center justify-center text-white font-bold text-xs shadow-[0_0_15px_rgba(220,38,38,0.4)] animate-pulse-slow">
-                        911
-                    </div>
+                    {profile?.logoUrl ? (
+                        <img 
+                            src={profile.logoUrl} 
+                            alt="Logo" 
+                            className="h-8 w-8 object-contain rounded-md shadow-[0_0_15px_rgba(255,255,255,0.1)]" 
+                        />
+                    ) : (
+                        <div className="h-8 w-8 rounded bg-red-600 flex items-center justify-center text-white font-bold text-xs shadow-[0_0_15px_rgba(220,38,38,0.4)] animate-pulse-slow">
+                            911
+                        </div>
+                    )}
                     <div>
                         <h1 className="text-sm font-bold tracking-wider text-zinc-100 uppercase">
                             {profile?.name || "Incident Command"}
@@ -167,7 +185,7 @@ export function EmergencyDashboard() {
                     infrastructure={infrastructure}
                     layers={layerState}
                     selectedAlertId={selectedAlertId}
-                    route={route} // Pass Route
+                    route={route} 
                     onSelectAlert={setSelectedAlertId} 
                     settings={profile}
                 />
@@ -184,7 +202,8 @@ export function EmergencyDashboard() {
                     households={households || []} 
                     onAlertSelect={handleAlertSelect}
                     selectedAlertId={selectedAlertId}
-                    onRouteCalculated={setRoute} // Receive Route
+                    onRouteCalculated={setRoute} 
+                    settings={profile} // Passed settings for fallback logic if needed
                 />
             </div>
 
