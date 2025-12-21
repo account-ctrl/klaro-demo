@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useUser, useCollection, useMemoFirebase, useFirestore } from '@/firebase';
 import { EmergencyAlert, User } from "@/lib/types";
-import { useEmergencyAlerts, useResponderLocations } from '@/hooks/use-barangay-data';
+import { useEmergencyAlerts, useResponderLocations, useHouseholds, useResidents } from '@/hooks/use-barangay-data';
 import { useFixedAssets } from '@/hooks/use-assets';
 import dynamic from 'next/dynamic';
 import { Loader2 } from "lucide-react";
@@ -14,6 +14,7 @@ import { useTenantProfile } from "@/hooks/use-tenant-profile";
 // Refactored Components
 import { WeatherHeader } from "./components/weather-header";
 import { OperationsPanel } from "./components/operations-panel"; 
+import { MapLayerControl, LayerState } from "./components/map-layer-control";
 
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
@@ -32,11 +33,19 @@ export function EmergencyDashboard() {
   
   // -- STATE --
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [layerState, setLayerState] = useState<LayerState>({
+      showCCTV: false,
+      showHydrants: false,
+      showEvac: false,
+      demographicLayer: 'none'
+  });
 
   // -- DATA HOOKS --
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: responders } = useResponderLocations();
   const { data: assets } = useFixedAssets();
+  const { data: households } = useHouseholds();
+  const { data: residents } = useResidents();
 
   // Fetch all users for the responder list logic (to get names/roles)
   const usersQuery = useMemoFirebase(() => {
@@ -51,9 +60,62 @@ export function EmergencyDashboard() {
       return allAlerts?.filter(a => ['New', 'Acknowledged', 'Dispatched', 'On Scene'].includes(a.status)) ?? [];
   }, [allAlerts]);
 
+  // -- COMPUTED DEMOGRAPHICS --
+  const mapHouseholds = useMemo(() => {
+      if (!households || !residents) return [];
+      
+      const vulnMap = new Map<string, { isSenior: boolean, isPwd: boolean, is4Ps: boolean, count: number }>();
+      
+      residents.forEach(r => {
+          if (!r.householdId) return;
+          const current = vulnMap.get(r.householdId) || { isSenior: false, isPwd: false, is4Ps: false, count: 0 };
+          
+          const age = r.dateOfBirth ? new Date().getFullYear() - new Date(r.dateOfBirth).getFullYear() : 0;
+          
+          if (age >= 60) current.isSenior = true;
+          if (r.isPwd) current.isPwd = true;
+          if (r.is4ps) current.is4Ps = true;
+          current.count++;
+          
+          vulnMap.set(r.householdId, current);
+      });
+
+      return households.map(h => {
+          const stats = vulnMap.get(h.householdId) || { isSenior: false, isPwd: false, is4Ps: false, count: 0 };
+          
+          let riskCategory = 'Standard';
+          if (stats.isPwd) riskCategory = 'PWD';
+          else if (stats.isSenior) riskCategory = 'Senior';
+          else if (stats.is4Ps) riskCategory = '4Ps';
+
+          return {
+              ...h,
+              ...stats,
+              riskCategory
+          };
+      });
+  }, [households, residents]);
+
+  // -- INFRASTRUCTURE FILTERS --
+  const infrastructure = useMemo(() => {
+      if (!assets) return { cctv: [], hydrants: [], evac: [] };
+      return {
+          cctv: assets.filter(a => a.name.toLowerCase().includes('cctv') || (a.type === 'Equipment' && a.name.toLowerCase().includes('camera'))),
+          hydrants: assets.filter(a => a.name.toLowerCase().includes('hydrant') || a.name.toLowerCase().includes('water')),
+          evac: assets.filter(a => a.name.toLowerCase().includes('evac') || a.type === 'Facility' || a.name.toLowerCase().includes('center')),
+      };
+  }, [assets]);
+
   // -- HANDLERS --
   const handleAlertSelect = (id: string, location?: {lat: number, lng: number}) => {
-      setSelectedAlertId(id === selectedAlertId ? null : id); // Toggle
+      setSelectedAlertId(id === selectedAlertId ? null : id); 
+  };
+
+  const handleToggleLayer = (key: keyof LayerState, value?: any) => {
+      setLayerState(prev => ({
+          ...prev,
+          [key]: value !== undefined ? value : !prev[key]
+      }));
   };
 
   return (
@@ -99,10 +161,14 @@ export function EmergencyDashboard() {
                 <EmergencyMap 
                     alerts={activeAlerts}
                     responders={responders}
+                    households={mapHouseholds}
+                    infrastructure={infrastructure}
+                    layers={layerState}
                     selectedAlertId={selectedAlertId}
                     onSelectAlert={setSelectedAlertId} 
                     settings={profile}
                 />
+                <MapLayerControl layers={layerState} toggleLayer={handleToggleLayer} />
             </div>
 
             {/* RIGHT: OPERATIONS PANEL (Fixed Width) */}
@@ -112,6 +178,7 @@ export function EmergencyDashboard() {
                     users={users || []}
                     responders={responders || []}
                     assets={assets || []}
+                    households={households || []} 
                     onAlertSelect={handleAlertSelect}
                     selectedAlertId={selectedAlertId}
                 />
