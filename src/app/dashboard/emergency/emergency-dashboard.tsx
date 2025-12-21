@@ -1,17 +1,18 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useUser, useCollection, useMemoFirebase, useFirestore } from '@/firebase';
 import { EmergencyAlert, User } from "@/lib/types";
 import { useEmergencyAlerts, useResponderLocations, useHouseholds, useResidents } from '@/hooks/use-barangay-data';
 import { useFixedAssets } from '@/hooks/use-assets';
 import dynamic from 'next/dynamic';
-import { Loader2, LayoutGrid } from "lucide-react";
+import { Loader2, LayoutGrid, ChevronRight, ChevronLeft } from "lucide-react";
 import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
 import { useTenantProfile } from "@/hooks/use-tenant-profile";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Refactored Components
 import { WeatherHeader } from "./components/weather-header";
@@ -35,13 +36,14 @@ export function EmergencyDashboard() {
   
   // -- STATE --
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
-  const [route, setRoute] = useState<any>(null); // Route state
+  const [route, setRoute] = useState<any>(null); 
   const [layerState, setLayerState] = useState<LayerState>({
       showCCTV: false,
       showHydrants: false,
       showEvac: false,
       demographicLayer: 'none'
   });
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
 
   // -- DATA HOOKS --
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
@@ -50,7 +52,7 @@ export function EmergencyDashboard() {
   const { data: households } = useHouseholds();
   const { data: residents } = useResidents();
 
-  // Fetch all users for the responder list logic (to get names/roles)
+  // Fetch all users for the responder list logic
   const usersQuery = useMemoFirebase(() => {
     if (!tenantId || !firestore) return null;
     return query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
@@ -112,7 +114,8 @@ export function EmergencyDashboard() {
   // -- HANDLERS --
   const handleAlertSelect = (id: string, location?: {lat: number, lng: number}) => {
       setSelectedAlertId(id === selectedAlertId ? null : id); 
-      if (id !== selectedAlertId) setRoute(null); // Clear route on new select
+      if (id !== selectedAlertId) setRoute(null); 
+      if (!isPanelOpen) setIsPanelOpen(true);
   };
 
   const handleToggleLayer = (key: keyof LayerState, value?: any) => {
@@ -122,10 +125,18 @@ export function EmergencyDashboard() {
       }));
   };
 
+  // Force map resize when panel toggles to prevent grey areas or empty space
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          window.dispatchEvent(new Event('resize'));
+      }, 350); 
+      return () => clearTimeout(timer);
+  }, [isPanelOpen]);
+
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 overflow-hidden text-zinc-200 font-sans">
         
-        {/* 1. TOP COMMAND BAR (HUD Header) */}
+        {/* 1. TOP COMMAND BAR */}
         <header className="h-14 shrink-0 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-md flex items-center justify-between px-6 z-30 shadow-sm">
             <div className="flex items-center gap-6">
                 
@@ -136,7 +147,7 @@ export function EmergencyDashboard() {
                     </Link>
                 </Button>
 
-                {/* Logo / Branding */}
+                {/* Logo */}
                 <div className="flex items-center gap-3">
                     {profile?.logoUrl ? (
                         <img 
@@ -162,7 +173,7 @@ export function EmergencyDashboard() {
                 </div>
             </div>
 
-            {/* Weather & System Status */}
+            {/* Weather & Clock */}
             <div className="flex items-center gap-8">
                  <WeatherHeader />
                  <div className="h-4 w-[1px] bg-zinc-800" />
@@ -173,11 +184,11 @@ export function EmergencyDashboard() {
             </div>
         </header>
 
-        {/* 2. MAIN LAYOUT (Docked View) */}
+        {/* 2. MAIN LAYOUT */}
         <div className="flex-1 flex overflow-hidden relative">
             
-            {/* LEFT: MAP CANVAS (Flex-1) */}
-            <div className="flex-1 relative z-0 bg-zinc-900 border-r border-zinc-800">
+            {/* LEFT: MAP CANVAS */}
+            <div className="flex-1 relative z-0 bg-zinc-900 border-r border-zinc-800 transition-all duration-300">
                 <EmergencyMap 
                     alerts={activeAlerts}
                     responders={responders}
@@ -189,11 +200,32 @@ export function EmergencyDashboard() {
                     onSelectAlert={setSelectedAlertId} 
                     settings={profile}
                 />
-                <MapLayerControl layers={layerState} toggleLayer={handleToggleLayer} />
+                
+                {/* Layer Controls - Moves to Left if Panel Collapsed */}
+                <div className={cn(
+                    "absolute top-4 z-[400] transition-all duration-500",
+                    isPanelOpen ? "right-4" : "left-4"
+                )}>
+                    <MapLayerControl layers={layerState} toggleLayer={handleToggleLayer} />
+                </div>
+
+                {/* Panel Toggle Button */}
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute top-1/2 right-0 -translate-y-1/2 z-[500] rounded-r-none rounded-l-md border border-r-0 border-zinc-700 h-16 w-5 bg-zinc-950/80 backdrop-blur text-zinc-400 hover:text-white hover:bg-zinc-900 hover:w-6 transition-all"
+                    onClick={() => setIsPanelOpen(!isPanelOpen)}
+                    title={isPanelOpen ? "Collapse Panel" : "Expand Panel"}
+                >
+                    {isPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </Button>
             </div>
 
-            {/* RIGHT: OPERATIONS PANEL (Fixed Width) */}
-            <div className="w-[400px] bg-zinc-950 border-l border-zinc-800 flex flex-col z-20 shadow-2xl">
+            {/* RIGHT: OPERATIONS PANEL */}
+            <div className={cn(
+                "bg-zinc-950 border-l border-zinc-800 flex flex-col z-20 shadow-2xl transition-all duration-300 ease-in-out overflow-hidden",
+                isPanelOpen ? "w-[400px] min-w-[400px]" : "w-0 min-w-0 border-l-0"
+            )}>
                 <OperationsPanel 
                     alerts={activeAlerts} 
                     users={users || []}
@@ -203,7 +235,7 @@ export function EmergencyDashboard() {
                     onAlertSelect={handleAlertSelect}
                     selectedAlertId={selectedAlertId}
                     onRouteCalculated={setRoute} 
-                    settings={profile} // Passed settings for fallback logic if needed
+                    settings={profile} 
                 />
             </div>
 
