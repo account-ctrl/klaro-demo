@@ -25,8 +25,8 @@ import {
     Trash2,
     PlayCircle,
     UserCheck,
-    Settings,
-    Truck
+    Truck,
+    Map as MapIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from 'date-fns';
@@ -34,6 +34,7 @@ import { useFirestore } from '@/firebase';
 import { doc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useTenant } from '@/providers/tenant-provider';
 import { IncidentTimeline } from './incident-timeline';
+import { getSmartRoute, RouteResult } from '@/lib/services/routing';
 
 interface OperationsPanelProps {
   alerts: EmergencyAlert[];
@@ -43,6 +44,25 @@ interface OperationsPanelProps {
   households?: Household[];
   onAlertSelect: (alertId: string, location?: { lat: number; lng: number }) => void;
   selectedAlertId: string | null;
+  onRouteCalculated?: (route: RouteResult | null) => void;
+}
+
+// Distance Helper
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; 
+  const dLat = deg2rad(lat2-lat1); 
+  const dLon = deg2rad(lon2-lon1); 
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  const d = R * c; 
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI/180);
 }
 
 export function OperationsPanel({ 
@@ -52,7 +72,8 @@ export function OperationsPanel({
   assets,
   households,
   onAlertSelect,
-  selectedAlertId 
+  selectedAlertId,
+  onRouteCalculated
 }: OperationsPanelProps) {
     const { tenantPath } = useTenant();
     const firestore = useFirestore();
@@ -61,6 +82,7 @@ export function OperationsPanel({
     
     // Asset Detail State
     const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+    const [routingAssetId, setRoutingAssetId] = useState<string | null>(null);
 
     // -- Derived State --
     const selectedAlert = useMemo(() => 
@@ -73,17 +95,35 @@ export function OperationsPanel({
 
     // -- Smart Dispatch Lists --
     const recommendedAssets = useMemo(() => {
-        if (!selectedAlert) return [];
+        if (!selectedAlert || !selectedAlert.latitude || !selectedAlert.longitude) return [];
         const vehicles = assets.filter(a => a.type === 'Vehicle');
-        return vehicles.sort((a, b) => {
+        
+        // Calculate distances
+        const withDistance = vehicles.map(asset => {
+             // Try to find location from responders (live tracking)
+             // Check if asset ID matches a responder ID (GPS tracker) or Custodian
+             const loc = responders.find(r => r.userId === asset.assetId || r.userId === asset.custodianId);
+             
+             let distance = Infinity;
+             let coordinates = null;
+
+             if (loc && selectedAlert.latitude && selectedAlert.longitude) {
+                 distance = getDistanceFromLatLonInKm(selectedAlert.latitude, selectedAlert.longitude, loc.latitude, loc.longitude);
+                 coordinates = { lat: loc.latitude, lng: loc.longitude };
+             }
+
+             return { ...asset, distance, coordinates }; 
+        });
+
+        return withDistance.sort((a, b) => {
+            // Sort by availability first, then distance
             if (a.status === 'Available' && b.status !== 'Available') return -1;
             if (a.status !== 'Available' && b.status === 'Available') return 1;
-            return 0;
+            return a.distance - b.distance;
         });
-    }, [selectedAlert, assets]);
+    }, [selectedAlert, assets, responders]);
 
     const availablePersonnel = useMemo(() => {
-        // Filter users who are Responders or Admin (Staff)
         return users.filter(u => 
             ['Responder', 'Admin', 'Tanod', 'Staff'].includes(u.systemRole || '') 
         ).map(u => {
@@ -128,9 +168,7 @@ export function OperationsPanel({
          const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
          const alertRef = doc(firestore, `${safePath}/emergency_alerts/${selectedAlert.id}`);
          
-         // Free up asset if assigned
          if (selectedAlert.responder_team_id) {
-             // Check if it's an asset (simple check: exists in assets list)
              const isAsset = assets.some(a => a.assetId === selectedAlert.responder_team_id);
              if (isAsset) {
                  const assetRef = doc(firestore, `${safePath}/fixed_assets/${selectedAlert.responder_team_id}`);
@@ -188,6 +226,19 @@ export function OperationsPanel({
         const safePath = tenantPath.startsWith('/') ? tenantPath.substring(1) : tenantPath;
         await updateDoc(doc(firestore, `${safePath}/fixed_assets/${selectedAsset.assetId}`), { status });
     };
+
+    const handleRoute = async (asset: any) => {
+        if (!selectedAlert?.latitude || !selectedAlert?.longitude || !asset.coordinates) return;
+        if (onRouteCalculated) {
+            setRoutingAssetId(asset.assetId);
+            const route = await getSmartRoute(
+                { lat: asset.coordinates.lat, lng: asset.coordinates.lng },
+                { lat: selectedAlert.latitude, lng: selectedAlert.longitude }
+            );
+            onRouteCalculated(route);
+            setRoutingAssetId(null);
+        }
+    }
 
     const formatTime = (timestamp: any) => {
         if (!timestamp) return '';
@@ -304,6 +355,7 @@ export function OperationsPanel({
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-zinc-400 text-xs uppercase tracking-wider font-semibold"><Siren className="h-3 w-3" /> Fleet Units</div>
                                 </div>
+                                {recommendedAssets.length === 0 && <div className="text-zinc-600 text-xs italic px-2">No vehicles found.</div>}
                                 {recommendedAssets.map((asset) => (
                                     <div key={asset.assetId} className="flex items-center justify-between p-2 rounded border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900 transition-all">
                                         <div className="flex items-center gap-3">
@@ -313,10 +365,34 @@ export function OperationsPanel({
                                                 <div className="text-[10px] text-zinc-500 flex items-center gap-1">
                                                     <span className={cn("w-1.5 h-1.5 rounded-full", asset.status === 'Available' ? "bg-emerald-500" : "bg-amber-500")} />
                                                     {asset.status}
+                                                    {asset.distance !== Infinity && <span className="text-zinc-600">• {asset.distance.toFixed(1)}km</span>}
                                                 </div>
                                             </div>
                                         </div>
-                                        <Button size="sm" variant={asset.status === 'Available' ? 'default' : 'secondary'} className={cn("h-7 text-xs", asset.status === 'Available' ? "bg-blue-600 hover:bg-blue-700" : "")} disabled={dispatchLoading || asset.status !== 'Available'} onClick={() => handleDispatch(asset.assetId, asset.name, 'Asset')}>Dispatch</Button>
+                                        <div className="flex gap-1">
+                                            {/* ROUTE BUTTON */}
+                                            {asset.coordinates && (
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="h-7 w-7 text-zinc-400 hover:text-blue-400" 
+                                                    title="Show Route"
+                                                    onClick={() => handleRoute(asset)}
+                                                    disabled={routingAssetId === asset.assetId}
+                                                >
+                                                    <MapIcon className={cn("h-4 w-4", routingAssetId === asset.assetId && "animate-pulse")} />
+                                                </Button>
+                                            )}
+                                            <Button 
+                                                size="sm" 
+                                                variant={asset.status === 'Available' ? 'default' : 'secondary'} 
+                                                className={cn("h-7 text-xs", asset.status === 'Available' ? "bg-blue-600 hover:bg-blue-700" : "")} 
+                                                disabled={dispatchLoading || asset.status !== 'Available'} 
+                                                onClick={() => handleDispatch(asset.assetId, asset.name, 'Asset')}
+                                            >
+                                                Dispatch
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                              </div>
