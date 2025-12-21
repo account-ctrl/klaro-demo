@@ -65,7 +65,20 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 let response;
                 let data;
 
-                // Priority 1: Explicit Barangay Hall Address from Settings
+                // Priority 1: Territory Boundary Centroid (Promoted)
+                // Use the drawn map boundary if available as the most authoritative source.
+                if (settings.territory?.boundary && settings.territory.boundary.length > 0) {
+                     const centroid = calculateCentroid(settings.territory.boundary);
+                     if (centroid) {
+                         console.log("[MapAutoFocus] Using Territory Boundary Centroid");
+                         setCenter(centroid);
+                         setZoom(16);
+                         hasFetched.current = true;
+                         return;
+                     }
+                }
+
+                // Priority 2: Explicit Barangay Hall Address from Settings
                 if (settings.barangayHallAddress) {
                     console.log("[MapAutoFocus] Trying explicit address:", settings.barangayHallAddress);
                     // Try with just the address first, or append city/province if not present
@@ -86,22 +99,7 @@ function useAutoFocus(settings?: TenantSettings | null) {
                     }
                 }
 
-                // Priority 2: Territory Boundary Centroid (NEW)
-                // If address failed or wasn't provided, use the drawn map boundary if available.
-                // This is often more reliable than generic geocoding for specific rural areas.
-                if (settings.territory?.boundary && settings.territory.boundary.length > 0) {
-                     const centroid = calculateCentroid(settings.territory.boundary);
-                     if (centroid) {
-                         console.log("[MapAutoFocus] Using Territory Boundary Centroid");
-                         setCenter(centroid);
-                         setZoom(16);
-                         hasFetched.current = true;
-                         return;
-                     }
-                }
-
                 // Priority 3: Specific "Barangay Hall" Search
-                // This is the most accurate for "Command Center" views.
                 const hallQuery = `${barangayName} Hall, ${city}, ${province}, Philippines`;
                 response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(hallQuery)}&format=json&limit=1`);
                 data = await response.json();
@@ -119,7 +117,6 @@ function useAutoFocus(settings?: TenantSettings | null) {
                 }
 
                 // Priority 4: General Barangay Boundary Center
-                // If hall is not mapped, center on the barangay itself.
                 const barangayQuery = `${barangayName}, ${city}, ${province}, Philippines`;
                 response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(barangayQuery)}&format=json&limit=1`);
                 data = await response.json();
