@@ -79,11 +79,17 @@ export function OperationsPanel({
 
         // Calculate distances
         const withDistance = vehicles.map(asset => {
-             // Mock distance for now as asset GPS isn't in FixedAsset type yet.
-             return { ...asset, distance: Math.random() * 5 }; 
+             // TODO: Match asset to a live responder location if available
+             // For now, stable sort (no random)
+             return { ...asset, distance: 0 }; 
         });
         
-        return withDistance.sort((a, b) => a.distance - b.distance);
+        return withDistance.sort((a, b) => {
+            // Sort by availability first
+            if (a.status === 'Available' && b.status !== 'Available') return -1;
+            if (a.status !== 'Available' && b.status === 'Available') return 1;
+            return 0;
+        });
     }, [selectedAlert, assets]);
 
 
@@ -101,7 +107,7 @@ export function OperationsPanel({
                 responder_team_id: assetId,
                 responderDetails: {
                     name: assetName,
-                    dispatchedAt: serverTimestamp() // Note: Firestore client SDK handles this, type might complain if strict
+                    dispatchedAt: serverTimestamp() 
                 },
                 notes: `Dispatched ${assetName}`
             });
@@ -188,7 +194,7 @@ export function OperationsPanel({
                                 <div className="flex items-center gap-2 text-zinc-400 text-xs uppercase tracking-wider font-semibold">
                                     <Siren className="h-3 w-3" /> Recommended Units
                                 </div>
-                                <span className="text-[10px] text-zinc-600">Sorted by proximity</span>
+                                <span className="text-[10px] text-zinc-600">Sorted by availability</span>
                              </div>
 
                              <div className="space-y-2">
@@ -275,7 +281,7 @@ export function OperationsPanel({
                                 alerts.map(alert => (
                                     <Card 
                                         key={alert.id}
-                                        onClick={() => onAlertSelect(alert.id, alert.location ? { lat: alert.latitude, lng: alert.longitude } : undefined)}
+                                        onClick={() => onAlertSelect(alert.id, { lat: alert.latitude, lng: alert.longitude })}
                                         className={cn(
                                             "p-3 border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 cursor-pointer transition-all relative overflow-hidden group",
                                             alert.status === 'New' && "border-l-2 border-l-red-500"
