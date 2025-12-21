@@ -22,10 +22,14 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
     const handleRefresh = async () => {
         setLoading(true);
         try {
-            await getImmediateFix();
+            // Robust catch for permission errors or timeouts
+            await getImmediateFix().catch(err => {
+                console.error("GeoDebugger fix failed:", err);
+                setLogs(prev => [...prev, `[ERROR] ${err.message || 'Location fix failed'}`]);
+            });
             setLastUpdated(new Date());
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            console.error("GeoDebugger refresh error:", e);
         } finally {
             setLoading(false);
         }
@@ -40,13 +44,17 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
         const logToState = (type: string, args: any[]) => {
              const message = args.map(arg => {
                 if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch(e) {
+                        return "[Object]";
+                    }
                 }
                 return String(arg);
             }).join(' ');
             
             // Only capture relevant logs for MapAutoFocus and Geolocation
-            if (message.includes('[MapAutoFocus]') || message.includes('Geolocation')) {
+            if (message.includes('[MapAutoFocus]') || message.includes('Geolocation') || message.includes('fix failed')) {
                  setLogs(prev => [...prev, `[${type.toUpperCase()}] ${message}`]);
             }
         };
@@ -84,7 +92,7 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
     }, [logs]);
 
 
-    // Auto-fetch on mount
+    // Auto-fetch on mount - handle rejection
     useEffect(() => {
         handleRefresh();
     }, []);
@@ -97,9 +105,6 @@ export function GeolocationDebugger({ currentUser }: GeolocationDebuggerProps) {
         return "text-red-500";
     };
 
-    // Determine display name and avatar fallback
-    // The User type from @/lib/types has fullName, but if we pass firebase user directly it might have displayName
-    // We cast or check
     const displayName = (currentUser as any)?.fullName || currentUser?.displayName || 'Admin';
     const avatarFallback = displayName ? displayName.substring(0, 2).toUpperCase() : 'AD';
 

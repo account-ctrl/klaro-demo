@@ -97,6 +97,7 @@ export const residents = [
       createdAt: "2024-02-01T09:15:00Z",
       updatedAt: "2024-02-01T09:15:00Z"
     },
+    // Add more mock data as needed...
   ];
 
   export const generateResidents = () => {
