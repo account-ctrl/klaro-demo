@@ -33,7 +33,8 @@ type EmergencyMapProps = {
 function MapUpdater({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
-        if (center && !isNaN(center[0]) && !isNaN(center[1])) {
+        // Strict check: Ensure center contains valid numbers and is not null
+        if (center && center[0] != null && center[1] != null && !isNaN(center[0]) && !isNaN(center[1])) {
             map.flyTo(center, 18, { animate: true, duration: 1.5 });
         }
     }, [center, map]);
@@ -88,11 +89,13 @@ export default function EmergencyMap({
     const defaultCenter: [number, number] = [14.5995, 120.9842];
     
     let center: [number, number] | null = null;
-    if (searchedLocation && !isNaN(searchedLocation.lat) && !isNaN(searchedLocation.lng)) {
+    
+    // Determine the center for manual updates (search/select) with STRICT NULL CHECKS
+    if (searchedLocation && searchedLocation.lat != null && searchedLocation.lng != null && !isNaN(searchedLocation.lat) && !isNaN(searchedLocation.lng)) {
         center = [searchedLocation.lat, searchedLocation.lng];
     } else if (selectedAlertId) {
         const selected = alerts?.find(a => a.alertId === selectedAlertId);
-        if (selected && !isNaN(selected.latitude) && !isNaN(selected.longitude)) {
+        if (selected && selected.latitude != null && selected.longitude != null && !isNaN(selected.latitude) && !isNaN(selected.longitude)) {
             center = [selected.latitude, selected.longitude];
         }
     }
@@ -145,7 +148,7 @@ export default function EmergencyMap({
 
                 {/* Alerts */}
                 {Array.isArray(alerts) && alerts.map((alert) => {
-                    if (!alert.latitude || !alert.longitude || isNaN(alert.latitude) || isNaN(alert.longitude)) return null;
+                    if (alert.latitude == null || alert.longitude == null || isNaN(alert.latitude) || isNaN(alert.longitude)) return null;
                     return (
                         <Marker 
                             key={alert.alertId} 
@@ -173,7 +176,7 @@ export default function EmergencyMap({
 
                 {/* Responders */}
                 {Array.isArray(responders) && responders.map((responder) => {
-                    if (!responder.latitude || !responder.longitude || isNaN(responder.latitude) || isNaN(responder.longitude)) return null;
+                    if (responder.latitude == null || responder.longitude == null || isNaN(responder.latitude) || isNaN(responder.longitude)) return null;
                     return (
                         <Marker 
                             key={responder.userId} 
