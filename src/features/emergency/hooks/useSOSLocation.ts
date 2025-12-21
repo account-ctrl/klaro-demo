@@ -99,16 +99,20 @@ export const useSOSLocation = () => {
 
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-            const data: SOSLocationData = {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-                heading: pos.coords.heading,
-                speed: pos.coords.speed,
-                timestamp: pos.timestamp,
-                source: pos.coords.accuracy < 100 ? 'gps' : 'network'
-            };
-            resolve(data);
+            if (pos && pos.coords) {
+                const data: SOSLocationData = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy,
+                    heading: pos.coords.heading,
+                    speed: pos.coords.speed,
+                    timestamp: pos.timestamp,
+                    source: pos.coords.accuracy < 100 ? 'gps' : 'network'
+                };
+                resolve(data);
+            } else {
+                reject(new Error("Received invalid position object."));
+            }
         },
         (err) => {
             console.warn("High accuracy immediate fix failed:", err);
@@ -121,21 +125,25 @@ export const useSOSLocation = () => {
             // Fallback: try low accuracy immediately
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                     resolve({
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        accuracy: pos.coords.accuracy,
-                        heading: pos.coords.heading,
-                        speed: pos.coords.speed,
-                        timestamp: pos.timestamp,
-                        source: 'network'
-                    });
+                     if (pos && pos.coords) {
+                        resolve({
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy,
+                            heading: pos.coords.heading,
+                            speed: pos.coords.speed,
+                            timestamp: pos.timestamp,
+                            source: 'network'
+                        });
+                    } else {
+                        reject(new Error("Received invalid position object on fallback."));
+                    }
                 }, 
                 (err2) => {
                     if (err2.code === 1) {
                         reject(new Error("Permission Denied"));
                     } else {
-                        reject(err2);
+                        reject(new Error("Could not retrieve location."));
                     }
                 }, 
                 { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
@@ -169,6 +177,11 @@ export const useSOSLocation = () => {
 
     watchId.current = navigator.geolocation.watchPosition(
         (pos) => {
+            if (!pos || !pos.coords) {
+                console.warn("Watcher received an invalid position object.");
+                return;
+            }
+
             // Filter stale (some browsers return cached cached old position first)
             if (isStale(pos.timestamp)) {
                 console.log("Ignoring stale location from watcher");
