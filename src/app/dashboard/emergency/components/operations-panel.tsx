@@ -120,11 +120,19 @@ export function OperationsPanel({
         });
     }, [selectedAlert, assets, responders]);
 
-    // Added coordinates logic for Personnel Routing
+    // Enhanced Personnel Filtering Logic
     const availablePersonnel = useMemo(() => {
-        return users.filter(u => 
-            ['Responder', 'Admin', 'Tanod', 'Staff'].includes(u.systemRole || '') 
-        ).map(u => {
+        return users.filter(u => {
+            const role = (u.systemRole || '').toLowerCase();
+            const pos = (u.position || '').toLowerCase();
+            
+            // Check broad range of roles and positions
+            return ['responder', 'admin', 'tanod', 'staff', 'health_worker'].includes(role) ||
+                   pos.includes('tanod') || 
+                   pos.includes('security') || 
+                   pos.includes('health') ||
+                   pos.includes('responder');
+        }).map(u => {
             const loc = responders.find(r => r.userId === u.userId || r.id === u.userId);
             return {
                 ...u,
@@ -401,6 +409,7 @@ export function OperationsPanel({
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-zinc-400 text-xs uppercase tracking-wider font-semibold"><UserCheck className="h-3 w-3" /> Personnel</div>
                                 </div>
+                                {availablePersonnel.length === 0 && <div className="text-zinc-600 text-xs italic px-2">No personnel found.</div>}
                                 {availablePersonnel.map((user) => (
                                     <div key={user.userId} className="flex items-center justify-between p-2 rounded border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900 transition-all">
                                         <div className="flex items-center gap-3">
