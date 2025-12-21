@@ -1,21 +1,18 @@
 
 'use client';
 
-import { useMemo, useState, useEffect } from "react";
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { useMemo, useState } from "react";
+import { useUser, useCollection, useMemoFirebase, useFirestore } from '@/firebase';
 import { EmergencyAlert, User } from "@/lib/types";
-import { useToast } from "@/hooks/use-toast";
 import { useEmergencyAlerts, useResponderLocations } from '@/hooks/use-barangay-data';
 import dynamic from 'next/dynamic';
 import { Loader2 } from "lucide-react";
-import { useTenantProfile } from "@/hooks/use-tenant-profile";
 import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
 
 // Simplified Sidebar Components
 import { ResponderStatusList, AssetList, ActiveAlertFeed } from "./components/sidebar-lists";
 import { WeatherHeader } from "./components/weather-header";
-import { HouseholdSearch } from "./components/household-search";
 
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
@@ -23,22 +20,18 @@ const EmergencyMap = dynamic(() => import('@/components/emergency-map'), {
 });
 
 export function EmergencyDashboard() {
-  const firestore = useFirestore();
-  const { user } = useUser();
-  const { toast } = useToast();
   const { tenantId } = useTenant();
+  const firestore = useFirestore();
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
-  const [searchedLocation, setSearchedLocation] = useState<{lat: number, lng: number} | null>(null);
 
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: responders } = useResponderLocations();
-  const { profile } = useTenantProfile();
 
   // Fetch all users for the responder list
   const usersQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
+    if (!tenantId || !firestore) return null;
     return query(collection(firestore, 'users'), where('tenantId', '==', tenantId));
-  }, [firestore, tenantId]);
+  }, [tenantId, firestore]);
   
   const { data: users } = useCollection<User>(usersQuery);
 
@@ -48,16 +41,9 @@ export function EmergencyDashboard() {
 
   const handleAlertSelect = (id: string) => {
       setSelectedAlertId(id);
-      setSearchedLocation(null);
   };
 
-  const handleSearchSelect = (location: { lat: number; lng: number; label: string }) => {
-      setSearchedLocation({ lat: location.lat, lng: location.lng });
-  };
-
-  const isLoading = isLoadingAlerts;
-
-  if (isLoading) {
+  if (isLoadingAlerts) {
       return (
           <div className="h-screen w-screen flex items-center justify-center bg-zinc-950 text-white">
               <div className="flex flex-col items-center gap-4">
@@ -77,8 +63,6 @@ export function EmergencyDashboard() {
                 responders={responders}
                 selectedAlertId={selectedAlertId}
                 onSelectAlert={handleAlertSelect}
-                searchedLocation={searchedLocation} 
-                settings={profile}
             />
             <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-b from-black/40 via-transparent to-black/40"></div>
         </div>
@@ -100,10 +84,6 @@ export function EmergencyDashboard() {
                 <ResponderStatusList responders={users || []} />
                 <AssetList />
             </div>
-        </div>
-
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 pointer-events-auto">
-            <HouseholdSearch onSelectLocation={handleSearchSelect} />
         </div>
     </div>
   );

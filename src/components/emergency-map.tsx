@@ -4,7 +4,7 @@
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert, MapHousehold, TenantSettings, ResponderWithRole } from '@/lib/types';
+import { EmergencyAlert, ResponderWithRole } from '@/lib/types';
 import { useEffect, useState } from 'react';
 
 // Essential fix for Leaflet icons in Next.js
@@ -20,24 +20,19 @@ const fixLeafletIcons = () => {
 };
 
 type EmergencyMapProps = {
-    alerts: EmergencyAlert[];
+    alerts?: EmergencyAlert[];
     responders?: ResponderWithRole[];
-    households?: MapHousehold[]; 
-    selectedAlertId: string | null;
-    onSelectAlert: (id: string) => void;
+    selectedAlertId?: string | null;
+    onSelectAlert?: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
-    showStructures?: boolean; 
-    filters?: any;
-    settings?: TenantSettings | null;
-    tenantPath?: string | null;
 };
 
 export default function EmergencyMap({ 
     alerts = [], 
     responders = [], 
-    selectedAlertId, 
-    onSelectAlert, 
-    searchedLocation 
+    selectedAlertId = null, 
+    onSelectAlert = () => {}, 
+    searchedLocation = null 
 }: EmergencyMapProps) {
     const [isMounted, setIsMounted] = useState(false);
 
@@ -53,7 +48,7 @@ export default function EmergencyMap({
     if (searchedLocation && !isNaN(searchedLocation.lat) && !isNaN(searchedLocation.lng)) {
         center = [searchedLocation.lat, searchedLocation.lng];
     } else if (selectedAlertId) {
-        const selected = alerts.find(a => a.alertId === selectedAlertId);
+        const selected = alerts?.find(a => a.alertId === selectedAlertId);
         if (selected && !isNaN(selected.latitude) && !isNaN(selected.longitude)) {
             center = [selected.latitude, selected.longitude];
         }
@@ -77,7 +72,7 @@ export default function EmergencyMap({
                 />
 
                 {/* Render Alerts */}
-                {alerts.map((alert) => {
+                {Array.isArray(alerts) && alerts.map((alert) => {
                     if (!alert.latitude || !alert.longitude || isNaN(alert.latitude) || isNaN(alert.longitude)) return null;
                     return (
                         <Marker 
@@ -98,7 +93,7 @@ export default function EmergencyMap({
                 })}
 
                 {/* Render Responders */}
-                {responders.map((responder) => {
+                {Array.isArray(responders) && responders.map((responder) => {
                     if (!responder.latitude || !responder.longitude || isNaN(responder.latitude) || isNaN(responder.longitude)) return null;
                     return (
                         <Marker 
