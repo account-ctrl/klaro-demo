@@ -99,9 +99,10 @@ type EmergencyMapProps = {
     infrastructure?: { cctv: any[], hydrants: any[], evac: any[] };
     layers?: any; 
     selectedAlertId?: string | null;
-    route?: any; // Route object
+    route?: any; 
     onSelectAlert?: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
+    highlightedHouseholdId?: string | null; // Added
     settings?: TenantSettings | null;
 };
 
@@ -125,6 +126,7 @@ export default function EmergencyMap({
     route = null,
     onSelectAlert = () => {}, 
     searchedLocation = null,
+    highlightedHouseholdId = null,
     settings = null
 }: EmergencyMapProps) {
     const [isMounted, setIsMounted] = useState(false);
@@ -264,44 +266,38 @@ export default function EmergencyMap({
                 })}
 
 
-                {/* SMART ROUTE */}
-                {route && route.coordinates && (
-                    <Polyline 
-                        positions={route.coordinates}
-                        pathOptions={{
-                            color: '#3b82f6', // Blue-500
-                            weight: 4,
-                            dashArray: '10, 10',
-                            opacity: 0.8,
-                            lineCap: 'round'
-                        }}
-                    >
-                        <Popup>
-                            <div className="text-zinc-900 text-xs font-bold p-1">
-                                ETA: {Math.round(route.durationSeconds / 60)} mins
-                                <br/>
-                                <span className="font-normal text-[10px] text-zinc-500">{(route.distanceMeters / 1000).toFixed(1)} km</span>
-                            </div>
-                        </Popup>
-                    </Polyline>
-                )}
-
-
-                {/* DEMOGRAPHICS LAYER */}
-                {layers?.demographicLayer !== 'none' && households?.map(h => {
-                    if (layers.demographicLayer === 'vulnerable' && h.riskCategory === 'Standard') return null;
+                {/* DEMOGRAPHICS LAYER & HIGHLIGHT */}
+                {households?.map(h => {
+                    const isHighlighted = highlightedHouseholdId === h.householdId;
                     
+                    // Visibility Logic: 
+                    // Show if layer is active OR if specifically highlighted
+                    const isLayerVisible = layers?.demographicLayer === 'all' || (layers?.demographicLayer === 'vulnerable' && h.riskCategory !== 'Standard');
+                    
+                    if (!isLayerVisible && !isHighlighted) return null;
+                    
+                    if (!h.latitude || !h.longitude) return null;
+
                     let color = '#52525b'; 
                     let radius = 3;
                     let opacity = 0.4;
+                    let weight = 1;
 
                     if (h.riskCategory === 'PWD') { color = '#06b6d4'; opacity = 0.8; }
                     else if (h.riskCategory === 'Senior') { color = '#a855f7'; opacity = 0.8; }
                     else if (h.riskCategory === '4Ps') { color = '#f97316'; opacity = 0.8; }
 
-                    if (layers.demographicLayer === 'all' && h.riskCategory !== 'Standard') {
+                    if (layers?.demographicLayer === 'all' && h.riskCategory !== 'Standard') {
                         opacity = 0.9;
                         radius = 4;
+                    }
+
+                    // HIGHLIGHT OVERRIDE
+                    if (isHighlighted) {
+                        color = '#facc15'; // Yellow
+                        opacity = 1;
+                        radius = 8;
+                        weight = 3;
                     }
 
                     if (h.boundary && h.boundary.length > 0) {
@@ -312,13 +308,14 @@ export default function EmergencyMap({
                                 pathOptions={{ 
                                     color: color, 
                                     fillColor: color, 
-                                    fillOpacity: opacity - 0.2, 
-                                    weight: 1 
+                                    fillOpacity: isHighlighted ? 0.6 : (opacity - 0.2), 
+                                    weight: weight 
                                 }}
                             >
                                 <Popup>
                                     <div className="text-zinc-900 p-1 min-w-[120px]">
                                         <p className="font-bold text-xs">{h.name || 'Household'}</p>
+                                        <p className="text-[10px] text-zinc-500 mt-1">{h.address}</p>
                                         {h.riskCategory !== 'Standard' && <span className="text-[9px] font-bold text-red-600 uppercase">{h.riskCategory} Household</span>}
                                     </div>
                                 </Popup>
@@ -326,7 +323,6 @@ export default function EmergencyMap({
                         )
                     }
 
-                    if (!h.latitude || !h.longitude) return null;
                     return (
                         <CircleMarker 
                             key={h.householdId}
@@ -346,6 +342,7 @@ export default function EmergencyMap({
                                         {h.isSenior && <span className="bg-purple-100 text-purple-800 text-[9px] px-1 rounded border border-purple-200">Senior</span>}
                                         {h.isPwd && <span className="bg-cyan-100 text-cyan-800 text-[9px] px-1 rounded border border-cyan-200">PWD</span>}
                                     </div>
+                                    <p className="text-[10px] text-zinc-500 mt-1">{h.address}</p>
                                 </div>
                            </Popup>
                         </CircleMarker>
@@ -360,6 +357,24 @@ export default function EmergencyMap({
                             color: '#0ea5e9', weight: 2, dashArray: '5, 10', fillColor: '#0ea5e9', fillOpacity: 0.05 
                         }} 
                     />
+                )}
+
+                {/* SMART ROUTE */}
+                {route && route.coordinates && (
+                    <Polyline 
+                        positions={route.coordinates}
+                        pathOptions={{
+                            color: '#3b82f6', weight: 4, dashArray: '10, 10', opacity: 0.8, lineCap: 'round'
+                        }}
+                    >
+                        <Popup>
+                            <div className="text-zinc-900 text-xs font-bold p-1">
+                                ETA: {Math.round(route.durationSeconds / 60)} mins
+                                <br/>
+                                <span className="font-normal text-[10px] text-zinc-500">{(route.distanceMeters / 1000).toFixed(1)} km</span>
+                            </div>
+                        </Popup>
+                    </Polyline>
                 )}
 
                 {/* Alerts */}

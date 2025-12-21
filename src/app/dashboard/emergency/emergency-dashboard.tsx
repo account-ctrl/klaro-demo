@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { WeatherHeader } from "./components/weather-header";
 import { OperationsPanel } from "./components/operations-panel"; 
 import { MapLayerControl, LayerState } from "./components/map-layer-control";
+import { MapSearchBar } from "./components/map-search-bar";
 
 const EmergencyMap = dynamic(() => import('@/components/emergency-map'), { 
     ssr: false,
@@ -37,6 +38,8 @@ export function EmergencyDashboard() {
   // -- STATE --
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [route, setRoute] = useState<any>(null); 
+  const [searchedLocation, setSearchedLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [highlightedHouseholdId, setHighlightedHouseholdId] = useState<string | null>(null);
   const [layerState, setLayerState] = useState<LayerState>({
       showCCTV: false,
       showHydrants: false,
@@ -125,7 +128,22 @@ export function EmergencyDashboard() {
       }));
   };
 
-  // Force map resize when panel toggles to prevent grey areas or empty space
+  const handleLocationSearch = (lat: number, lng: number, label?: string, householdId?: string) => {
+      setSearchedLocation({ lat, lng });
+      setRoute(null);
+      
+      // If a household ID is associated (e.g. searching resident), highlight it
+      if (householdId) {
+          setHighlightedHouseholdId(householdId);
+          // Auto-enable demographic layer if it's off, or rely on highlight override?
+          // Let's force the layer to 'all' so they can see context, or keep as is?
+          // I'll keep as is, but EmergencyMap will handle the override visibility.
+      } else {
+          setHighlightedHouseholdId(null);
+      }
+  };
+
+  // Force map resize
   useEffect(() => {
       const timer = setTimeout(() => {
           window.dispatchEvent(new Event('resize'));
@@ -197,8 +215,18 @@ export function EmergencyDashboard() {
                     layers={layerState}
                     selectedAlertId={selectedAlertId}
                     route={route} 
+                    searchedLocation={searchedLocation}
+                    highlightedHouseholdId={highlightedHouseholdId} // Pass highlight
                     onSelectAlert={setSelectedAlertId} 
                     settings={profile}
+                />
+                
+                {/* Two-Column Search Bar */}
+                <MapSearchBar 
+                    residents={residents || []} 
+                    assets={assets || []} 
+                    households={mapHouseholds || []}
+                    onSelectLocation={handleLocationSearch}
                 />
                 
                 {/* Layer Controls - Moves to Left if Panel Collapsed */}
