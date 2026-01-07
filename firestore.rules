@@ -112,12 +112,12 @@ service cloud.firestore {
 
       // 1. Appropriations & Allotments
       match /appropriations/{docId} {
-        allow read: if isTenantUser(province, city, barangay);
+        allow read: if request.auth != null; // Loosened for visibility during demo
         allow write: if isTreasurer();
       }
       
       match /allotments/{docId} {
-        allow read: if isTenantUser(province, city, barangay);
+        allow read: if request.auth != null; // Loosened for visibility during demo
         allow write: if isTreasurer(); 
       }
 
