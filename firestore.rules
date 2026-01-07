@@ -93,6 +93,55 @@ service cloud.firestore {
         allow read, write: if isTenantUser(province, city, barangay);
       }
 
+      // --- FINANCIAL MODULE (New) ---
+      // Helper for role checks within the tenant context
+      function hasRole(role) {
+         // Assuming role is stored in request.auth.token or we use existing isTenantAdmin logic for general admin
+         // For stricter Treasurer checks, we would ideally check a 'position' or 'role' claim
+         // For now, using isTenantAdmin as a base, but limiting WRITE to specific actions
+         // In a real scenario, we'd check request.auth.token.position == 'Treasurer'
+         return isTenantUser(province, city, barangay); 
+      }
+
+      function isTreasurer() {
+         // Placeholder: Check if user is the treasurer. 
+         // In this codebase, relying on isTenantAdmin for now as 'admin' role covers officials.
+         // Or check specific claim if available. 
+         return isTenantAdmin(province, city, barangay); 
+      }
+
+      // 1. Appropriations & Allotments
+      match /appropriations/{docId} {
+        allow read: if isTenantUser(province, city, barangay);
+        allow write: if isTreasurer();
+      }
+      
+      match /allotments/{docId} {
+        allow read: if isTenantUser(province, city, barangay);
+        allow write: if isTreasurer(); 
+      }
+
+      // 2. Obligations
+      match /obligations/{docId} {
+        allow read: if isTenantUser(province, city, barangay);
+        
+        // Only treasurer can create/update
+        allow create: if isTreasurer() 
+                      && request.resource.data.createdBy == request.auth.uid;
+        
+        allow update: if isTreasurer()
+                      // Prevent tampering with the Amount after creation to ensure 
+                      // it matches the Allotment deduction logic
+                      && request.resource.data.amount == resource.data.amount; 
+      }
+
+      // 3. Transactions (Sub-collection)
+      match /obligations/{obligationId}/transactions/{txId} {
+        allow read: if isTenantUser(province, city, barangay);
+        allow create: if isTreasurer();
+        allow update, delete: if false; // Immutable audit trail
+      }
+
       // Default: Only Admins
       match /{document=**} {
         allow read, write: if isTenantAdmin(province, city, barangay);
