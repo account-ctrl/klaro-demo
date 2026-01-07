@@ -12,6 +12,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialsTable } from "./financials-table";
 import { DisbursementsTable } from "./disbursements-table";
+import BudgetOverview from "./budget/page";
 import { RoleGuard } from "@/components/auth/role-guard";
 import { PERMISSIONS } from "@/lib/config/roles";
 
@@ -26,11 +27,15 @@ export default function FinancialsPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="transactions">
-              <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="budget">
+              <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="budget">Budget Monitoring</TabsTrigger>
                   <TabsTrigger value="transactions">Income & Expense Log</TabsTrigger>
                   <TabsTrigger value="disbursements">Disbursements (Vouchers)</TabsTrigger>
               </TabsList>
+               <TabsContent value="budget">
+                  <BudgetOverview />
+              </TabsContent>
               <TabsContent value="transactions">
                   <Card>
                       <CardHeader>
