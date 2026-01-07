@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, Timestamp } from 'firebase/firestore';
 import { useTenant } from '@/providers/tenant-provider';
+import { tenantRef } from '@/lib/firebase/db-client';
 import { FiscalYear, Appropriation, Allotment } from '@/lib/financials/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -31,13 +32,13 @@ export default function BudgetOverview() {
     // Simplifying to fetch all appropriations for demo.
     
     const appropriationsRef = useMemoFirebase(
-        () => tenantPath && firestore ? collection(firestore, `${tenantPath}/appropriations`) : null,
+        () => tenantPath && firestore ? tenantRef(firestore, tenantPath, 'appropriations') : null,
         [tenantPath, firestore]
     );
     const { data: appropriations, isLoading: isLoadingApprop } = useCollection<Appropriation>(appropriationsRef);
 
     const allotmentsRef = useMemoFirebase(
-        () => tenantPath && firestore ? collection(firestore, `${tenantPath}/allotments`) : null,
+        () => tenantPath && firestore ? tenantRef(firestore, tenantPath, 'allotments') : null,
         [tenantPath, firestore]
     );
     const { data: allotments, isLoading: isLoadingAllot } = useCollection<Allotment>(allotmentsRef);
