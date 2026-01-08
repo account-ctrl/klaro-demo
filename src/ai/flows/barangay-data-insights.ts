@@ -27,7 +27,19 @@ const BarangayDataInsightsOutputSchema = z.object({
 export type BarangayDataInsightsOutput = z.infer<typeof BarangayDataInsightsOutputSchema>;
 
 export async function getBarangayInsights(input: BarangayDataInsightsInput): Promise<BarangayDataInsightsOutput> {
-  return barangayDataInsightsFlow(input);
+  try {
+    return await barangayDataInsightsFlow(input);
+  } catch (error: any) {
+    console.error("Genkit Flow Error:", error);
+    // Return a structured fallback with the error message
+    return {
+      summary: `AI Service Error: ${error.message || 'Unknown error'}. Please check API key quotas.`,
+      demographicInsights: [],
+      projectInsights: [],
+      blotterInsights: [],
+      recommendations: []
+    };
+  }
 }
 
 const prompt = ai.definePrompt({

@@ -45,13 +45,19 @@ export function HeroBanner({ residents, projects, blotterCases, currentDate, her
           projectStatus: JSON.stringify(projects),
           blotterResolutions: JSON.stringify(blotterCases),
         });
+
+        // Check for error message returned from server action
+        if (result.answer && result.answer.startsWith('AI Service Error')) {
+            throw new Error(result.answer);
+        }
+
         setAnswer(result.answer);
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
         toast({
           variant: 'destructive',
-          title: 'Error',
-          description: 'Failed to get an answer from the AI. Please try again.',
+          title: 'AI Analysis Failed',
+          description: error.message || 'Failed to get an answer from the AI. Please try again.',
         });
       }
     });

@@ -31,8 +31,13 @@ export function DraftTools({ content, onApplySuggestion }: DraftToolsProps) {
         try {
             const data = await analyzeOrdinance(content);
             setResult(data);
-        } catch (e) {
-            toast({ title: "Analysis Failed", description: "Could not connect to AI service.", variant: "destructive" });
+        } catch (e: any) {
+            console.error("Analysis Error:", e);
+            toast({ 
+                title: "Analysis Failed", 
+                description: e.message || "Could not connect to AI service. Please check API quotas.", 
+                variant: "destructive" 
+            });
         } finally {
             setIsAnalyzing(false);
         }

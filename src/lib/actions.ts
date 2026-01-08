@@ -84,6 +84,11 @@ export async function generateInsightsAction(): Promise<{ success: boolean; insi
 
     const result = await getBarangayInsights(input);
     
+    // Check for error from flow wrapper
+    if (result.summary && result.summary.startsWith("AI Service Error")) {
+        return { success: false, error: result.summary };
+    }
+
     // Format the structured result back into a string for the frontend,
     // or we could update the frontend to handle the object structure.
     // For now, let's construct a readable string.
