@@ -22,6 +22,64 @@ const fixLeafletIcons = () => {
   });
 };
 
+function BoxDrawer({ active, onBoxDrawn }: { active: boolean, onBoxDrawn: (bounds: L.LatLngBounds) => void }) {
+    const map = useMap();
+    const startPoint = useRef<L.LatLng | null>(null);
+    const rectangleRef = useRef<L.Rectangle | null>(null);
+
+    useEffect(() => {
+        if (!active) {
+            if (rectangleRef.current) {
+                rectangleRef.current.remove();
+                rectangleRef.current = null;
+            }
+            map.dragging.enable();
+            map.getContainer().style.cursor = '';
+            return;
+        }
+
+        map.dragging.disable();
+        map.getContainer().style.cursor = 'crosshair';
+
+        const onMouseDown = (e: L.LeafletMouseEvent) => {
+            startPoint.current = e.latlng;
+            const rect = L.rectangle([startPoint.current, startPoint.current], { color: "#3b82f6", weight: 1, dashArray: '5, 5' });
+            rect.addTo(map);
+            rectangleRef.current = rect;
+        };
+
+        const onMouseMove = (e: L.LeafletMouseEvent) => {
+            if (startPoint.current && rectangleRef.current) {
+                const currentBounds = L.latLngBounds(startPoint.current, e.latlng);
+                rectangleRef.current.setBounds(currentBounds);
+            }
+        };
+
+        const onMouseUp = (e: L.LeafletMouseEvent) => {
+            if (startPoint.current && rectangleRef.current) {
+                const finalBounds = rectangleRef.current.getBounds();
+                onBoxDrawn(finalBounds);
+                startPoint.current = null;
+                rectangleRef.current.remove();
+                rectangleRef.current = null;
+            }
+        };
+
+        map.on('mousedown', onMouseDown);
+        map.on('mousemove', onMouseMove);
+        map.on('mouseup', onMouseUp);
+
+        return () => {
+            map.off('mousedown', onMouseDown);
+            map.off('mousemove', onMouseMove);
+            map.off('mouseup', onMouseUp);
+            if (rectangleRef.current) rectangleRef.current.remove();
+        };
+    }, [active, map, onBoxDrawn]);
+
+    return null;
+}
+
 // --- CCTV PLAYER COMPONENT ---
 function CCTVPopup({ name, url }: { name: string, url?: string }) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -102,8 +160,12 @@ type EmergencyMapProps = {
     route?: any; 
     onSelectAlert?: (id: string) => void;
     searchedLocation?: { lat: number; lng: number } | null;
-    highlightedHouseholdId?: string | null; // Added
+    highlightedHouseholdId?: string | null;
     settings?: TenantSettings | null;
+    
+    // Scan Capability
+    scanMode?: boolean;
+    onScanArea?: (bounds: L.LatLngBounds) => void;
 };
 
 function MapUpdater({ center }: { center: [number, number] | null }) {
@@ -127,7 +189,9 @@ export default function EmergencyMap({
     onSelectAlert = () => {}, 
     searchedLocation = null,
     highlightedHouseholdId = null,
-    settings = null
+    settings = null,
+    scanMode = false,
+    onScanArea = () => {}
 }: EmergencyMapProps) {
     const [isMounted, setIsMounted] = useState(false);
 
@@ -234,6 +298,8 @@ export default function EmergencyMap({
                 <MapAutoFocus settings={settings} />
                 <MapUpdater center={center} />
                 <ZoomControl position="bottomright" />
+                
+                <BoxDrawer active={scanMode} onBoxDrawn={onScanArea} />
 
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

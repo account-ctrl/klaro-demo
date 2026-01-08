@@ -6,13 +6,21 @@ import { EmergencyAlert, User } from "@/lib/types";
 import { useEmergencyAlerts, useResponderLocations, useHouseholds, useResidents } from '@/hooks/use-barangay-data';
 import { useFixedAssets } from '@/hooks/use-assets';
 import dynamic from 'next/dynamic';
-import { Loader2, LayoutGrid, ChevronRight, ChevronLeft } from "lucide-react";
+import { Loader2, LayoutGrid, ChevronRight, ChevronLeft, Scan, Users, Accessibility, Baby, Activity } from "lucide-react";
 import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
 import { useTenantProfile } from "@/hooks/use-tenant-profile";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
 
 // Refactored Components
 import { WeatherHeader } from "./components/weather-header";
@@ -47,6 +55,10 @@ export function EmergencyDashboard() {
       demographicLayer: 'none'
   });
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  
+  // Scan State
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<any>(null);
 
   // -- DATA HOOKS --
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
@@ -132,15 +144,59 @@ export function EmergencyDashboard() {
       setSearchedLocation({ lat, lng });
       setRoute(null);
       
-      // If a household ID is associated (e.g. searching resident), highlight it
       if (householdId) {
           setHighlightedHouseholdId(householdId);
-          // Auto-enable demographic layer if it's off, or rely on highlight override?
-          // Let's force the layer to 'all' so they can see context, or keep as is?
-          // I'll keep as is, but EmergencyMap will handle the override visibility.
       } else {
           setHighlightedHouseholdId(null);
       }
+  };
+  
+  const handleScanArea = (bounds: any) => {
+      setIsScanning(false);
+      if (!mapHouseholds) return;
+
+      // Filter households inside bounds
+      const inside = mapHouseholds.filter(h => {
+          if (!h.latitude || !h.longitude) return false;
+          // Leaflet bounds has contains method, but passing strict types is hard with dynamic import
+          // Manual check:
+          const lat = h.latitude;
+          const lng = h.longitude;
+          const southWest = bounds.getSouthWest();
+          const northEast = bounds.getNorthEast();
+          return lat >= southWest.lat && lat <= northEast.lat &&
+                 lng >= southWest.lng && lng <= northEast.lng;
+      });
+
+      // Aggregate
+      const totalPop = inside.reduce((sum, h) => sum + (h.count || 0), 0);
+      const seniors = inside.filter(h => h.isSenior).length; // Households with seniors, strictly counting households? Or residents? 
+      // Current mapHouseholds aggregates bools. To get total seniors count, I need residents.
+      // But mapHouseholds only has bool flags. Let's re-scan residents for better accuracy.
+      
+      let seniorCount = 0;
+      let pwdCount = 0;
+      let childrenCount = 0;
+      
+      if (residents) {
+          const hhIds = new Set(inside.map(h => h.householdId));
+          residents.forEach(r => {
+              if (r.householdId && hhIds.has(r.householdId)) {
+                  const age = r.dateOfBirth ? new Date().getFullYear() - new Date(r.dateOfBirth).getFullYear() : 0;
+                  if (age >= 60) seniorCount++;
+                  if (r.isPwd) pwdCount++;
+                  if (age <= 12) childrenCount++;
+              }
+          });
+      }
+
+      setScanResult({ 
+          hhCount: inside.length, 
+          population: totalPop, 
+          seniors: seniorCount,
+          pwds: pwdCount,
+          children: childrenCount
+      });
   };
 
   // Force map resize
@@ -216,9 +272,11 @@ export function EmergencyDashboard() {
                     selectedAlertId={selectedAlertId}
                     route={route} 
                     searchedLocation={searchedLocation}
-                    highlightedHouseholdId={highlightedHouseholdId} // Pass highlight
+                    highlightedHouseholdId={highlightedHouseholdId} 
                     onSelectAlert={setSelectedAlertId} 
                     settings={profile}
+                    scanMode={isScanning}
+                    onScanArea={handleScanArea}
                 />
                 
                 {/* Two-Column Search Bar */}
@@ -231,10 +289,22 @@ export function EmergencyDashboard() {
                 
                 {/* Layer Controls - Moves to Left if Panel Collapsed */}
                 <div className={cn(
-                    "absolute top-4 z-[400] transition-all duration-500",
-                    isPanelOpen ? "right-4" : "left-4"
+                    "absolute top-4 z-[400] transition-all duration-500 flex flex-col gap-2 right-4"
                 )}>
                     <MapLayerControl layers={layerState} toggleLayer={handleToggleLayer} />
+                    
+                    {/* SCAN BUTTON */}
+                    <Button 
+                        variant={isScanning ? "default" : "secondary"}
+                        className={cn(
+                            "w-full justify-start gap-2 shadow-lg backdrop-blur-md transition-all",
+                            isScanning ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-zinc-900/90 text-zinc-300 border-zinc-700 hover:text-white hover:bg-zinc-800"
+                        )}
+                        onClick={() => setIsScanning(!isScanning)}
+                    >
+                        <Scan className="h-4 w-4" />
+                        {isScanning ? "Draw Box..." : "Scan Area"}
+                    </Button>
                 </div>
 
                 {/* Panel Toggle Button */}
@@ -268,6 +338,64 @@ export function EmergencyDashboard() {
             </div>
 
         </div>
+
+        {/* SCAN RESULT MODAL */}
+        <Dialog open={!!scanResult} onOpenChange={(o) => !o && setScanResult(null)}>
+            <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 max-w-sm">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Scan className="h-5 w-5 text-blue-500" />
+                        Demographic Scan
+                    </DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                        Analysis of the selected area.
+                    </DialogDescription>
+                </DialogHeader>
+                
+                {scanResult && (
+                    <div className="grid gap-4 py-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <Card className="bg-zinc-950 border-zinc-800">
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                    <div className="text-2xl font-bold text-white">{scanResult.hhCount}</div>
+                                    <div className="text-xs text-zinc-500 uppercase tracking-wider">Households</div>
+                                </CardContent>
+                            </Card>
+                            <Card className="bg-zinc-950 border-zinc-800">
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                    <div className="text-2xl font-bold text-white">{scanResult.population}</div>
+                                    <div className="text-xs text-zinc-500 uppercase tracking-wider">Population</div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-2 rounded bg-zinc-800/50">
+                                <div className="flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-purple-400" />
+                                    <span className="text-sm">Senior Citizens</span>
+                                </div>
+                                <span className="font-bold">{scanResult.seniors}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 rounded bg-zinc-800/50">
+                                <div className="flex items-center gap-2">
+                                    <Accessibility className="h-4 w-4 text-cyan-400" />
+                                    <span className="text-sm">PWDs</span>
+                                </div>
+                                <span className="font-bold">{scanResult.pwds}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 rounded bg-zinc-800/50">
+                                <div className="flex items-center gap-2">
+                                    <Baby className="h-4 w-4 text-emerald-400" />
+                                    <span className="text-sm">Children (0-12)</span>
+                                </div>
+                                <span className="font-bold">{scanResult.children}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }
