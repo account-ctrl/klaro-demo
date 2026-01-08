@@ -16,12 +16,8 @@ service cloud.firestore {
     }
     
     // Check if the user belongs to the tenant (regardless of role - admin, staff, or resident)
-    // Note: We need a reliable way to check tenant membership for residents. 
-    // Residents might not have 'tenantPath' in token initially or it might be different.
-    // For residents, we rely on the document matching the user's ID within the tenant structure.
     function isTenantUser(province, city, barangay) {
       let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
-      // This is primarily for officials/staff who have tenantPath
       return request.auth.token.tenantPath == expectedPath;
     }
 
@@ -45,8 +41,6 @@ service cloud.firestore {
     
     // 3. Global User Profiles (The connection point)
     match /users/{userId} {
-        // Users can read/write their own profile
-        // Admins can read profiles to link them
         allow read: if isOwner(userId) || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin';
         allow write: if isOwner(userId) || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin';
     }
@@ -55,91 +49,78 @@ service cloud.firestore {
 
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
       
-      // The Barangay Root Document 
-      // Allow tenant admins/staff to read config
-      // Allow residents to read basic config if they belong to this tenant (logic handled in app by checking user.tenantId)
-      // Since we can't easily check resident's tenantId from token in all cases yet without custom claims sync, 
-      // we'll rely on specific subcollection rules for residents.
       allow read: if isTenantUser(province, city, barangay); 
       allow write: if false; 
 
       // --- RESIDENT RECORDS (The Source of Truth) ---
       match /resident_records/{residentId} {
-         // Admins can read/write all records
          allow read, write: if isTenantAdmin(province, city, barangay);
-         
-         // A resident can READ their own record if the document ID matches their Auth UID (or a field links them)
-         // Assuming we link by Auth UID or store Auth UID in a field 'linkedUserId'
          allow read: if resource.data.linkedUserId == request.auth.uid;
       }
 
       // --- DOCUMENTS (Strict Isolation) ---
       match /users/{userId}/documents/{documentId} {
-         // 1. The User (Owner) can read/write their own documents
          allow read, write: if isOwner(userId);
-
-         // 2. The Tenant Admin can read/write documents for users in their tenant
-         // (This assumes the user actually belongs to this tenant path, which is implicit by the path structure)
          allow read, write: if isTenantAdmin(province, city, barangay);
       }
 
-      // Emergency Alerts: Allow any tenant user (e.g. Responders) to read/write
+      // Emergency Alerts
       match /emergency_alerts/{alertId} {
         allow read, write: if isTenantUser(province, city, barangay);
       }
 
-      // Responder Locations: Allow any tenant user to read/write
+      // Responder Locations
       match /responder_locations/{userId} {
         allow read, write: if isTenantUser(province, city, barangay);
       }
 
-      // --- FINANCIAL MODULE (New) ---
-      // Helper for role checks within the tenant context
-      function hasRole(role) {
-         // Assuming role is stored in request.auth.token or we use existing isTenantAdmin logic for general admin
-         // For stricter Treasurer checks, we would ideally check a 'position' or 'role' claim
-         // For now, using isTenantAdmin as a base, but limiting WRITE to specific actions
-         // In a real scenario, we'd check request.auth.token.position == 'Treasurer'
-         return isTenantUser(province, city, barangay); 
-      }
-
+      // --- FINANCIAL MODULE ---
       function isTreasurer() {
-         // Placeholder: Check if user is the treasurer. 
-         // In this codebase, relying on isTenantAdmin for now as 'admin' role covers officials.
-         // Or check specific claim if available. 
          return isTenantAdmin(province, city, barangay); 
       }
 
-      // 1. Appropriations & Allotments
+      // 1. Appropriations & Allotments (Budget)
       match /appropriations/{docId} {
-        allow read: if request.auth != null; // Loosened for visibility during demo
+        allow read: if request.auth != null; 
         allow write: if isTreasurer();
       }
-      
       match /allotments/{docId} {
-        allow read: if request.auth != null; // Loosened for visibility during demo
+        allow read: if request.auth != null; 
         allow write: if isTreasurer(); 
+      }
+      
+      // 1.5 Budget Proposals (Drafts)
+      match /budget_proposals/{docId} {
+        allow read: if request.auth != null; 
+        allow write: if isTenantUser(province, city, barangay);
       }
 
       // 2. Obligations
       match /obligations/{docId} {
         allow read: if isTenantUser(province, city, barangay);
-        
-        // Only treasurer can create/update
-        allow create: if isTreasurer() 
-                      && request.resource.data.createdBy == request.auth.uid;
-        
-        allow update: if isTreasurer()
-                      // Prevent tampering with the Amount after creation to ensure 
-                      // it matches the Allotment deduction logic
-                      && request.resource.data.amount == resource.data.amount; 
+        allow create: if isTreasurer() && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isTreasurer() && request.resource.data.amount == resource.data.amount; 
       }
 
-      // 3. Transactions (Sub-collection)
+      // 3. Transactions
       match /obligations/{obligationId}/transactions/{txId} {
         allow read: if isTenantUser(province, city, barangay);
         allow create: if isTreasurer();
-        allow update, delete: if false; // Immutable audit trail
+        allow update, delete: if false; 
+      }
+      
+      // 4. Procurement (New)
+      match /vendors/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTenantUser(province, city, barangay);
+      }
+      match /catalog_items/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTenantUser(province, city, barangay);
+      }
+      match /purchase_orders/{docId} {
+        allow read: if request.auth != null;
+        allow write: if isTenantUser(province, city, barangay);
       }
 
       // Default: Only Admins

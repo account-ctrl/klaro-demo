@@ -1,7 +1,9 @@
 
 import { runTransaction, doc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase'; // Your firebase config
+import { initializeFirebase } from '@/firebase'; 
 import { Allotment } from './types';
+
+const { firestore: db } = initializeFirebase();
 
 interface CreateObligationParams {
   barangayId: string;

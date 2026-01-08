@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AdjustBudgetModal } from './adjust-budget-modal';
 
 function formatCurrency(amount: number) {
     return new Intl.NumberFormat('en-PH', {
@@ -26,10 +27,6 @@ function formatCurrency(amount: number) {
 export default function BudgetOverview() {
     const { tenantPath } = useTenant();
     const firestore = useFirestore();
-    
-    // Fetch Active Fiscal Year
-    // In a real app, you might have a selector. For now, we assume "2024" or fetch the active one.
-    // Simplifying to fetch all appropriations for demo.
     
     const appropriationsRef = useMemoFirebase(
         () => tenantPath && firestore ? tenantRef(firestore, tenantPath, 'appropriations') : null,
@@ -69,11 +66,12 @@ export default function BudgetOverview() {
                     <p className="text-muted-foreground">Fiscal Year 2024 - Real-time Monitoring</p>
                 </div>
                 <div className="flex gap-2">
-                     {/* Placeholder for "New Appropriation" or "Re-align" actions */}
-                     <Button variant="outline" size="sm">
-                        <Wallet className="mr-2 h-4 w-4" />
-                        Adjust Budget
-                     </Button>
+                     <AdjustBudgetModal>
+                         <Button variant="outline" size="sm">
+                            <Wallet className="mr-2 h-4 w-4" />
+                            Adjust Budget
+                         </Button>
+                     </AdjustBudgetModal>
                 </div>
             </div>
 
