@@ -279,7 +279,7 @@ export function EmergencyDashboard() {
                     onScanArea={handleScanArea}
                 />
                 
-                {/* Two-Column Search Bar */}
+                {/* Two-Column Search Bar (Top Left) */}
                 <MapSearchBar 
                     residents={residents || []} 
                     assets={assets || []} 
@@ -287,17 +287,19 @@ export function EmergencyDashboard() {
                     onSelectLocation={handleLocationSearch}
                 />
                 
-                {/* Layer Controls - Moves to Left if Panel Collapsed */}
-                <div className={cn(
-                    "absolute top-4 z-[400] transition-all duration-500 flex flex-col gap-2 right-4"
-                )}>
+                {/* Layer Controls - Separated and moved to Left below Search Bar */}
+                <div className="absolute top-[72px] left-4 z-[400] transition-all duration-500">
                     <MapLayerControl layers={layerState} toggleLayer={handleToggleLayer} />
-                    
-                    {/* SCAN BUTTON */}
+                </div>
+                
+                {/* SCAN BUTTON - Centered */}
+                <div className={cn(
+                    "absolute top-4 z-[400] transition-all duration-500 left-1/2 -translate-x-1/2"
+                )}>
                     <Button 
                         variant={isScanning ? "default" : "secondary"}
                         className={cn(
-                            "w-full justify-start gap-2 shadow-lg backdrop-blur-md transition-all",
+                            "w-48 justify-center gap-2 shadow-lg backdrop-blur-md transition-all",
                             isScanning ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-zinc-900/90 text-zinc-300 border-zinc-700 hover:text-white hover:bg-zinc-800"
                         )}
                         onClick={() => setIsScanning(!isScanning)}

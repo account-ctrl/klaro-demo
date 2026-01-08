@@ -139,6 +139,19 @@ export default function TerritoryEditor({ initialBoundary, onSave }: TerritoryEd
         </div>
 
         <div className="h-[500px] w-full border rounded-lg overflow-hidden shadow-sm relative z-0">
+             {/* Center the Draw Control (which is in topright) */}
+             <style>{`
+                .leaflet-top.leaflet-right {
+                    left: 50% !important;
+                    transform: translateX(-50%);
+                    right: auto !important;
+                    margin-top: 10px;
+                }
+                /* Optionally make it horizontal if it's too tall */
+                .leaflet-draw-toolbar a {
+                    /* float: left; */ /* Default is vertical */
+                }
+             `}</style>
              <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

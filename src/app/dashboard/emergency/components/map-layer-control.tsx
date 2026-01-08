@@ -15,11 +15,12 @@ export interface LayerState {
 interface LayerControlProps {
     layers: LayerState;
     toggleLayer: (key: keyof LayerState, value?: any) => void;
+    className?: string; // Allow external styling
 }
 
-export function MapLayerControl({ layers, toggleLayer }: LayerControlProps) {
+export function MapLayerControl({ layers, toggleLayer, className }: LayerControlProps) {
     return (
-        <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-auto">
+        <div className={cn("flex flex-col gap-2 pointer-events-auto", className)}>
             <div className="bg-zinc-950/90 backdrop-blur border border-zinc-800 rounded-md p-2 shadow-xl w-56 space-y-2">
                 
                 <CollapsibleSection title="Infrastructure" icon={<Layers className="w-3 h-3" />}>
