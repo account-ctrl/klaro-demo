@@ -30,7 +30,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { caseTypes } from '../blotter/case-types';
-import OrdinanceEditor from './editor/ordinance-editor';
+import { OrdinanceEditor } from './editor/ordinance-editor';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Editor } from '@tiptap/react';
 import { DraftTools } from './editor/draft-tools';

@@ -74,6 +74,12 @@ service cloud.firestore {
         allow read, write: if isTenantUser(province, city, barangay);
       }
 
+      // --- LEGISLATIVE ---
+      match /ordinances/{ordinanceId} {
+        allow read: if isTenantUser(province, city, barangay);
+        allow write: if isTenantAdmin(province, city, barangay);
+      }
+
       // --- FINANCIAL MODULE ---
       function isTreasurer() {
          return isTenantAdmin(province, city, barangay); 

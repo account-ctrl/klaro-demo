@@ -1,24 +1,15 @@
-
 'use client';
 
-import { collection, query, where, orderBy } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { query, orderBy } from 'firebase/firestore';
+import { useCollection, useMemoFirebase } from '@/firebase';
 import { Ordinance } from '@/lib/types';
-import { BARANGAY_ID as IMPORTED_BARANGAY_ID } from './use-barangay-data';
-
-export const BARANGAY_ID = IMPORTED_BARANGAY_ID;
-
-// --- REFS ---
-
-export function useLegislativeRef(collectionName: string) {
-  const firestore = useFirestore();
-  return useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, `/barangays/${BARANGAY_ID}/${collectionName}`);
-  }, [firestore, collectionName]);
-}
+import { useBarangayRef } from './use-barangay-data';
 
 // --- HOOKS ---
+
+export function useLegislativeRef(collectionName: string) {
+    return useBarangayRef(collectionName);
+}
 
 export function useOrdinances() {
     const ref = useLegislativeRef('ordinances');
