@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useUser, useCollection, useMemoFirebase, useFirestore } from '@/firebase';
-import { EmergencyAlert, User } from "@/lib/types";
+import { EmergencyAlert, User, Resident } from "@/lib/types";
 import { useEmergencyAlerts, useResponderLocations, useHouseholds, useResidents } from '@/hooks/use-barangay-data';
 import { useFixedAssets } from '@/hooks/use-assets';
 import dynamic from 'next/dynamic';
-import { Loader2, LayoutGrid, ChevronRight, ChevronLeft, Scan, Users, Accessibility, Baby, Activity } from "lucide-react";
+import { Loader2, LayoutGrid, ChevronRight, ChevronLeft, Scan, Users, Accessibility, Baby, Activity, User as UserIcon, Phone, Mail, Calendar, MapPin, Heart, Shield, Briefcase, Trash2, X } from "lucide-react";
 import { collection, query, where } from "firebase/firestore";
 import { useTenant } from "@/providers/tenant-provider";
 import { useTenantProfile } from "@/hooks/use-tenant-profile";
@@ -20,7 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ResidentEditorContent } from "../residents/resident-actions";
 
 // Refactored Components
 import { WeatherHeader } from "./components/weather-header";
@@ -37,6 +41,130 @@ const EmergencyMap = dynamic(() => import('@/components/emergency-map'), {
         </div>
     )
 });
+
+// --- ENHANCED RESIDENT QUICK VIEW ---
+function ResidentQuickView({ resident, onEdit, onClose }: { resident: Resident, onEdit: (r: Resident) => void, onClose: () => void }) {
+    const age = resident.dateOfBirth ? new Date().getFullYear() - new Date(resident.dateOfBirth).getFullYear() : 'N/A';
+    
+    return (
+        <div className="flex flex-col h-full bg-white text-zinc-900 font-sans">
+            {/* Header */}
+            <div className="p-6 bg-zinc-100 border-b border-zinc-200 relative shrink-0">
+                <Button variant="ghost" size="icon" onClick={onClose} className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-900">
+                    <X className="h-4 w-4" />
+                </Button>
+                
+                <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-full bg-zinc-200 border-2 border-orange-500 flex items-center justify-center overflow-hidden shadow-sm">
+                        {resident.selfieUrl ? (
+                            <img src={resident.selfieUrl} alt="Avatar" className="h-full w-full object-cover" />
+                        ) : (
+                            <UserIcon className="h-8 w-8 text-zinc-400" />
+                        )}
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-black uppercase tracking-tight text-zinc-900">{resident.firstName} {resident.lastName}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-[10px] uppercase font-black bg-orange-500 text-white border-transparent">
+                                {resident.status}
+                            </Badge>
+                            <span className="text-xs text-zinc-600 font-bold uppercase tracking-wider">• {resident.gender}, {age} yrs</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <ScrollArea className="flex-1 bg-zinc-50">
+                <div className="p-6 space-y-6">
+                    {/* Tags Section */}
+                    <div className="flex flex-wrap gap-2">
+                        {resident.isPwd && <Badge className="bg-cyan-600 text-white border-transparent text-[10px] font-black uppercase">PWD</Badge>}
+                        {resident.is4ps && <Badge className="bg-orange-600 text-white border-transparent text-[10px] font-black uppercase">4Ps</Badge>}
+                        {Number(age) >= 60 && <Badge className="bg-purple-600 text-white border-transparent text-[10px] font-black uppercase">Senior Citizen</Badge>}
+                        {resident.isVoter && <Badge className="bg-blue-600 text-white border-transparent text-[10px] font-black uppercase">Registered Voter</Badge>}
+                    </div>
+
+                    {/* Quick Info Grid */}
+                    <div className="grid grid-cols-1 gap-6">
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest flex items-center gap-2">
+                                <Shield className="h-3 w-3" /> Contact & Identity
+                            </h4>
+                            <div className="space-y-3 bg-white p-4 rounded-lg border-2 border-zinc-200 shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-zinc-100 rounded">
+                                        <Phone className="h-3.5 w-3.5 text-zinc-900" />
+                                    </div>
+                                    <span className="text-sm font-bold text-zinc-800">{resident.contactNumber || 'No phone number'}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-zinc-100 rounded">
+                                        <Mail className="h-3.5 w-3.5 text-zinc-900" />
+                                    </div>
+                                    <span className="text-sm font-bold text-zinc-800 truncate">{resident.email || 'No email address'}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-zinc-100 rounded">
+                                        <Calendar className="h-3.5 w-3.5 text-zinc-900" />
+                                    </div>
+                                    <span className="text-sm font-bold text-zinc-800">{resident.dateOfBirth ? new Date(resident.dateOfBirth).toLocaleDateString() : 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest flex items-center gap-2">
+                                <MapPin className="h-3 w-3" /> Residency
+                            </h4>
+                            <div className="bg-white p-4 rounded-lg border-2 border-zinc-200 shadow-sm">
+                                <p className="text-sm font-bold leading-relaxed text-zinc-800">
+                                    {typeof resident.address === 'string' ? resident.address : 'See household location'}
+                                </p>
+                                <p className="text-[10px] text-zinc-400 mt-2 uppercase font-black tracking-widest">
+                                    HH ID: {resident.householdId || 'None'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Health & Employment Summary */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest flex items-center gap-2">
+                                    <Heart className="h-3 w-3" /> Health
+                                </h4>
+                                <div className="bg-white p-4 rounded-lg border-2 border-zinc-200 shadow-sm">
+                                    <p className="text-xs font-black text-zinc-900 uppercase">{resident.healthProfile?.bloodType ? `Blood: ${resident.healthProfile.bloodType}` : 'No Data'}</p>
+                                    {resident.healthProfile?.comorbidities && (
+                                        <p className="text-[10px] text-zinc-500 mt-1 font-bold">{resident.healthProfile.comorbidities.join(', ')}</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest flex items-center gap-2">
+                                    <Briefcase className="h-3 w-3" /> Job
+                                </h4>
+                                <div className="bg-white p-4 rounded-lg border-2 border-zinc-200 shadow-sm">
+                                    <p className="text-xs font-black text-zinc-900 uppercase truncate">{resident.occupation || 'None'}</p>
+                                    <p className="text-[10px] text-zinc-500 mt-1 font-bold">Resident</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </ScrollArea>
+
+            {/* Actions */}
+            <div className="p-6 bg-white border-t border-zinc-200 shrink-0">
+                <Button 
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black h-12 shadow-md uppercase tracking-widest"
+                    onClick={() => onEdit(resident)}
+                >
+                    EDIT FULL PROFILE
+                </Button>
+            </div>
+        </div>
+    );
+}
 
 export function EmergencyDashboard() {
   const { tenantId } = useTenant();
@@ -60,12 +188,17 @@ export function EmergencyDashboard() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
 
+  // Resident Modal State
+  const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
+  const [isResidentQuickViewOpen, setIsResidentQuickViewOpen] = useState(false);
+  const [isResidentFullEditOpen, setIsResidentFullEditOpen] = useState(false);
+
   // -- DATA HOOKS --
   const { data: allAlerts, isLoading: isLoadingAlerts } = useEmergencyAlerts();
   const { data: responders } = useResponderLocations();
   const { data: assets } = useFixedAssets();
-  const { data: households } = useHouseholds();
-  const { data: residents } = useResidents();
+  const { data: households, update: updateHousehold } = useHouseholds();
+  const { data: residents, update: updateResident } = useResidents();
 
   // Fetch all users for the responder list logic
   const usersQuery = useMemoFirebase(() => {
@@ -207,6 +340,25 @@ export function EmergencyDashboard() {
       return () => clearTimeout(timer);
   }, [isPanelOpen]);
 
+  const handleUpdateResident = async (data: any) => {
+      if (data.residentId) {
+          await updateResident(data.residentId, data);
+          setIsResidentFullEditOpen(false);
+          setIsResidentQuickViewOpen(false);
+      }
+  };
+
+  const handleSelectResidentFromMap = (resident: Resident) => {
+      setSelectedResident(resident);
+      setIsResidentQuickViewOpen(true);
+  };
+
+  const handleOpenFullEdit = () => {
+      setIsResidentQuickViewOpen(false);
+      // Wait for quick view to close before opening full edit
+      setTimeout(() => setIsResidentFullEditOpen(true), 150);
+  };
+
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 overflow-hidden text-zinc-200 font-sans">
         
@@ -267,6 +419,7 @@ export function EmergencyDashboard() {
                     alerts={activeAlerts}
                     responders={responders}
                     households={mapHouseholds}
+                    residents={residents || []}
                     infrastructure={infrastructure}
                     layers={layerState}
                     selectedAlertId={selectedAlertId}
@@ -277,6 +430,7 @@ export function EmergencyDashboard() {
                     settings={profile}
                     scanMode={isScanning}
                     onScanArea={handleScanArea}
+                    onSelectResident={handleSelectResidentFromMap}
                 />
                 
                 {/* Two-Column Search Bar (Top Left) */}
@@ -398,6 +552,41 @@ export function EmergencyDashboard() {
                 )}
             </DialogContent>
         </Dialog>
+
+        {/* RESIDENT QUICK VIEW MODAL (FROM MAP) */}
+        {selectedResident && (
+            <Dialog open={isResidentQuickViewOpen} onOpenChange={setIsResidentQuickViewOpen}>
+                <DialogContent className="max-w-md bg-white p-0 overflow-hidden shadow-2xl border-none">
+                    <ResidentQuickView 
+                        resident={selectedResident} 
+                        onEdit={handleOpenFullEdit} 
+                        onClose={() => setIsResidentQuickViewOpen(false)} 
+                    />
+                </DialogContent>
+            </Dialog>
+        )}
+
+        {/* RESIDENT FULL EDIT MODAL */}
+        {selectedResident && (
+             <Dialog open={isResidentFullEditOpen} onOpenChange={setIsResidentFullEditOpen}>
+                <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden text-zinc-900 border-none">
+                    <div className="h-[85vh] overflow-hidden flex flex-col">
+                        <div className="p-6 border-b border-zinc-200 shrink-0">
+                            <h2 className="text-xl font-black uppercase tracking-tight">Edit Resident Profile</h2>
+                            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-1">Full administrative access for {selectedResident.firstName} {selectedResident.lastName}.</p>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <ResidentEditorContent 
+                                record={selectedResident} 
+                                onSave={handleUpdateResident} 
+                                onClose={() => setIsResidentFullEditOpen(false)} 
+                                households={households || []} 
+                            />
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        )}
     </div>
   );
 }

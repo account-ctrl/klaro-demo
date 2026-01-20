@@ -3,11 +3,11 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, ZoomControl, CircleMarker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { EmergencyAlert, ResponderWithRole, TenantSettings } from '@/lib/types';
+import { EmergencyAlert, ResponderWithRole, TenantSettings, Resident } from '@/lib/types';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { MapAutoFocus } from './maps/MapAutoFocus';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AlertCircle, Car, MapPin, Video, Droplets, Tent, ShieldAlert } from 'lucide-react';
+import { AlertCircle, Car, MapPin, Video, Droplets, Tent, ShieldAlert, Users, ChevronRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 // Fix generic Leaflet icons
@@ -149,11 +149,91 @@ function CCTVPopup({ name, url }: { name: string, url?: string }) {
     )
 }
 
+// --- HOUSEHOLD POPUP COMPONENT ---
+function HouseholdPopup({ household, residents = [], onSelectResident }: { household: any, residents?: Resident[], onSelectResident?: (resident: Resident) => void }) {
+    const members = useMemo(() => {
+        return residents.filter(r => r.householdId === household.householdId);
+    }, [residents, household.householdId]);
+
+    return (
+        <div className="text-zinc-900 p-2 min-w-[240px] font-sans">
+            <div className="flex justify-between items-start mb-2">
+                <p className="font-bold text-sm leading-tight">{household.name || 'Household'}</p>
+                <div className="flex gap-1 flex-wrap justify-end">
+                    {household.isSenior && <span className="bg-purple-100 text-purple-800 text-[9px] px-1.5 py-0.5 rounded-full border border-purple-200 font-bold uppercase tracking-tighter">Senior</span>}
+                    {household.isPwd && <span className="bg-cyan-100 text-cyan-800 text-[9px] px-1.5 py-0.5 rounded-full border border-cyan-200 font-bold uppercase tracking-tighter">PWD</span>}
+                    {household.riskCategory === '4Ps' && <span className="bg-orange-100 text-orange-800 text-[9px] px-1.5 py-0.5 rounded-full border border-orange-200 font-bold uppercase tracking-tighter">4Ps</span>}
+                </div>
+            </div>
+            
+            <div className="space-y-1.5 border-t border-zinc-100 pt-2">
+                <div className="flex items-start gap-2">
+                    <MapPin className="w-3 h-3 text-zinc-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-[11px] text-zinc-600 leading-tight">{household.address}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 bg-zinc-50 p-1.5 rounded border border-zinc-100">
+                    <div>
+                        <p className="text-[8px] uppercase text-zinc-400 font-bold">HH Number</p>
+                        <p className="text-[10px] font-medium text-zinc-700">{household.householdNumber || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p className="text-[8px] uppercase text-zinc-400 font-bold">Material</p>
+                        <p className="text-[10px] font-medium text-zinc-700">{household.housing_material || 'N/A'}</p>
+                    </div>
+                </div>
+
+                {/* HOUSEHOLD MEMBERS SECTION */}
+                <div className="mt-3 pt-3 border-t border-zinc-100">
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <Users className="w-3 h-3 text-zinc-400" />
+                        <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider">Members ({members.length})</p>
+                    </div>
+                    <div className="space-y-1 max-h-[120px] overflow-y-auto pr-1">
+                        {members.map(member => (
+                            <button 
+                                key={member.residentId}
+                                onClick={() => onSelectResident?.(member)}
+                                className="w-full flex items-center justify-between p-1.5 rounded hover:bg-zinc-100 transition-colors group text-left border border-transparent hover:border-zinc-200"
+                            >
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-medium text-zinc-700 truncate">
+                                        {member.firstName} {member.lastName}
+                                        {member.residentId === household.household_head_id && <span className="ml-1 text-[8px] text-blue-600 font-bold italic">(Head)</span>}
+                                    </p>
+                                    <div className="flex gap-1 items-center mt-0.5">
+                                        {member.isPwd && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" title="PWD" />}
+                                        {member.is4ps && <div className="w-1.5 h-1.5 rounded-full bg-orange-400" title="4Ps" />}
+                                        <p className="text-[9px] text-zinc-400">
+                                            {member.gender}, {member.dateOfBirth ? (new Date().getFullYear() - new Date(member.dateOfBirth).getFullYear()) : 'N/A'} yrs
+                                        </p>
+                                    </div>
+                                </div>
+                                <ChevronRight className="w-3 h-3 text-zinc-300 group-hover:text-zinc-500 flex-shrink-0" />
+                            </button>
+                        ))}
+                        {members.length === 0 && (
+                            <p className="text-[10px] text-zinc-400 italic py-1">No members registered.</p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between opacity-60 border-t border-zinc-50 mt-2">
+                     <p className="text-[9px] font-mono text-zinc-500">
+                        {household.latitude?.toFixed(5)}, {household.longitude?.toFixed(5)}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // --- MAIN MAP ---
 type EmergencyMapProps = {
     alerts?: EmergencyAlert[];
     responders?: ResponderWithRole[];
     households?: any[]; 
+    residents?: Resident[];
     infrastructure?: { cctv: any[], hydrants: any[], evac: any[] };
     layers?: any; 
     selectedAlertId?: string | null;
@@ -166,6 +246,7 @@ type EmergencyMapProps = {
     // Scan Capability
     scanMode?: boolean;
     onScanArea?: (bounds: L.LatLngBounds) => void;
+    onSelectResident?: (resident: Resident) => void;
 };
 
 function MapUpdater({ center }: { center: [number, number] | null }) {
@@ -182,6 +263,7 @@ export default function EmergencyMap({
     alerts = [], 
     responders = [], 
     households = [],
+    residents = [],
     infrastructure = { cctv: [], hydrants: [], evac: [] },
     layers,
     selectedAlertId = null, 
@@ -191,7 +273,8 @@ export default function EmergencyMap({
     highlightedHouseholdId = null,
     settings = null,
     scanMode = false,
-    onScanArea = () => {}
+    onScanArea = () => {},
+    onSelectResident
 }: EmergencyMapProps) {
     const [isMounted, setIsMounted] = useState(false);
 
@@ -379,11 +462,7 @@ export default function EmergencyMap({
                                 }}
                             >
                                 <Popup>
-                                    <div className="text-zinc-900 p-1 min-w-[120px]">
-                                        <p className="font-bold text-xs">{h.name || 'Household'}</p>
-                                        <p className="text-[10px] text-zinc-500 mt-1">{h.address}</p>
-                                        {h.riskCategory !== 'Standard' && <span className="text-[9px] font-bold text-red-600 uppercase">{h.riskCategory} Household</span>}
-                                    </div>
+                                    <HouseholdPopup household={h} residents={residents} onSelectResident={onSelectResident} />
                                 </Popup>
                             </Polygon>
                         )
@@ -402,14 +481,7 @@ export default function EmergencyMap({
                             }}
                         >
                            <Popup>
-                                <div className="text-zinc-900 p-1 min-w-[120px]">
-                                    <p className="font-bold text-xs">{h.name || 'Household'}</p>
-                                    <div className="flex gap-1 mt-1">
-                                        {h.isSenior && <span className="bg-purple-100 text-purple-800 text-[9px] px-1 rounded border border-purple-200">Senior</span>}
-                                        {h.isPwd && <span className="bg-cyan-100 text-cyan-800 text-[9px] px-1 rounded border border-cyan-200">PWD</span>}
-                                    </div>
-                                    <p className="text-[10px] text-zinc-500 mt-1">{h.address}</p>
-                                </div>
+                                <HouseholdPopup household={h} residents={residents} onSelectResident={onSelectResident} />
                            </Popup>
                         </CircleMarker>
                     )

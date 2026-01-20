@@ -56,11 +56,12 @@ import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
 import { collection, orderBy, query } from 'firebase/firestore';
 import { ResidentSchema } from '@/utils/schemas'; // Import Zod Schema
 import { z } from 'zod';
+import { cn } from "@/lib/utils";
 
 export type ResidentFormValues = Omit<Resident, 'residentId'>;
 
 // Extended type to include Firestore document ID
-type ResidentWithId = Resident & { id?: string };
+export type ResidentWithId = Resident & { id?: string };
 
 type ResidentFormProps = {
   record?: ResidentWithId;
@@ -102,6 +103,32 @@ const defaultResidentData: ResidentFormValues = {
     email: "",
     householdId: "NO_HOUSEHOLD"
 };
+
+// --- HIGH CONTRAST INPUT COMPONENT ---
+function ContrastInput({ className, ...props }: React.ComponentProps<typeof Input>) {
+    return (
+        <Input 
+            className={cn(
+                "bg-white text-zinc-900 border-zinc-300 focus:border-orange-500 focus:ring-orange-500 font-medium placeholder:text-zinc-400 shadow-sm h-10",
+                className
+            )} 
+            {...props} 
+        />
+    );
+}
+
+function ContrastSelect({ id, value, onValueChange, children, placeholder = "Select...", required }: { id?: string, value: string, onValueChange: (v: string) => void, children: React.ReactNode, placeholder?: string, required?: boolean }) {
+    return (
+        <Select onValueChange={onValueChange} value={value} required={required}>
+            <SelectTrigger id={id} className="bg-white text-zinc-900 border-zinc-300 focus:border-orange-500 focus:ring-orange-500 font-medium shadow-sm h-10">
+                <SelectValue placeholder={placeholder} />
+            </SelectTrigger>
+            <SelectContent className="bg-white border-zinc-200">
+                {children}
+            </SelectContent>
+        </Select>
+    );
+}
 
 function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps) {
   const firestore = useFirestore();
@@ -185,42 +212,27 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 1. Prepare Data for Zod
-    // We need to match the schema structure. 
-    // ResidentSchema expects simple address string for now (based on schemas.ts), 
-    // but our form uses structured address.
-    // Let's serialize the address for validation if needed, or update schema to support structured.
-    // For now, we'll validate the core fields.
-    
     try {
-        // Flatten address for the basic schema check if it expects a string
-        // Or better, let's update schemas.ts to accept structured address later.
-        // For now, we construct a display address string to pass validation
         const displayAddress = typeof formData.address === 'string' 
             ? formData.address 
             : `${getAddressField('blockLot')} ${getAddressField('street')}, ${getAddressField('purok')}`;
 
         const dataToValidate = {
             ...formData,
-            address: displayAddress || "Unspecified Address", // Fallback to pass string min(5) check
-            tenantId: tenantId || 'unknown-tenant' // Inject tenant context
+            address: displayAddress || "Unspecified Address", 
+            tenantId: tenantId || 'unknown-tenant' 
         };
 
-        // 2. Validate
         const parsed = ResidentSchema.parse(dataToValidate);
         
-        // 3. Transform Back (The schema automatically UPPERCASES names)
-        // We merge the transformed fields (names) back into our rich formData
         const finalData = {
             ...formData,
             firstName: parsed.firstName,
             lastName: parsed.lastName,
             middleName: parsed.middleName,
-            // Keep original structured address object, don't overwrite with the string representation
             householdId: formData.householdId === 'NO_HOUSEHOLD' ? undefined : formData.householdId,
         };
 
-        // 4. Save
         if (record) {
             const updatedRecord = { ...record, ...finalData } as ResidentWithId;
             onSave(updatedRecord);
@@ -230,7 +242,6 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
         
     } catch (error) {
         if (error instanceof z.ZodError) {
-            // Show the first error message
             const firstError = error.errors[0];
             toast({
                 variant: "destructive",
@@ -249,210 +260,179 @@ function ResidentForm({ record, onSave, onClose, households }: ResidentFormProps
         <div className="space-y-6">
           {/* Personal Identity */}
           <div className="space-y-4">
-              <h4 className="font-semibold text-primary">Personal Identity</h4>
+              <h4 className="text-xs font-black uppercase text-zinc-900 tracking-widest border-l-4 border-orange-500 pl-3 py-1 bg-zinc-100 rounded-r">Personal Identity</h4>
               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" value={formData.firstName} onChange={handleChange} required placeholder="Juan" />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="firstName" className="text-zinc-900 font-bold text-xs uppercase">First Name</Label>
+                      <ContrastInput id="firstName" value={formData.firstName} onChange={handleChange} required placeholder="Juan" />
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" value={formData.lastName} onChange={handleChange} required placeholder="Dela Cruz" />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="lastName" className="text-zinc-900 font-bold text-xs uppercase">Last Name</Label>
+                      <ContrastInput id="lastName" value={formData.lastName} onChange={handleChange} required placeholder="Dela Cruz" />
                   </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label htmlFor="middleName">Middle Name</Label>
-                      <Input id="middleName" value={formData.middleName} onChange={handleChange} placeholder="Santos" />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="middleName" className="text-zinc-900 font-bold text-xs uppercase">Middle Name</Label>
+                      <ContrastInput id="middleName" value={formData.middleName} onChange={handleChange} placeholder="Santos" />
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="suffix">Suffix</Label>
-                      <Input id="suffix" value={formData.suffix} onChange={handleChange} placeholder="e.g., Jr., III" />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="suffix" className="text-zinc-900 font-bold text-xs uppercase">Suffix</Label>
+                      <ContrastInput id="suffix" value={formData.suffix} onChange={handleChange} placeholder="e.g., Jr., III" />
                   </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                      <Input id="dateOfBirth" type="date" value={formData.dateOfBirth} onChange={handleChange} required />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="dateOfBirth" className="text-zinc-900 font-bold text-xs uppercase">Date of Birth</Label>
+                      <ContrastInput id="dateOfBirth" type="date" value={formData.dateOfBirth} onChange={handleChange} required />
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="gender">Gender</Label>
-                      <Select onValueChange={(value) => handleSelectChange('gender', value)} value={formData.gender}>
-                          <SelectTrigger id="gender"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="Male">Male</SelectItem>
-                              <SelectItem value="Female">Female</SelectItem>
-                              <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                      </Select>
+                  <div className="space-y-1.5">
+                      <Label htmlFor="gender" className="text-zinc-900 font-bold text-xs uppercase">Gender</Label>
+                      <ContrastSelect value={formData.gender} onValueChange={(v) => handleSelectChange('gender', v)}>
+                          <SelectItem value="Male">Male</SelectItem>
+                          <SelectItem value="Female">Female</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                      </ContrastSelect>
                   </div>
               </div>
                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label htmlFor="civilStatus">Civil Status</Label>
-                      <Select onValueChange={(value) => handleSelectChange('civilStatus', value as any)} value={formData.civilStatus}>
-                          <SelectTrigger id="civilStatus"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="Single">Single</SelectItem>
-                              <SelectItem value="Married">Married</SelectItem>
-                              <SelectItem value="Widowed">Widowed</SelectItem>
-                              <SelectItem value="Separated">Separated</SelectItem>
-                          </SelectContent>
-                      </Select>
+                  <div className="space-y-1.5">
+                      <Label htmlFor="civilStatus" className="text-zinc-900 font-bold text-xs uppercase">Civil Status</Label>
+                      <ContrastSelect value={formData.civilStatus} onValueChange={(v) => handleSelectChange('civilStatus', v)}>
+                          <SelectItem value="Single">Single</SelectItem>
+                          <SelectItem value="Married">Married</SelectItem>
+                          <SelectItem value="Widowed">Widowed</SelectItem>
+                          <SelectItem value="Separated">Separated</SelectItem>
+                      </ContrastSelect>
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="nationality">Nationality</Label>
-                      <Input id="nationality" value={formData.nationality} onChange={handleChange} />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="nationality" className="text-zinc-900 font-bold text-xs uppercase">Nationality</Label>
+                      <ContrastInput id="nationality" value={formData.nationality} onChange={handleChange} />
                   </div>
               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="occupation">Occupation</Label>
-                  <Input id="occupation" value={formData.occupation} onChange={handleChange} placeholder="e.g. Teacher, Farmer" />
+               <div className="space-y-1.5">
+                  <Label htmlFor="occupation" className="text-zinc-900 font-bold text-xs uppercase">Occupation</Label>
+                  <ContrastInput id="occupation" value={formData.occupation} onChange={handleChange} placeholder="e.g. Teacher, Farmer" />
               </div>
           </div>
           
-          {/* Residency & Location (UPDATED SCHEMA) */}
+          {/* Residency & Location */}
           <div className="space-y-4">
-              <h4 className="font-semibold text-primary flex items-center gap-2">
-                  <MapPin className="h-4 w-4" /> Residency & Location
-              </h4>
+              <h4 className="text-xs font-black uppercase text-zinc-900 tracking-widest border-l-4 border-orange-500 pl-3 py-1 bg-zinc-100 rounded-r">Residency & Location</h4>
               
-              <div className="space-y-2">
-                  <Label htmlFor="purokId">Purok / Zone</Label>
-                   <Select onValueChange={handlePurokChange} value={formData.purokId}>
-                        <SelectTrigger id="purokId">
-                            <SelectValue placeholder="Select Purok" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {puroks && puroks.map(p => (
-                                <SelectItem key={p.purokId} value={p.purokId}>
-                                    {p.name}
-                                </SelectItem>
-                            ))}
-                            {(!puroks || puroks.length === 0) && (
-                                <SelectItem value="no_purok" disabled>No Puroks Found (Configure in Settings)</SelectItem>
-                            )}
-                        </SelectContent>
-                    </Select>
+              <div className="space-y-1.5">
+                  <Label htmlFor="purokId" className="text-zinc-900 font-bold text-xs uppercase">Purok / Zone</Label>
+                  <ContrastSelect value={formData.purokId || ''} onValueChange={handlePurokChange} placeholder="Select Purok">
+                        {puroks && puroks.map(p => (
+                            <SelectItem key={p.purokId} value={p.purokId}>
+                                {p.name}
+                            </SelectItem>
+                        ))}
+                        {(!puroks || puroks.length === 0) && (
+                            <SelectItem value="no_purok" disabled>No Puroks Found</SelectItem>
+                        )}
+                  </ContrastSelect>
               </div>
 
-              {/* Structured Address Fields */}
               <div className="grid grid-cols-2 gap-4">
-                   <div className="space-y-2 col-span-2">
-                      <Label htmlFor="addr_street">Street Name</Label>
-                      <Input 
+                   <div className="space-y-1.5 col-span-2">
+                      <Label htmlFor="addr_street" className="text-zinc-900 font-bold text-xs uppercase">Street Name</Label>
+                      <ContrastInput 
                         id="addr_street" 
                         value={getAddressField('street')} 
                         onChange={(e) => handleAddressChange('street', e.target.value)} 
                         placeholder="Rizal St."
                       />
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="addr_block">Block / Lot</Label>
-                      <Input 
+                  <div className="space-y-1.5">
+                      <Label htmlFor="addr_block" className="text-zinc-900 font-bold text-xs uppercase">Block / Lot</Label>
+                      <ContrastInput 
                         id="addr_block" 
                         value={getAddressField('blockLot')} 
                         onChange={(e) => handleAddressChange('blockLot', e.target.value)} 
                         placeholder="Blk 1 Lot 2"
                       />
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="addr_unit">Unit / Apt</Label>
-                      <Input 
+                  <div className="space-y-1.5">
+                      <Label htmlFor="addr_unit" className="text-zinc-900 font-bold text-xs uppercase">Unit / Apt</Label>
+                      <ContrastInput 
                         id="addr_unit" 
                         value={getAddressField('unit')} 
                         onChange={(e) => handleAddressChange('unit', e.target.value)} 
                         placeholder="Apt 4B"
                       />
                   </div>
-                   <div className="space-y-2 col-span-2">
-                      <Label htmlFor="addr_landmark">Landmark</Label>
-                      <Input 
-                        id="addr_landmark" 
-                        value={getAddressField('landmark')} 
-                        onChange={(e) => handleAddressChange('landmark', e.target.value)} 
-                        placeholder="Near the old mango tree"
-                      />
-                  </div>
               </div>
 
-              <div className="space-y-2">
-                  <Label htmlFor="householdId">Household</Label>
-                   <Select onValueChange={(value) => handleSelectChange('householdId', value)} value={formData.householdId}>
-                        <SelectTrigger id="householdId">
-                            <SelectValue placeholder="Assign to a household" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="NO_HOUSEHOLD">None (Head of new household)</SelectItem>
-                            {households.map(hh => (
-                                <SelectItem key={hh.householdId} value={hh.householdId}>
-                                    {hh.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+              <div className="space-y-1.5">
+                  <Label htmlFor="householdId" className="text-zinc-900 font-bold text-xs uppercase">Household</Label>
+                  <ContrastSelect value={formData.householdId || 'NO_HOUSEHOLD'} onValueChange={(v) => handleSelectChange('householdId', v)}>
+                        <SelectItem value="NO_HOUSEHOLD">None (Head of new household)</SelectItem>
+                        {households.map(hh => (
+                            <SelectItem key={hh.householdId} value={hh.householdId}>
+                                {hh.name}
+                            </SelectItem>
+                        ))}
+                  </ContrastSelect>
               </div>
           </div>
 
           {/* Social Status */}
           <div className="space-y-4">
-              <h4 className="font-semibold text-primary">Government & Social Status</h4>
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                <div className="space-y-0.5">
-                  <Label>Registered Voter?</Label>
-                  <p className="text-xs text-muted-foreground">Is the resident a registered voter in this barangay?</p>
-                </div>
-                <Switch id="isVoter" checked={formData.isVoter} onCheckedChange={(checked) => handleSwitchChange('isVoter', checked)} />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                <div className="space-y-0.5">
-                  <Label>4Ps Beneficiary?</Label>
-                   <p className="text-xs text-muted-foreground">Is the resident a beneficiary of the 4Ps program?</p>
-                </div>
-                <Switch id="is4ps" checked={formData.is4ps} onCheckedChange={(checked) => handleSwitchChange('is4ps', checked)} />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                <div className="space-y-0.5">
-                  <Label>PWD?</Label>
-                   <p className="text-xs text-muted-foreground">Is the resident a Person with Disability?</p>
-                </div>
-                <Switch id="isPwd" checked={formData.isPwd} onCheckedChange={(checked) => handleSwitchChange('isPwd', checked)} />
+              <h4 className="text-xs font-black uppercase text-zinc-900 tracking-widest border-l-4 border-orange-500 pl-3 py-1 bg-zinc-100 rounded-r">Government & Social Status</h4>
+              <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-lg border-2 border-zinc-200 bg-white p-4 shadow-sm">
+                    <div className="space-y-0.5">
+                      <Label className="text-zinc-900 font-bold text-sm">Registered Voter?</Label>
+                      <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-tight">Active registration status</p>
+                    </div>
+                    <Switch className="data-[state=checked]:bg-orange-500" checked={formData.isVoter} onCheckedChange={(checked) => handleSwitchChange('isVoter', checked)} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border-2 border-zinc-200 bg-white p-4 shadow-sm">
+                    <div className="space-y-0.5">
+                      <Label className="text-zinc-900 font-bold text-sm">4Ps Beneficiary?</Label>
+                       <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-tight">CCT recipient status</p>
+                    </div>
+                    <Switch className="data-[state=checked]:bg-orange-500" checked={formData.is4ps} onCheckedChange={(checked) => handleSwitchChange('is4ps', checked)} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border-2 border-zinc-200 bg-white p-4 shadow-sm">
+                    <div className="space-y-0.5">
+                      <Label className="text-zinc-900 font-bold text-sm">PWD?</Label>
+                       <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-tight">Disability record status</p>
+                    </div>
+                    <Switch className="data-[state=checked]:bg-orange-500" checked={formData.isPwd} onCheckedChange={(checked) => handleSwitchChange('isPwd', checked)} />
+                  </div>
               </div>
           </div>
 
            {/* Contact & Status */}
           <div className="space-y-4">
-              <h4 className="font-semibold text-primary">Contact & System Status</h4>
+              <h4 className="text-xs font-black uppercase text-zinc-900 tracking-widest border-l-4 border-orange-500 pl-3 py-1 bg-zinc-100 rounded-r">Contact & System Status</h4>
               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label htmlFor="contactNumber">Contact Number</Label>
-                      <Input id="contactNumber" value={formData.contactNumber} onChange={handleChange} placeholder="09..." />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="contactNumber" className="text-zinc-900 font-bold text-xs uppercase">Contact Number</Label>
+                      <ContrastInput id="contactNumber" value={formData.contactNumber} onChange={handleChange} placeholder="09..." />
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
-                      <Input id="email" type="email" value={formData.email} onChange={handleChange} placeholder="optional@email.com" />
+                  <div className="space-y-1.5">
+                      <Label htmlFor="email" className="text-zinc-900 font-bold text-xs uppercase">Email Address</Label>
+                      <ContrastInput id="email" type="email" value={formData.email} onChange={handleChange} placeholder="email@address.com" />
                   </div>
               </div>
-              <div className="space-y-2">
-                  <Label htmlFor="status">Resident Status</Label>
-                  <Select onValueChange={(value) => handleSelectChange('status', value)} value={formData.status}>
-                      <SelectTrigger id="status"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="Active">Active</SelectItem>
-                          <SelectItem value="Moved Out">Moved Out</SelectItem>
-                          <SelectItem value="Deceased">Deceased</SelectItem>
-                      </SelectContent>
-                  </Select>
+              <div className="space-y-1.5">
+                  <Label htmlFor="status" className="text-zinc-900 font-bold text-xs uppercase">Resident Status</Label>
+                  <ContrastSelect value={formData.status} onValueChange={(v) => handleSelectChange('status', v)}>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Moved Out">Moved Out</SelectItem>
+                      <SelectItem value="Deceased">Deceased</SelectItem>
+                  </ContrastSelect>
               </div>
           </div>
         </div>
       </div>
-      <div className="border-t pt-4 mt-auto">
-        <div className="flex justify-end gap-2">
-            <SheetClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-            </SheetClose>
-            <Button type="submit">Save Resident</Button>
+      <div className="border-t border-zinc-300 pt-4 mt-auto">
+        <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" className="border-zinc-300 text-zinc-700 font-bold hover:bg-zinc-100 px-6 h-11" onClick={onClose}>CANCEL</Button>
+            <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white font-black px-10 h-11 shadow-md uppercase tracking-wider">SAVE CHANGES</Button>
         </div>
       </div>
     </form>
@@ -464,7 +444,6 @@ export function AddResident({ onAdd, households }: { onAdd: (data: ResidentFormV
   const [open, setOpen] = useState(false);
 
   const handleSave = (data: ResidentFormValues | ResidentWithId) => {
-    // Cast to ResidentFormValues since this is AddResident and we expect new data
     onAdd(data as ResidentFormValues);
     setOpen(false);
   };
@@ -472,24 +451,56 @@ export function AddResident({ onAdd, households }: { onAdd: (data: ResidentFormV
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button className="bg-[#409656] text-white hover:bg-[#409656]/90">
+        <Button className="bg-orange-600 text-white hover:bg-orange-700 font-bold">
           <PlusCircle className="mr-2 h-4 w-4" />
           New Resident
         </Button>
       </SheetTrigger>
-      <SheetContent className="sm:max-w-md w-full">
-        <SheetHeader>
-          <SheetTitle>Add New Resident</SheetTitle>
-          <SheetDescription>
-            Fill in the details of the new resident. Click save when you're done.
+      <SheetContent className="sm:max-w-md w-full bg-zinc-50">
+        <SheetHeader className="bg-white p-6 border-b border-zinc-200">
+          <SheetTitle className="text-zinc-900 font-black uppercase tracking-tight">Add New Resident</SheetTitle>
+          <SheetDescription className="text-zinc-500 font-medium">
+            Register a new resident in the system.
           </SheetDescription>
         </SheetHeader>
-        <div className="h-[calc(100vh-10rem)] mt-4">
+        <div className="h-[calc(100vh-10rem)] p-6 pt-0">
             <ResidentForm onSave={handleSave} onClose={() => setOpen(false)} households={households} />
         </div>
       </SheetContent>
     </Sheet>
   );
+}
+
+export function ResidentEditorContent({
+    record,
+    onSave,
+    onClose,
+    households
+}: {
+    record: ResidentWithId;
+    onSave: (data: ResidentWithId) => void;
+    onClose: () => void;
+    households: Household[];
+}) {
+    return (
+        <Tabs defaultValue="profile" className="h-full flex flex-col">
+            <TabsList className="grid w-full grid-cols-2 bg-zinc-200 p-1 rounded-none">
+                <TabsTrigger value="profile" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 font-bold uppercase text-[11px] tracking-wider py-2.5">Profile Details</TabsTrigger>
+                <TabsTrigger value="activity" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 font-bold uppercase text-[11px] tracking-wider py-2.5">Activity Log</TabsTrigger>
+            </TabsList>
+            <TabsContent value="profile" className="flex-1 overflow-hidden bg-zinc-50">
+                <ResidentForm
+                    record={record}
+                    onSave={(data) => onSave(data as ResidentWithId)}
+                    onClose={onClose}
+                    households={households}
+                />
+            </TabsContent>
+            <TabsContent value="activity" className="flex-1 overflow-y-auto bg-zinc-50">
+                <ResidentActivity residentId={record.residentId} />
+            </TabsContent>
+        </Tabs>
+    );
 }
 
 export function EditResident({
@@ -505,40 +516,28 @@ export function EditResident({
 }) {
   const [open, setOpen] = useState(false);
 
-  const handleSave = (data: ResidentFormValues | ResidentWithId) => {
-    // Cast to ResidentWithId because we are editing an existing record
-    onEdit(data as ResidentWithId);
+  const handleSave = (data: ResidentWithId) => {
+    onEdit(data);
     setOpen(false);
   };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="sm:max-w-md w-full">
-        <SheetHeader>
-          <SheetTitle>Edit Resident Details</SheetTitle>
-          <SheetDescription>
-            Update the details for {record.firstName} {record.lastName}.
+      <SheetContent className="sm:max-w-md w-full bg-zinc-50">
+        <SheetHeader className="bg-white p-6 border-b border-zinc-200">
+          <SheetTitle className="text-zinc-900 font-black uppercase tracking-tight">Edit Resident</SheetTitle>
+          <SheetDescription className="text-zinc-500 font-medium">
+             Updating record for {record.firstName} {record.lastName}.
           </SheetDescription>
         </SheetHeader>
-        <div className="h-[calc(100vh-10rem)] mt-4">
-            <Tabs defaultValue="profile" className="h-full flex flex-col">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="profile">Profile Details</TabsTrigger>
-                <TabsTrigger value="activity">Activity Log</TabsTrigger>
-            </TabsList>
-            <TabsContent value="profile" className="flex-1 overflow-hidden">
-                <ResidentForm
-                record={record}
-                onSave={handleSave}
-                onClose={() => setOpen(false)}
-                households={households}
-                />
-            </TabsContent>
-            <TabsContent value="activity" className="flex-1 overflow-y-auto">
-                <ResidentActivity residentId={record.residentId} />
-            </TabsContent>
-            </Tabs>
+        <div className="h-[calc(100vh-10rem)]">
+            <ResidentEditorContent 
+                record={record} 
+                onSave={handleSave} 
+                onClose={() => setOpen(false)} 
+                households={households} 
+            />
         </div>
       </SheetContent>
     </Sheet>
@@ -567,21 +566,21 @@ export function DeleteResident({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent className="bg-white border-zinc-300">
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogTitle className="text-zinc-900 font-black uppercase">Permanently Delete Record?</AlertDialogTitle>
+          <AlertDialogDescription className="text-zinc-600 font-medium">
             This action cannot be undone. This will permanently delete the
-            resident record from Firestore.
+            resident profile from the system.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel className="border-zinc-300 font-bold">CANCEL</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDelete}
-            className="bg-destructive hover:bg-destructive/90"
+            className="bg-red-600 hover:bg-red-700 text-white font-black"
           >
-            Delete
+            DELETE FOREVER
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
