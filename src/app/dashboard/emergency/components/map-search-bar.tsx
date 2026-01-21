@@ -63,17 +63,18 @@ export function MapSearchBar({ residents, assets, households, onSelectLocation }
                     return {
                         id: r.residentId,
                         label: `${r.firstName} ${r.lastName}`,
-                        sub: r.address?.mapAddress?.street || (typeof r.address === 'string' ? r.address : 'Unknown Address'),
+                        sub: typeof r.address === 'string' ? r.address : (r.address?.mapAddress?.street || 'No Address'),
                         type: 'resident',
                         lat,
                         lng,
-                        householdId: r.householdId // Pass household ID
+                        householdId: r.householdId 
                     };
                 });
         }
 
+        // GENERAL MODE: Includes Assets, Households, AND Residents
         const assetResults = assets
-            .filter(a => a.name.toLowerCase().includes(lower))
+            .filter(a => (a.name || '').toLowerCase().includes(lower))
             .slice(0, 5)
             .map(a => ({
                 id: a.assetId,
@@ -86,7 +87,7 @@ export function MapSearchBar({ residents, assets, households, onSelectLocation }
             }));
 
         const houseResults = households
-            .filter(h => (h.name || h.householdId).toLowerCase().includes(lower))
+            .filter(h => (h.name || h.householdId || '').toLowerCase().includes(lower) || (h.address || '').toLowerCase().includes(lower))
             .slice(0, 5)
             .map(h => ({
                 id: h.householdId,
@@ -95,10 +96,26 @@ export function MapSearchBar({ residents, assets, households, onSelectLocation }
                 type: 'household',
                 lat: h.latitude,
                 lng: h.longitude,
-                householdId: h.householdId // Self is the household
+                householdId: h.householdId
             }));
+            
+        const residentResults = residents
+            .filter(r => `${r.firstName} ${r.lastName}`.toLowerCase().includes(lower))
+            .slice(0, 5)
+            .map(r => {
+                const coords = r.householdId ? householdMap.get(r.householdId) : null;
+                return {
+                    id: r.residentId,
+                    label: `${r.firstName} ${r.lastName}`,
+                    sub: "Resident",
+                    type: 'resident',
+                    lat: r.latitude || coords?.lat,
+                    lng: r.longitude || coords?.lng,
+                    householdId: r.householdId
+                };
+            });
 
-        return [...assetResults, ...houseResults];
+        return [...assetResults, ...houseResults, ...residentResults];
 
     }, [value, searchMode, residents, assets, households, householdMap]);
 
@@ -109,7 +126,7 @@ export function MapSearchBar({ residents, assets, households, onSelectLocation }
                     <SelectTrigger className="h-10 bg-zinc-950/90 border-zinc-800 text-zinc-200 backdrop-blur shadow-xl">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-zinc-950 border-zinc-800 text-zinc-200">
                         <SelectItem value="general">General</SelectItem>
                         <SelectItem value="residents">Residents</SelectItem>
                     </SelectContent>
@@ -126,44 +143,51 @@ export function MapSearchBar({ residents, assets, households, onSelectLocation }
                             className="w-full justify-start text-left font-normal h-10 bg-zinc-950/90 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 backdrop-blur shadow-xl px-3"
                         >
                             <Search className="mr-2 h-4 w-4 opacity-50" />
-                            <span className="truncate">{value ? value : `Search ${searchMode === 'residents' ? 'Residents' : 'Everything'}...`}</span>
+                            <span className="truncate">{value ? value : `Search...`}</span>
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[260px] p-0 bg-zinc-950 border-zinc-800 text-zinc-200 shadow-2xl" align="start">
-                        <Command className="bg-transparent">
+                        <Command className="bg-transparent" shouldFilter={false}>
                             <CommandInput 
-                                placeholder={`Type to search...`} 
+                                placeholder={`Search ${searchMode === 'residents' ? 'Residents' : 'Everything'}...`} 
                                 value={value}
                                 onValueChange={setValue}
                                 className="border-none focus:ring-0 text-zinc-200 h-9"
                             />
-                            <CommandList>
-                                <CommandEmpty className="py-2 text-center text-xs text-zinc-500">No results found.</CommandEmpty>
+                            <CommandList className="max-h-[300px]">
+                                {filteredItems.length === 0 && value.length >= 2 && (
+                                    <div className="py-6 text-center text-sm text-zinc-500">No results found.</div>
+                                )}
+                                {value.length < 2 && value.length > 0 && (
+                                    <div className="py-2 text-center text-[10px] text-zinc-500 uppercase tracking-widest">Type at least 2 characters...</div>
+                                )}
                                 <CommandGroup>
                                     {filteredItems.map((item) => (
                                         <CommandItem
                                             key={item.id}
-                                            value={item.label} 
+                                            value={item.id} 
                                             onSelect={() => {
                                                 if (item.lat && item.lng) {
                                                     onSelectLocation(item.lat, item.lng, item.label, item.householdId);
                                                     setOpen(false);
-                                                    setValue(item.label);
+                                                    setValue("");
                                                 } else {
                                                     console.warn("Item has no location");
                                                 }
                                             }}
-                                            className="cursor-pointer aria-selected:bg-zinc-900 aria-selected:text-white flex items-center gap-2 py-2"
+                                            className="cursor-pointer aria-selected:bg-zinc-900 aria-selected:text-white flex items-center gap-2 py-2 px-3 transition-colors"
                                         >
-                                            {item.type === 'resident' && <User className="h-4 w-4 text-emerald-500 shrink-0" />}
-                                            {item.type === 'asset' && <Box className="h-4 w-4 text-blue-500 shrink-0" />}
-                                            {item.type === 'household' && <Home className="h-4 w-4 text-orange-500 shrink-0" />}
+                                            <div className="shrink-0">
+                                                {item.type === 'resident' && <User className="h-4 w-4 text-emerald-500" />}
+                                                {item.type === 'asset' && <Box className="h-4 w-4 text-blue-500" />}
+                                                {item.type === 'household' && <Home className="h-4 w-4 text-orange-500" />}
+                                            </div>
                                             
                                             <div className="flex flex-col overflow-hidden">
                                                 <span className="truncate text-sm font-medium">{item.label}</span>
                                                 <span className="truncate text-[10px] text-zinc-500">{item.sub}</span>
                                             </div>
-                                            {!item.lat && <span className="ml-auto text-[9px] text-red-500 uppercase tracking-tighter">No Map</span>}
+                                            {!item.lat && <span className="ml-auto text-[9px] text-red-500 uppercase tracking-tighter font-bold">No Map</span>}
                                         </CommandItem>
                                     ))}
                                 </CommandGroup>

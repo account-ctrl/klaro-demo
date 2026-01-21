@@ -14,6 +14,12 @@ service cloud.firestore {
       let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
       return request.auth.token.role == 'admin' && request.auth.token.tenantPath == expectedPath;
     }
+
+    // Check if the user is a Responder/Tanod for the specific path
+    function isResponder(province, city, barangay) {
+      let expectedPath = "provinces/" + province + "/cities/" + city + "/barangays/" + barangay;
+      return request.auth.token.role == 'responder' && request.auth.token.tenantPath == expectedPath;
+    }
     
     // Check if the user belongs to the tenant (regardless of role - admin, staff, or resident)
     function isTenantUser(province, city, barangay) {
@@ -45,6 +51,12 @@ service cloud.firestore {
         allow write: if isOwner(userId) || request.auth.token.role == 'admin' || request.auth.token.role == 'super_admin';
     }
 
+    // 4. System Integrations (Weather, etc.)
+    match /system_integrations/weather_current {
+      allow read: if request.auth != null;
+      allow write: if false; // Only cloud functions
+    }
+
     // --- THE VAULT (Strict Isolation) ---
 
     match /provinces/{province}/cities/{city}/barangays/{barangay} {
@@ -52,9 +64,22 @@ service cloud.firestore {
       allow read: if isTenantUser(province, city, barangay); 
       allow write: if false; 
 
+      // --- HAZARD MONITORING (New Module 1.2) ---
+      match /hazard_monitoring_points/{pointId} {
+        allow read: if isTenantUser(province, city, barangay);
+        allow write: if isTenantAdmin(province, city, barangay) || isResponder(province, city, barangay);
+      }
+
+      // --- GIS LAYERS (New Module 1.3) ---
+      match /static_gis_layers/{layerId} {
+        allow read: if isTenantUser(province, city, barangay);
+        allow write: if isTenantAdmin(province, city, barangay);
+      }
+
       // --- RESIDENT RECORDS (The Source of Truth) ---
       match /resident_records/{residentId} {
-         allow read, write: if isTenantAdmin(province, city, barangay);
+         allow read: if isTenantAdmin(province, city, barangay) || isResponder(province, city, barangay);
+         allow write: if isTenantAdmin(province, city, barangay);
          allow read: if resource.data.linkedUserId == request.auth.uid;
       }
 

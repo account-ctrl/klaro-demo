@@ -1,14 +1,15 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, ZoomControl, CircleMarker, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, ZoomControl, CircleMarker, Polyline, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { EmergencyAlert, ResponderWithRole, TenantSettings, Resident } from '@/lib/types';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { MapAutoFocus } from './maps/MapAutoFocus';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AlertCircle, Car, MapPin, Video, Droplets, Tent, ShieldAlert, Users, ChevronRight } from 'lucide-react';
+import { AlertCircle, Car, MapPin, Video, Droplets, Tent, ShieldAlert, Users, ChevronRight, Eye, AlertTriangle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Fix generic Leaflet icons
 const fixLeafletIcons = () => {
@@ -20,6 +21,24 @@ const fixLeafletIcons = () => {
     iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
     shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
   });
+};
+
+// --- HAZARD MONITORING POINT ICON ---
+const getHazardIcon = (status: 'SAFE' | 'WATCH' | 'CRITICAL') => {
+    let colorClass = "bg-emerald-500";
+    if (status === 'WATCH') colorClass = "bg-orange-500";
+    if (status === 'CRITICAL') colorClass = "bg-red-600 animate-pulse";
+
+    return L.divIcon({
+        className: 'bg-transparent',
+        html: renderToStaticMarkup(
+            <div className={cn("w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white", colorClass)}>
+                <Eye className="w-4 h-4" />
+            </div>
+        ),
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+    });
 };
 
 function BoxDrawer({ active, onBoxDrawn }: { active: boolean, onBoxDrawn: (bounds: L.LatLngBounds) => void }) {
@@ -114,7 +133,7 @@ function CCTVPopup({ name, url }: { name: string, url?: string }) {
     }, [url]);
 
     return (
-        <div className="w-[300px] h-[240px] bg-black flex flex-col font-sans text-white rounded overflow-hidden">
+        <div className="w-[300px] h-[240px] bg-black flex flex-col font-sans text-white rounded overflow-hidden shadow-2xl">
             <div className="bg-zinc-900 p-2 flex justify-between items-center h-10 border-b border-zinc-800">
                 <span className="text-xs font-bold flex items-center gap-2 truncate">
                     <Video className="w-3 h-3 text-zinc-400" />
@@ -162,7 +181,7 @@ function HouseholdPopup({ household, residents = [], onSelectResident }: { house
                 <div className="flex gap-1 flex-wrap justify-end">
                     {household.isSenior && <span className="bg-purple-100 text-purple-800 text-[9px] px-1.5 py-0.5 rounded-full border border-purple-200 font-bold uppercase tracking-tighter">Senior</span>}
                     {household.isPwd && <span className="bg-cyan-100 text-cyan-800 text-[9px] px-1.5 py-0.5 rounded-full border border-cyan-200 font-bold uppercase tracking-tighter">PWD</span>}
-                    {household.riskCategory === '4Ps' && <span className="bg-orange-100 text-orange-800 text-[9px] px-1.5 py-0.5 rounded-full border border-orange-200 font-bold uppercase tracking-tighter">4Ps</span>}
+                    {household.is4Ps && <span className="bg-orange-100 text-orange-800 text-[9px] px-1.5 py-0.5 rounded-full border border-orange-200 font-bold uppercase tracking-tighter">4Ps</span>}
                 </div>
             </div>
             
@@ -172,16 +191,23 @@ function HouseholdPopup({ household, residents = [], onSelectResident }: { house
                     <p className="text-[11px] text-zinc-600 leading-tight">{household.address}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 bg-zinc-50 p-1.5 rounded border border-zinc-100">
-                    <div>
-                        <p className="text-[8px] uppercase text-zinc-400 font-bold">HH Number</p>
-                        <p className="text-[10px] font-medium text-zinc-700">{household.householdNumber || 'N/A'}</p>
+                {/* MODULE 2.2: EXPANDED VULNERABILITY PROFILE */}
+                {household.vulnerability_details && (
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                        <div className="p-1.5 bg-zinc-50 rounded border border-zinc-100">
+                             <p className="text-[8px] uppercase text-zinc-400 font-bold tracking-widest">Mobility</p>
+                             <p className="text-[10px] font-bold text-zinc-700 capitalize">{household.vulnerability_details.mobility || 'Ambulant'}</p>
+                        </div>
+                        {household.vulnerability_details.medical_dependency?.length > 0 && (
+                            <div className="p-1.5 bg-red-50 rounded border border-red-100">
+                                <p className="text-[8px] uppercase text-red-400 font-bold tracking-widest">Medical Need</p>
+                                <p className="text-[9px] font-black text-red-700 uppercase truncate">
+                                    {household.vulnerability_details.medical_dependency[0]}
+                                </p>
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <p className="text-[8px] uppercase text-zinc-400 font-bold">Material</p>
-                        <p className="text-[10px] font-medium text-zinc-700">{household.housing_material || 'N/A'}</p>
-                    </div>
-                </div>
+                )}
 
                 {/* HOUSEHOLD MEMBERS SECTION */}
                 <div className="mt-3 pt-3 border-t border-zinc-100">
@@ -189,7 +215,7 @@ function HouseholdPopup({ household, residents = [], onSelectResident }: { house
                         <Users className="w-3 h-3 text-zinc-400" />
                         <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider">Members ({members.length})</p>
                     </div>
-                    <div className="space-y-1 max-h-[120px] overflow-y-auto pr-1">
+                    <div className="space-y-1 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
                         {members.map(member => (
                             <button 
                                 key={member.residentId}
@@ -212,16 +238,7 @@ function HouseholdPopup({ household, residents = [], onSelectResident }: { house
                                 <ChevronRight className="w-3 h-3 text-zinc-300 group-hover:text-zinc-500 flex-shrink-0" />
                             </button>
                         ))}
-                        {members.length === 0 && (
-                            <p className="text-[10px] text-zinc-400 italic py-1">No members registered.</p>
-                        )}
                     </div>
-                </div>
-
-                <div className="pt-2 flex items-center justify-between opacity-60 border-t border-zinc-50 mt-2">
-                     <p className="text-[9px] font-mono text-zinc-500">
-                        {household.latitude?.toFixed(5)}, {household.longitude?.toFixed(5)}
-                    </p>
                 </div>
             </div>
         </div>
@@ -234,11 +251,13 @@ type EmergencyMapProps = {
     responders?: ResponderWithRole[];
     households?: any[]; 
     residents?: Resident[];
+    hazardPoints?: any[]; // MODULE 1.2
     infrastructure?: { cctv: any[], hydrants: any[], evac: any[] };
     layers?: any; 
     selectedAlertId?: string | null;
     route?: any; 
     onSelectAlert?: (id: string) => void;
+    onUpdateHazard?: (id: string, status: string) => void; // MODULE 1.2
     searchedLocation?: { lat: number; lng: number } | null;
     highlightedHouseholdId?: string | null;
     settings?: TenantSettings | null;
@@ -264,11 +283,13 @@ export default function EmergencyMap({
     responders = [], 
     households = [],
     residents = [],
+    hazardPoints = [],
     infrastructure = { cctv: [], hydrants: [], evac: [] },
     layers,
     selectedAlertId = null, 
     route = null,
     onSelectAlert = () => {}, 
+    onUpdateHazard = () => {},
     searchedLocation = null,
     highlightedHouseholdId = null,
     settings = null,
@@ -316,36 +337,13 @@ export default function EmergencyMap({
     const cctvIcon = useMemo(() => L.divIcon({
         className: 'bg-transparent',
         html: renderToStaticMarkup(
-            <div className="w-8 h-8 bg-zinc-900 border-2 border-zinc-500 rounded-lg flex items-center justify-center shadow-xl hover:border-green-500 hover:scale-110 transition-transform cursor-pointer">
-                <Video className="w-4 h-4 text-zinc-300" />
+            <div className="w-8 h-8 bg-zinc-900 border-2 border-zinc-500 rounded-lg flex items-center justify-center shadow-xl hover:border-green-500 hover:scale-110 transition-transform cursor-pointer text-zinc-300">
+                <Video className="w-4 h-4" />
             </div>
         ),
         iconSize: [32, 32],
         iconAnchor: [16, 16]
     }), []);
-
-    const hydrantIcon = useMemo(() => L.divIcon({
-        className: 'bg-transparent',
-        html: renderToStaticMarkup(
-            <div className="w-6 h-6 bg-blue-900 border-2 border-blue-500 rounded-full flex items-center justify-center shadow-lg">
-                <Droplets className="w-3 h-3 text-blue-400" />
-            </div>
-        ),
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-    }), []);
-
-    const evacIcon = useMemo(() => L.divIcon({
-        className: 'bg-transparent',
-        html: renderToStaticMarkup(
-            <div className="w-8 h-8 bg-emerald-900 border-2 border-emerald-500 rounded-md flex items-center justify-center shadow-lg">
-                <Tent className="w-4 h-4 text-emerald-400" />
-            </div>
-        ),
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-    }), []);
-
 
     const defaultCenter: [number, number] = [14.5995, 120.9842];
     
@@ -390,82 +388,65 @@ export default function EmergencyMap({
                     className="dark-map-tiles"
                 />
 
-                {/* INFRASTRUCTURE LAYERS */}
-                {layers?.showCCTV && infrastructure?.cctv?.map((item, i) => {
-                    if (item.latitude == null || item.longitude == null) return null;
-                    return (
+                {/* MODULE 1.2: VIRTUAL FLOOD WATCH (EYE ICONS) */}
+                {hazardPoints.map((point) => (
+                    <div key={point.id}>
                         <Marker 
-                            key={item.assetId || i} 
-                            position={[item.latitude, item.longitude]} 
-                            icon={cctvIcon}
+                            position={[point.location.latitude, point.location.longitude]} 
+                            icon={getHazardIcon(point.status)}
                         >
-                            <Popup minWidth={300} closeButton={false} className="custom-popup-clean">
-                                <CCTVPopup name={item.name} url={item.streamUrl || item.description?.match(/https?:\/\/[^\s]+/)?.[0]} />
+                            <Popup className="custom-popup">
+                                <div className="p-3 w-48 font-sans">
+                                    <p className="font-black uppercase text-xs tracking-tight">{point.name}</p>
+                                    <div className="mt-2 space-y-1">
+                                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Current Status</p>
+                                        <div className={cn(
+                                            "px-2 py-1 rounded text-white text-[10px] font-black text-center",
+                                            point.status === 'SAFE' ? 'bg-emerald-600' : point.status === 'WATCH' ? 'bg-orange-500' : 'bg-red-600'
+                                        )}>
+                                            {point.status}
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 flex flex-col gap-1">
+                                        <Button size="sm" className="h-7 text-[9px] font-black uppercase tracking-tighter" variant="outline" onClick={() => onUpdateHazard(point.id, 'SAFE')}>Set Safe</Button>
+                                        <Button size="sm" className="h-7 text-[9px] font-black uppercase tracking-tighter bg-orange-600 text-white" onClick={() => onUpdateHazard(point.id, 'WATCH')}>Set Watch</Button>
+                                        <Button size="sm" className="h-7 text-[9px] font-black uppercase tracking-tighter bg-red-600 text-white" onClick={() => onUpdateHazard(point.id, 'CRITICAL')}>Set Critical</Button>
+                                    </div>
+                                </div>
                             </Popup>
                         </Marker>
-                    )
-                })}
-                {layers?.showHydrants && infrastructure?.hydrants?.map((item, i) => {
-                    if (item.latitude == null || item.longitude == null) return null;
-                    return <Marker key={item.assetId || i} position={[item.latitude, item.longitude]} icon={hydrantIcon}><Popup>{item.name}</Popup></Marker>
-                })}
-                {layers?.showEvac && infrastructure?.evac?.map((item, i) => {
-                    if (item.latitude == null || item.longitude == null) return null;
-                    return <Marker key={item.assetId || i} position={[item.latitude, item.longitude]} icon={evacIcon}><Popup>{item.name}</Popup></Marker>
-                })}
-
+                        {point.status === 'CRITICAL' && (
+                            <Circle 
+                                center={[point.location.latitude, point.location.longitude]} 
+                                radius={500} 
+                                pathOptions={{ color: 'red', fillColor: 'red', fillOpacity: 0.15, dashArray: '10, 10', weight: 1 }} 
+                            />
+                        )}
+                    </div>
+                ))}
 
                 {/* DEMOGRAPHICS LAYER & HIGHLIGHT */}
                 {households?.map(h => {
                     const isHighlighted = highlightedHouseholdId === h.householdId;
-                    
-                    // Visibility Logic: 
-                    // Show if layer is active OR if specifically highlighted
-                    const isLayerVisible = layers?.demographicLayer === 'all' || (layers?.demographicLayer === 'vulnerable' && h.riskCategory !== 'Standard');
+                    const isLayerVisible = 
+                        layers?.demographicLayer === 'all' || 
+                        (layers?.demographicLayer === 'seniors' && h.isSenior) ||
+                        (layers?.demographicLayer === 'pwds' && h.isPwd) ||
+                        (layers?.demographicLayer === '4ps' && h.is4Ps);
                     
                     if (!isLayerVisible && !isHighlighted) return null;
-                    
                     if (!h.latitude || !h.longitude) return null;
 
                     let color = '#52525b'; 
                     let radius = 3;
                     let opacity = 0.4;
-                    let weight = 1;
 
-                    if (h.riskCategory === 'PWD') { color = '#06b6d4'; opacity = 0.8; }
-                    else if (h.riskCategory === 'Senior') { color = '#a855f7'; opacity = 0.8; }
-                    else if (h.riskCategory === '4Ps') { color = '#f97316'; opacity = 0.8; }
+                    if (h.isPwd) { color = '#06b6d4'; opacity = 0.8; }
+                    else if (h.isSenior) { color = '#a855f7'; opacity = 0.8; }
+                    else if (h.is4Ps) { color = '#f97316'; opacity = 0.8; }
 
-                    if (layers?.demographicLayer === 'all' && h.riskCategory !== 'Standard') {
-                        opacity = 0.9;
-                        radius = 4;
-                    }
-
-                    // HIGHLIGHT OVERRIDE
                     if (isHighlighted) {
-                        color = '#facc15'; // Yellow
-                        opacity = 1;
-                        radius = 8;
-                        weight = 3;
-                    }
-
-                    if (h.boundary && h.boundary.length > 0) {
-                        return (
-                            <Polygon 
-                                key={h.householdId}
-                                positions={h.boundary}
-                                pathOptions={{ 
-                                    color: color, 
-                                    fillColor: color, 
-                                    fillOpacity: isHighlighted ? 0.6 : (opacity - 0.2), 
-                                    weight: weight 
-                                }}
-                            >
-                                <Popup>
-                                    <HouseholdPopup household={h} residents={residents} onSelectResident={onSelectResident} />
-                                </Popup>
-                            </Polygon>
-                        )
+                        color = '#facc15'; radius = 8; opacity = 1;
                     }
 
                     return (
@@ -473,12 +454,7 @@ export default function EmergencyMap({
                             key={h.householdId}
                             center={[h.latitude, h.longitude]}
                             radius={radius}
-                            pathOptions={{
-                                color: color,
-                                fillColor: color,
-                                fillOpacity: opacity,
-                                stroke: false
-                            }}
+                            pathOptions={{ color: color, fillColor: color, fillOpacity: opacity, stroke: false }}
                         >
                            <Popup>
                                 <HouseholdPopup household={h} residents={residents} onSelectResident={onSelectResident} />
@@ -491,70 +467,29 @@ export default function EmergencyMap({
                 {boundaryPositions && (
                     <Polygon 
                         positions={boundaryPositions}
-                        pathOptions={{ 
-                            color: '#0ea5e9', weight: 2, dashArray: '5, 10', fillColor: '#0ea5e9', fillOpacity: 0.05 
-                        }} 
+                        pathOptions={{ color: '#0ea5e9', weight: 2, dashArray: '5, 10', fillColor: '#0ea5e9', fillOpacity: 0.05 }} 
                     />
                 )}
 
-                {/* SMART ROUTE */}
-                {route && route.coordinates && (
-                    <Polyline 
-                        positions={route.coordinates}
-                        pathOptions={{
-                            color: '#3b82f6', weight: 4, dashArray: '10, 10', opacity: 0.8, lineCap: 'round'
-                        }}
+                {/* Alerts */}
+                {alerts.map((alert) => (
+                    <Marker 
+                        key={alert.alertId} 
+                        position={[alert.latitude, alert.longitude]}
+                        icon={sosIcon}
+                        eventHandlers={{ click: () => onSelectAlert(alert.alertId) }}
                     >
-                        <Popup>
-                            <div className="text-zinc-900 text-xs font-bold p-1">
-                                ETA: {Math.round(route.durationSeconds / 60)} mins
-                                <br/>
-                                <span className="font-normal text-[10px] text-zinc-500">{(route.distanceMeters / 1000).toFixed(1)} km</span>
+                        <Popup className="custom-popup">
+                            <div className="text-zinc-900 p-1 min-w-[150px]">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+                                    <span className="font-bold text-sm uppercase text-red-700 tracking-tighter">SOS Signal</span>
+                                </div>
+                                <p className="font-black text-sm uppercase">{alert.residentName || 'Unknown'}</p>
                             </div>
                         </Popup>
-                    </Polyline>
-                )}
-
-                {/* Alerts */}
-                {Array.isArray(alerts) && alerts.map((alert) => {
-                    if (alert.latitude == null || alert.longitude == null || isNaN(alert.latitude) || isNaN(alert.longitude)) return null;
-                    return (
-                        <Marker 
-                            key={alert.alertId} 
-                            position={[alert.latitude, alert.longitude]}
-                            icon={sosIcon}
-                            eventHandlers={{ click: () => onSelectAlert(alert.alertId) }}
-                        >
-                            <Popup className="custom-popup">
-                                <div className="text-zinc-900 p-1 min-w-[150px]">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
-                                        <span className="font-bold text-sm uppercase text-red-700">SOS Signal</span>
-                                    </div>
-                                    <p className="font-semibold text-sm">{alert.residentName || 'Unknown'}</p>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    );
-                })}
-
-                {/* Responders */}
-                {Array.isArray(responders) && responders.map((responder) => {
-                    if (responder.latitude == null || responder.longitude == null || isNaN(responder.latitude) || isNaN(responder.longitude)) return null;
-                    return (
-                        <Marker 
-                            key={responder.userId} 
-                            position={[responder.latitude, responder.longitude]}
-                            icon={responderIcon}
-                        >
-                            <Popup>
-                                <div className="text-zinc-900 p-1">
-                                    <p className="font-bold text-sm">{responder.name || 'Responder'}</p>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    );
-                })}
+                    </Marker>
+                ))}
             </MapContainer>
         </div>
     );

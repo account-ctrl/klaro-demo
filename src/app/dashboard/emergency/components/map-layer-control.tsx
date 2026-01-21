@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Video, Droplets, Tent, Layers, Users, Accessibility, ChevronDown, ChevronUp } from "lucide-react";
+import { Video, Droplets, Tent, Layers, Users, Accessibility, ChevronDown, ChevronUp, Baby, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -9,7 +9,7 @@ export interface LayerState {
     showCCTV: boolean;
     showHydrants: boolean;
     showEvac: boolean;
-    demographicLayer: 'none' | 'vulnerable' | 'all';
+    demographicLayer: 'none' | 'seniors' | 'pwds' | '4ps' | 'all';
 }
 
 interface LayerControlProps {
@@ -46,17 +46,32 @@ export function MapLayerControl({ layers, toggleLayer, className }: LayerControl
 
                 <CollapsibleSection title="Demographics" icon={<Users className="w-3 h-3" />}>
                     <LayerToggle 
-                        active={layers.demographicLayer === 'vulnerable'} 
-                        onClick={() => toggleLayer('demographicLayer', layers.demographicLayer === 'vulnerable' ? 'none' : 'vulnerable')} 
-                        icon={<Accessibility className="w-3 h-3" />}
-                        label="Vulnerable (Priority)"
+                        active={layers.demographicLayer === 'seniors'} 
+                        onClick={() => toggleLayer('demographicLayer', layers.demographicLayer === 'seniors' ? 'none' : 'seniors')} 
+                        icon={<Heart className="w-3 h-3" />}
+                        label="Senior Citizens"
                         colorIndicator="bg-purple-500"
                     />
                     <LayerToggle 
+                        active={layers.demographicLayer === 'pwds'} 
+                        onClick={() => toggleLayer('demographicLayer', layers.demographicLayer === 'pwds' ? 'none' : 'pwds')} 
+                        icon={<Accessibility className="w-3 h-3" />}
+                        label="Persons with Disability"
+                        colorIndicator="bg-cyan-500"
+                    />
+                    <LayerToggle 
+                        active={layers.demographicLayer === '4ps'} 
+                        onClick={() => toggleLayer('demographicLayer', layers.demographicLayer === '4ps' ? 'none' : '4ps')} 
+                        icon={<Users className="w-3 h-3" />}
+                        label="4Ps Beneficiaries"
+                        colorIndicator="bg-orange-500"
+                    />
+                    <div className="h-px bg-zinc-800 my-1 mx-2" />
+                    <LayerToggle 
                         active={layers.demographicLayer === 'all'} 
                         onClick={() => toggleLayer('demographicLayer', layers.demographicLayer === 'all' ? 'none' : 'all')} 
-                        icon={<Users className="w-3 h-3" />}
-                        label="All Households"
+                        icon={<Layers className="w-3 h-3" />}
+                        label="View All Households"
                         colorIndicator="bg-zinc-500"
                     />
                 </CollapsibleSection>
@@ -74,7 +89,7 @@ function CollapsibleSection({ title, icon, children }: { title: string, icon: Re
                 onClick={() => setIsOpen(!isOpen)} 
                 className="w-full flex items-center justify-between p-2 bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors"
             >
-                <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-2 uppercase tracking-wider font-semibold">
+                <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-2 uppercase tracking-wider font-black">
                     {icon} {title}
                 </div>
                 {isOpen ? <ChevronUp className="w-3 h-3 text-zinc-500" /> : <ChevronDown className="w-3 h-3 text-zinc-500" />}
@@ -91,12 +106,12 @@ function LayerToggle({ active, onClick, icon, label, colorIndicator }: any) {
             size="sm" 
             onClick={onClick}
             className={cn(
-                "w-full justify-between h-7 text-xs px-2 hover:bg-zinc-800",
-                active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400"
+                "w-full justify-between h-8 text-[11px] px-2 hover:bg-zinc-800 transition-all font-bold",
+                active ? "bg-zinc-800 text-zinc-100 ring-1 ring-zinc-700 shadow-inner" : "text-zinc-400"
             )}
         >
             <div className="flex items-center gap-2">
-                {icon}
+                <span className={cn(active ? "text-inherit" : "text-zinc-500")}>{icon}</span>
                 {label}
             </div>
             {colorIndicator && (
