@@ -295,6 +295,20 @@ export function EmergencyDashboard() {
       setScanResult({ hhCount: inside.length, population: totalPop, seniors: seniorCount, pwds: pwdCount, children: childrenCount });
   };
 
+  const handleSelectResidentFromMap = (residentId: string) => {
+    const resident = residents?.find(r => r.residentId === residentId);
+    if (resident) {
+      setSelectedResident(resident);
+      setIsResidentQuickViewOpen(true);
+    }
+  };
+
+  const handleOpenFullEdit = (resident: Resident) => {
+      setSelectedResident(resident);
+      setIsResidentFullEditOpen(true);
+      setIsResidentQuickViewOpen(false);
+  };
+
   useEffect(() => {
       const timer = setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 350); 
       return () => clearTimeout(timer);
