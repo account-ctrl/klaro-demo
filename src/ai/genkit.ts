@@ -1,7 +1,7 @@
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/google-genai';
 
-const GEMINI_API_KEY = "AIzaSyBo028lDGC2e6p7tqrBr8CWYXu66qDAujI";
+const GEMINI_API_KEY = "AIzaSyCfFTHZyeJQr2jd95N0xLX68nTG44DfW2Q";
 
 export const ai = genkit({
   plugins: [
