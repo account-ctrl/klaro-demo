@@ -1,27 +1,30 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Video, Droplets, Tent, Layers, Users, Accessibility, ChevronDown, ChevronUp, Baby, Heart } from "lucide-react";
+import { Video, Droplets, Tent, Layers, Users, Accessibility, ChevronDown, ChevronUp, Baby, Heart, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { Slider } from "@/components/ui/slider";
 
 export interface LayerState {
     showCCTV: boolean;
     showHydrants: boolean;
     showEvac: boolean;
     demographicLayer: 'none' | 'seniors' | 'pwds' | '4ps' | 'all';
+    hazardLayerOpacity: number;
+    showFloodMap: boolean;
 }
 
 interface LayerControlProps {
     layers: LayerState;
     toggleLayer: (key: keyof LayerState, value?: any) => void;
-    className?: string; // Allow external styling
+    className?: string; 
 }
 
 export function MapLayerControl({ layers, toggleLayer, className }: LayerControlProps) {
     return (
         <div className={cn("flex flex-col gap-2 pointer-events-auto", className)}>
-            <div className="bg-zinc-950/90 backdrop-blur border border-zinc-800 rounded-md p-2 shadow-xl w-56 space-y-2">
+            <div className="bg-zinc-950/90 backdrop-blur border border-zinc-800 rounded-md p-2 shadow-xl w-60 space-y-2">
                 
                 <CollapsibleSection title="Infrastructure" icon={<Layers className="w-3 h-3" />}>
                     <LayerToggle 
@@ -42,6 +45,30 @@ export function MapLayerControl({ layers, toggleLayer, className }: LayerControl
                         icon={<Tent className="w-3 h-3" />}
                         label="Evac Centers"
                     />
+                </CollapsibleSection>
+
+                {/* MODULE 1.3: STATIC GIS HAZARD LAYERS */}
+                <CollapsibleSection title="Hazard Maps" icon={<ShieldAlert className="w-3 h-3" />}>
+                    <LayerToggle 
+                        active={layers.showFloodMap} 
+                        onClick={() => toggleLayer('showFloodMap')} 
+                        icon={<Droplets className="w-3 h-3" />}
+                        label="100-Yr Flood Plain"
+                        colorIndicator="bg-blue-500"
+                    />
+                    <div className="px-2 py-3 space-y-2">
+                        <div className="flex justify-between items-center text-[8px] font-black uppercase text-zinc-500 tracking-widest">
+                            <span>Layer Opacity</span>
+                            <span className="text-zinc-300">{layers.hazardLayerOpacity}%</span>
+                        </div>
+                        <Slider 
+                            value={[layers.hazardLayerOpacity]} 
+                            onValueChange={(v) => toggleLayer('hazardLayerOpacity', v[0])}
+                            max={100}
+                            step={5}
+                            className="h-4"
+                        />
+                    </div>
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Demographics" icon={<Users className="w-3 h-3" />}>

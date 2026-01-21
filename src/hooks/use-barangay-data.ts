@@ -1,7 +1,7 @@
 
 'use client';
 
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { useTenant } from '@/providers/tenant-provider';
 import { 
@@ -113,6 +113,16 @@ export function useResponderLocations() {
 
 export function useBlotterCases() {
     return useBarangayCollection<BlotterCase>('blotter_cases', 'dateReported', 'desc', 'caseId');
+}
+
+// --- MODULE 1.2: HAZARD MONITORING ---
+export function useHazardMonitoringPoints() {
+    return useBarangayCollection<any>('hazard_monitoring_points', 'name', 'asc', 'id');
+}
+
+// --- MODULE 1.3: STATIC GIS LAYERS ---
+export function useStaticGISLayers() {
+    return useBarangayCollection<any>('static_gis_layers', 'layer_name', 'asc', 'id');
 }
 
 export function useOfficials() {
